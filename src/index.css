@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 25% 10%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 217 91% 95%;
+    --accent-foreground: 217 91% 40%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 25% 10%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 217 91% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 18%;
+    --sidebar-accent-foreground: 220 14% 95%;
+    --sidebar-border: 220 20% 18%;
+    --sidebar-ring: 217 91% 50%;
+    --sidebar-muted: 220 10% 46%;
+
+    /* Financial specific */
+    --positive: 142 76% 36%;
+    --negative: 0 72% 51%;
+    --pending: 38 92% 50%;
+  }
+
+  .dark {
+    --background: 220 25% 7%;
+    --foreground: 220 14% 95%;
+
+    --card: 220 25% 10%;
+    --card-foreground: 220 14% 95%;
+
+    --popover: 220 25% 10%;
+    --popover-foreground: 220 14% 95%;
+
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 220 14% 95%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 10% 60%;
+
+    --accent: 217 91% 20%;
+    --accent-foreground: 217 91% 70%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 20% 18%;
+    --input: 220 20% 18%;
+    --ring: 217 91% 55%;
+
+    --sidebar-background: 220 25% 5%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 217 91% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 12%;
+    --sidebar-accent-foreground: 220 14% 95%;
+    --sidebar-border: 220 20% 12%;
+    --sidebar-ring: 217 91% 55%;
+    --sidebar-muted: 220 10% 50%;
+
+    --positive: 142 76% 45%;
+    --negative: 0 72% 50%;
+    --pending: 38 92% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
+  }
+
+  .stat-card {
+    @apply bg-card rounded-xl border border-border p-6 transition-all duration-200 hover:shadow-md hover:border-primary/20;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors;
+  }
+
+  .sidebar-item-active {
+    @apply bg-sidebar-accent text-sidebar-foreground font-medium;
+  }
+
+  .data-table-row {
+    @apply border-b border-border hover:bg-muted/50 transition-colors;
+  }
+
+  .badge-pending {
+    @apply bg-pending/10 text-pending border-pending/20;
+  }
+
+  .badge-success {
+    @apply bg-success/10 text-success border-success/20;
+  }
+
+  .badge-danger {
+    @apply bg-destructive/10 text-destructive border-destructive/20;
+  }
+
+  .value-positive {
+    @apply text-success font-medium;
+  }
+
+  .value-negative {
+    @apply text-destructive font-medium;
+  }
+}
