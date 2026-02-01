@@ -16,6 +16,27 @@ const AccountBody = z.object({
   defaultConfirmed: z.boolean().optional(),
 });
 
+async function getAccountWithExtras(params: { companyId: string; accountId: string }) {
+  const account = await prisma.account.findUnique({
+    where: { id: params.accountId },
+    include: { accountType: true },
+  });
+  if (!account) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+  if (account.companyId !== params.companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+
+  const ledger = await prisma.bankLedgerEntry.findMany({
+    where: { companyId: params.companyId, deletedAt: null, confirmed: true, accountId: params.accountId },
+    select: { amount: true, operation: true },
+  });
+  const balance = ledger.reduce((sum, e) => sum + (e.operation === "CREDITO" ? e.amount : -e.amount), 0);
+
+  return {
+    ...account,
+    typeDescription: account.accountType?.description ?? null,
+    balance,
+  };
+}
+
 export async function accountsRoutes(app: FastifyInstance) {
   app.get(
     "/types",
@@ -77,18 +98,27 @@ export async function accountsRoutes(app: FastifyInstance) {
       const defaultType = await prisma.accountType.findFirst({ where: { code: "003" } });
       const accountTypeId = data.accountTypeId ?? defaultType?.id ?? null;
 
-      return prisma.account.create({
-        data: {
-          companyId,
-          code,
-          description: data.description,
-          accountTypeId,
-          active: data.active ?? true,
-          useInCashFlow: data.useInCashFlow ?? true,
-          superOnly: data.superOnly ?? false,
-          defaultConfirmed: data.defaultConfirmed ?? false,
-        },
-      });
+      let created;
+      try {
+        created = await prisma.account.create({
+          data: {
+            companyId,
+            code,
+            description: data.description,
+            accountTypeId,
+            active: data.active ?? true,
+            useInCashFlow: data.useInCashFlow ?? true,
+            superOnly: data.superOnly ?? false,
+            defaultConfirmed: data.defaultConfirmed ?? false,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+
+      return getAccountWithExtras({ companyId, accountId: created.id });
     }
   );
 
@@ -102,7 +132,16 @@ export async function accountsRoutes(app: FastifyInstance) {
       const existing = await prisma.account.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
-      return prisma.account.update({ where: { id: params.id }, data });
+
+      let updated;
+      try {
+        updated = await prisma.account.update({ where: { id: params.id }, data });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+      return getAccountWithExtras({ companyId, accountId: updated.id });
     }
   );
 }

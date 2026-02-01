@@ -108,9 +108,7 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       const autoCode = !data.code;
       const { isGlobal: _isGlobal, ...rest } = data;
       const base: typeof rest = { ...rest };
-      if (!base.code) {
-        base.code = await generateNextCode(scopeCompanyId, base.parentId ?? null);
-      }
+      base.code = base.code ?? (await generateNextCode(scopeCompanyId, base.parentId ?? null));
 
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -120,7 +118,15 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
           }
           return await prisma.chartAccount.create({
             data: {
-              ...base,
+              code: base.code,
+              description: base.description,
+              planType: base.planType,
+              parentId: base.parentId ?? null,
+              revenueExpense: base.revenueExpense,
+              debitCredit: base.debitCredit,
+              fixedVariable: base.fixedVariable,
+              costExpense: base.costExpense,
+              accountingCode: base.accountingCode ?? null,
               companyId: scopeCompanyId,
               active: base.active ?? true,
               isSuper: base.isSuper ?? false,

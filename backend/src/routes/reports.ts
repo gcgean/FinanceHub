@@ -140,11 +140,56 @@ export async function reportsRoutes(app: FastifyInstance) {
       const operationalResult = totalRevenue - totalExpense;
 
       const listagem = [
-        { code: "R", description: "RECEITAS", value: totalRevenue, type: "GROUP" },
-        ...revenue.map((a) => ({ ...a, value: a.total, type: "ACCOUNT" })),
-        { code: "D", description: "DESPESAS", value: totalExpense, type: "GROUP" },
-        ...expense.map((a) => ({ ...a, value: a.total, type: "ACCOUNT" })),
-        { code: "RES", description: "RESULTADO OPERACIONAL", value: operationalResult, type: "TOTAL" },
+        {
+          id: "group_receitas",
+          code: "R",
+          description: "RECEITAS",
+          revenueExpense: RevenueExpense.RECEITA,
+          parentId: null,
+          total: totalRevenue,
+          value: totalRevenue,
+          type: "GROUP" as const,
+        },
+        ...revenue.map((a) => ({
+          id: a.id,
+          code: a.code,
+          description: a.description,
+          revenueExpense: a.revenueExpense,
+          parentId: a.parentId,
+          total: a.total,
+          value: a.total,
+          type: "ACCOUNT" as const,
+        })),
+        {
+          id: "group_despesas",
+          code: "D",
+          description: "DESPESAS",
+          revenueExpense: RevenueExpense.DESPESA,
+          parentId: null,
+          total: totalExpense,
+          value: totalExpense,
+          type: "GROUP" as const,
+        },
+        ...expense.map((a) => ({
+          id: a.id,
+          code: a.code,
+          description: a.description,
+          revenueExpense: a.revenueExpense,
+          parentId: a.parentId,
+          total: a.total,
+          value: a.total,
+          type: "ACCOUNT" as const,
+        })),
+        {
+          id: "total_resultado_operacional",
+          code: "RES",
+          description: "RESULTADO OPERACIONAL",
+          revenueExpense: RevenueExpense.RECEITA,
+          parentId: null,
+          total: operationalResult,
+          value: operationalResult,
+          type: "TOTAL" as const,
+        },
       ];
 
       return {

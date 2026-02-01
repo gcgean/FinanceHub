@@ -28,14 +28,20 @@ export async function costCentersRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const data = parseBody(CostCenterBody, request.body);
-      return prisma.costCenter.create({
-        data: {
-          companyId,
-          code: data.code,
-          description: data.description,
-          active: data.active ?? true,
-        },
-      });
+      try {
+        return await prisma.costCenter.create({
+          data: {
+            companyId,
+            code: data.code,
+            description: data.description,
+            active: data.active ?? true,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("COST_CENTER_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
     }
   );
 
@@ -49,8 +55,13 @@ export async function costCentersRoutes(app: FastifyInstance) {
       const existing = await prisma.costCenter.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
-      return prisma.costCenter.update({ where: { id: params.id }, data });
+      try {
+        return await prisma.costCenter.update({ where: { id: params.id }, data });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("COST_CENTER_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
     }
   );
 }
-

@@ -16,6 +16,16 @@ O código fica em `backend/`.
 
 ## Como rodar
 
+### Banco (Postgres via Docker)
+
+No diretório raiz do projeto:
+
+```bash
+docker compose up -d
+```
+
+Adminer (opcional): `http://127.0.0.1:8080`.
+
 1) Criar o arquivo `.env` a partir do exemplo:
 
 ```bash
