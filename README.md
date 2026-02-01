@@ -34,6 +34,12 @@ Por padrão o dev server sobe em `http://localhost:8080/` (configurado em `vite.
 
 - [docs/README.md](./docs/README.md)
 
+## Backend (API)
+
+O backend fica em `backend/` e expõe uma API REST com JWT + Prisma/SQLite.
+
+- Setup e endpoints: [docs/13-backend.md](./docs/13-backend.md)
+
 ## Observações importantes
 
 - A navegação principal do app não usa URL: as telas são trocadas por estado local em `src/pages/Index.tsx`.
