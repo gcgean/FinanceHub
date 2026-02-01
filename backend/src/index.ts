@@ -29,8 +29,9 @@ export function buildApp() {
   });
 
   app.setErrorHandler((error, _request, reply) => {
-    const statusCode = (error as any).statusCode ?? 500;
-    const message = statusCode === 500 ? "INTERNAL_SERVER_ERROR" : (error as any).message;
+    const maybeStatus = (error as { statusCode?: unknown }).statusCode;
+    const statusCode = typeof maybeStatus === "number" ? maybeStatus : 500;
+    const message = statusCode === 500 ? "INTERNAL_SERVER_ERROR" : (error instanceof Error ? error.message : "ERROR");
     reply.status(statusCode).send({ error: message });
   });
 

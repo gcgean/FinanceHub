@@ -17,7 +17,7 @@ export function AIInsightCard({ insight }: AIInsightCardProps) {
     }
   };
 
-  const getVariant = () => {
+  const getVariant = (): "default" | "secondary" | "destructive" | "outline" => {
     switch (insight.tipo) {
       case 'alerta': return 'destructive';
       case 'oportunidade': return 'default';
@@ -56,7 +56,7 @@ export function AIInsightCard({ insight }: AIInsightCardProps) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <Badge variant={getVariant() as any} className="text-xs">
+            <Badge variant={getVariant()} className="text-xs">
               {insight.tipo.charAt(0).toUpperCase() + insight.tipo.slice(1)}
             </Badge>
             <Badge variant="outline" className="text-xs">

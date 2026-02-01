@@ -5,6 +5,7 @@ import { parseBody, parseQuery } from "../lib/validation";
 import { requireAuth, requireCompanyScope } from "../lib/auth";
 import { resolveCompanyId } from "../lib/company";
 import { LedgerOperation, RevenueExpense } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 const StatementQuery = z.object({
   dateFrom: z.string().optional(),
@@ -27,7 +28,7 @@ export async function reportsRoutes(app: FastifyInstance) {
       const companyId = await resolveCompanyId(request);
       const q = parseQuery(StatementQuery, request.query);
 
-      const openingWhere: any = {
+      const openingWhere: Prisma.BankLedgerEntryWhereInput = {
         companyId,
         deletedAt: null,
         confirmed: true,
@@ -37,7 +38,7 @@ export async function reportsRoutes(app: FastifyInstance) {
       const openingEntries = await prisma.bankLedgerEntry.findMany({ where: openingWhere, select: { amount: true, operation: true } });
       const openingBalance = openingEntries.reduce((sum, e) => sum + (e.operation === LedgerOperation.CREDITO ? e.amount : -e.amount), 0);
 
-      const where: any = {
+      const where: Prisma.BankLedgerEntryWhereInput = {
         companyId,
         deletedAt: null,
         ...(q.dateFrom || q.dateTo
@@ -159,4 +160,3 @@ export async function reportsRoutes(app: FastifyInstance) {
     }
   );
 }
-

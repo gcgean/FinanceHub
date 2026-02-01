@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { parseBody, parseQuery } from "../lib/validation";
 import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
 import { resolveCompanyId } from "../lib/company";
-import { AuditAction, LedgerOperation, UserRole } from "@prisma/client";
+import { AuditAction, LedgerOperation, Prisma, UserRole } from "@prisma/client";
 
 const SplitSchema = z.object({
   chartAccountId: z.string().min(1),
@@ -46,7 +46,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       const companyId = await resolveCompanyId(request);
       const q = parseQuery(ListQuery, request.query);
 
-      const where: any = {
+      const where: Prisma.BankLedgerEntryWhereInput = {
         companyId,
         ...(q.dateFrom || q.dateTo
           ? {

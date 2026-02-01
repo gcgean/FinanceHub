@@ -5,6 +5,7 @@ import { parseBody, parseQuery } from "../lib/validation";
 import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
 import { resolveCompanyId } from "../lib/company";
 import { ChartPlanType, CostExpense, DebitCredit, FixedVariable, RevenueExpense, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 const ChartAccountBody = z.object({
   code: z.string().min(1).optional(),
@@ -77,7 +78,7 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
         ? { OR: [{ companyId }, { companyId: null }] }
         : { companyId };
 
-      const where: any = {
+      const where: Prisma.ChartAccountWhereInput = {
         ...companyFilter,
         ...(q.active === undefined ? {} : { active: q.active }),
         ...(q.planType ? { planType: q.planType } : {}),
@@ -105,8 +106,8 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       }
 
       const autoCode = !data.code;
-      const base = { ...data } as any;
-      delete base.isGlobal;
+      const { isGlobal: _isGlobal, ...rest } = data;
+      const base: typeof rest = { ...rest };
       if (!base.code) {
         base.code = await generateNextCode(scopeCompanyId, base.parentId ?? null);
       }
@@ -132,8 +133,10 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
               cashflowHide: base.cashflowHide ?? false,
             },
           });
-        } catch (e: any) {
-          if (autoCode && (e?.code === "P2002" || e?.statusCode === 409)) {
+        } catch (e: unknown) {
+          const code = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          const statusCode = typeof e === "object" && e && "statusCode" in e ? (e as { statusCode?: unknown }).statusCode : undefined;
+          if (autoCode && (code === "P2002" || statusCode === 409)) {
             base.code = await generateNextCode(scopeCompanyId, base.parentId ?? null);
             continue;
           }
@@ -172,7 +175,7 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
 
       const wantsGlobal = data.isGlobal;
       const nextCompanyId = wantsGlobal === undefined ? existing.companyId : request.user.role === UserRole.ADMIN && wantsGlobal ? null : companyId;
-      const payload: any = { ...data };
+      const payload: Record<string, unknown> = { ...data };
       delete payload.isGlobal;
 
       if (wantsGlobal !== undefined && request.user.role !== UserRole.ADMIN) {
@@ -190,7 +193,7 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
         if (exists) throw Object.assign(new Error("CHART_ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
       }
 
-      return prisma.chartAccount.update({ where: { id: existing.id }, data: payload });
+      return prisma.chartAccount.update({ where: { id: existing.id }, data: payload as Prisma.ChartAccountUpdateInput });
     }
   );
 
@@ -213,4 +216,3 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
     }
   );
 }
-

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { parseBody, parseQuery } from "../lib/validation";
 import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
-import { TransactionStatus, TransactionType, UserRole } from "@prisma/client";
+import { Prisma, TransactionStatus, TransactionType, UserRole } from "@prisma/client";
 
 const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
@@ -36,7 +36,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     async (request) => {
       const { take, skip, status, type, dateFrom, dateTo } = parseQuery(ListQuery, request.query);
       const companyId = request.user.role === UserRole.ADMIN ? undefined : request.user.companyId!;
-      const where: any = {
+      const where: Prisma.TransactionWhereInput = {
         ...(companyId ? { companyId } : {}),
         ...(status ? { status } : {}),
         ...(type ? { type } : {}),

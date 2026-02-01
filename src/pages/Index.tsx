@@ -10,10 +10,14 @@ import Reports from "@/pages/Reports";
 import Companies from "@/pages/Companies";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
+import FinancialRegistrations from "@/pages/FinancialRegistrations";
+import Ledger from "@/pages/Ledger";
 
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: "Dashboard", subtitle: "Visão geral financeira" },
   aiInsights: { title: "Inteligência Artificial", subtitle: "Insights preditivos e análise de mercado" },
+  financialRegistrations: { title: "Cadastros", subtitle: "Contas, centros de custo e plano de contas" },
+  ledger: { title: "Livro-caixa", subtitle: "Lançamentos e conciliação" },
   transactions: { title: "Transações", subtitle: "Gerenciar movimentações" },
   pendencies: { title: "Pendências", subtitle: "Itens aguardando resolução" },
   reports: { title: "Relatórios", subtitle: "DRE, Fluxo de Caixa e mais" },
@@ -29,9 +33,13 @@ const Index = () => {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onNavigate={setCurrentPage} />;
       case "aiInsights":
         return <AIInsights />;
+      case "financialRegistrations":
+        return <FinancialRegistrations />;
+      case "ledger":
+        return <Ledger />;
       case "imports":
         return <Imports />;
       case "transactions":

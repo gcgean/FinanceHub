@@ -53,7 +53,22 @@ async function main() {
     create: { email: "cliente@financehub.local", name: "Cliente", role: UserRole.CLIENT, passwordHash: clientPasswordHash, companyId: company.id },
   });
 
-  const txs = [
+  type SeedTx = {
+    id: string
+    date: string
+    description: string
+    value: number
+    type: TransactionType
+    category: string
+    categoryConfidence?: number
+    account: string
+    status: TransactionStatus
+    costCenter?: string
+    attachmentUrl?: string
+    notes?: string
+  }
+
+  const txs: SeedTx[] = [
     {
       id: "tx1",
       date: "2026-01-30",
@@ -90,7 +105,7 @@ async function main() {
       costCenter: "Administrativo",
       attachmentUrl: "/placeholder.svg",
     },
-  ] as const;
+  ];
 
   for (const tx of txs) {
     await prisma.transaction.upsert({
@@ -105,9 +120,9 @@ async function main() {
         categoryConfidence: tx.categoryConfidence ?? null,
         account: tx.account,
         status: tx.status,
-        costCenter: (tx as any).costCenter ?? null,
-        attachmentUrl: (tx as any).attachmentUrl ?? null,
-        notes: (tx as any).notes ?? null,
+        costCenter: tx.costCenter ?? null,
+        attachmentUrl: tx.attachmentUrl ?? null,
+        notes: tx.notes ?? null,
       },
       create: {
         id: tx.id,
@@ -120,9 +135,9 @@ async function main() {
         categoryConfidence: tx.categoryConfidence ?? null,
         account: tx.account,
         status: tx.status,
-        costCenter: (tx as any).costCenter ?? null,
-        attachmentUrl: (tx as any).attachmentUrl ?? null,
-        notes: (tx as any).notes ?? null,
+        costCenter: tx.costCenter ?? null,
+        attachmentUrl: tx.attachmentUrl ?? null,
+        notes: tx.notes ?? null,
       },
     });
   }

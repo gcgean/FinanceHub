@@ -17,8 +17,7 @@ export async function aiRoutes(app: FastifyInstance) {
       const { horizon } = parseQuery(HorizonQuery, request.query);
       const companyId = request.user.role === UserRole.ADMIN ? undefined : request.user.companyId!;
 
-      const where: any = companyId ? { companyId } : {};
-      const txs = await prisma.transaction.findMany({ where, orderBy: { date: "desc" }, take: 200 });
+      const txs = await prisma.transaction.findMany({ where: companyId ? { companyId } : undefined, orderBy: { date: "desc" }, take: 200 });
 
       const revenue = txs.filter((t) => t.type === TransactionType.REVENUE).reduce((a, b) => a + b.value, 0);
       const expense = txs.filter((t) => t.type === TransactionType.EXPENSE).reduce((a, b) => a + Math.abs(b.value), 0);
@@ -60,11 +59,11 @@ export async function aiRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
       const companyId = request.user.role === UserRole.ADMIN ? undefined : request.user.companyId!;
-      const where: any = companyId ? { companyId } : {};
+
 
       const [overdue, pending] = await Promise.all([
-        prisma.pendency.count({ where: { ...where, status: PendencyStatus.OVERDUE } }),
-        prisma.pendency.count({ where: { ...where, status: PendencyStatus.PENDING } }),
+        prisma.pendency.count({ where: { ...(companyId ? { companyId } : {}), status: PendencyStatus.OVERDUE } }),
+        prisma.pendency.count({ where: { ...(companyId ? { companyId } : {}), status: PendencyStatus.PENDING } }),
       ]);
 
       return {

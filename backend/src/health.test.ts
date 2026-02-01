@@ -1,9 +1,10 @@
 import { beforeAll, afterAll, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
 
 process.env.DATABASE_URL = process.env.DATABASE_URL ?? "file:./dev.db";
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_1234567890";
 
-let app: any;
+let app: FastifyInstance;
 
 beforeAll(async () => {
   const mod = await import("./index");
@@ -20,4 +21,3 @@ it("GET /health", async () => {
   expect(res.statusCode).toBe(200);
   expect(res.json()).toEqual({ ok: true });
 });
-
