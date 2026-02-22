@@ -4,6 +4,8 @@ import { Header } from "@/components/layout/Header";
 import Dashboard from "@/pages/Dashboard";
 import AIInsights from "@/pages/AIInsights";
 import Imports from "@/pages/Imports";
+import Integrations from "@/pages/Integrations";
+import Mapping from "@/pages/Mapping";
 import Transactions from "@/pages/Transactions";
 import Pendencies from "@/pages/Pendencies";
 import Reports from "@/pages/Reports";
@@ -42,6 +44,10 @@ const Index = () => {
         return <Ledger />;
       case "imports":
         return <Imports />;
+      case "integrations":
+        return <Integrations />;
+      case "mapping":
+        return <Mapping />;
       case "transactions":
         return <Transactions />;
       case "pendencies":

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { parseBody } from "../lib/validation";
@@ -9,6 +9,7 @@ import { UserRole } from "@prisma/client";
 const AccountBody = z.object({
   code: z.string().min(1).optional(),
   description: z.string().min(1),
+  externalCode: z.string().optional().nullable(),
   accountTypeId: z.string().optional().nullable(),
   active: z.boolean().optional(),
   useInCashFlow: z.boolean().optional(),
@@ -28,7 +29,7 @@ async function getAccountWithExtras(params: { companyId: string; accountId: stri
     where: { companyId: params.companyId, deletedAt: null, confirmed: true, accountId: params.accountId },
     select: { amount: true, operation: true },
   });
-  const balance = ledger.reduce((sum, e) => sum + (e.operation === "CREDITO" ? e.amount : -e.amount), 0);
+  const balance = ledger.reduce<number>((sum, e) => sum + (e.operation === "CREDITO" ? e.amount : -e.amount), 0);
 
   return {
     ...account,
@@ -80,7 +81,7 @@ export async function accountsRoutes(app: FastifyInstance) {
   app.post(
     "/",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
-    async (request) => {
+    async (request: FastifyRequest) => {
       const companyId = await resolveCompanyId(request);
       const data = parseBody(AccountBody, request.body);
 
@@ -105,6 +106,7 @@ export async function accountsRoutes(app: FastifyInstance) {
             companyId,
             code,
             description: data.description,
+            externalCode: data.externalCode ?? null,
             accountTypeId,
             active: data.active ?? true,
             useInCashFlow: data.useInCashFlow ?? true,
@@ -142,6 +144,22 @@ export async function accountsRoutes(app: FastifyInstance) {
         throw e;
       }
       return getAccountWithExtras({ companyId, accountId: updated.id });
+    }
+  );
+
+  app.delete(
+    "/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const existing = await prisma.account.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const inUse = await prisma.bankLedgerEntry.count({ where: { companyId, accountId: params.id } });
+      if (inUse > 0) throw Object.assign(new Error("CANNOT_DELETE_IN_USE"), { statusCode: 400 });
+      await prisma.account.delete({ where: { id: params.id } });
+      return { ok: true };
     }
   );
 }

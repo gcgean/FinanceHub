@@ -4,7 +4,8 @@ process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://financehub:
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_1234567890";
 process.env.FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? "http://127.0.0.1:5173";
 
-let app: any;
+import type { FastifyInstance } from "fastify";
+let app: FastifyInstance;
 
 async function login(email: string, password: string) {
   const res = await app.inject({
@@ -146,7 +147,8 @@ describe("Backend routes (integration)", () => {
 
     const chartAccountsRes = await app.inject({ method: "GET", url: "/chart-accounts?includeGlobal=true", headers });
     expect(chartAccountsRes.statusCode).toBe(200);
-    const firstChart = chartAccountsRes.json().find((x: any) => x.planType === "ANALITICA") ?? chartAccountsRes.json()[0];
+    const charts = chartAccountsRes.json() as Array<{ id: string; planType: string }>;
+    const firstChart = charts.find((x) => x.planType === "ANALITICA") ?? charts[0];
     expect(firstChart?.id).toBeTruthy();
 
     const ledgerCreate = await app.inject({

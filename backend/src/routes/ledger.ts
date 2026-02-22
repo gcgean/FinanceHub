@@ -28,14 +28,20 @@ const EntrySchema = z.object({
   splits: z.array(SplitSchema).default([]),
 });
 
+const QueryBoolean = z.preprocess((v) => {
+  if (v === "true" || v === true || v === 1 || v === "1") return true;
+  if (v === "false" || v === false || v === 0 || v === "0") return false;
+  return v;
+}, z.boolean());
+
 const ListQuery = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   accountId: z.string().optional(),
   operation: z.nativeEnum(LedgerOperation).optional(),
-  confirmed: z.coerce.boolean().optional(),
-  deleted: z.coerce.boolean().optional().default(false),
-  withSplits: z.coerce.boolean().optional().default(false),
+  confirmed: QueryBoolean.optional(),
+  deleted: QueryBoolean.optional().default(false),
+  withSplits: QueryBoolean.optional().default(false),
 });
 
 export async function ledgerRoutes(app: FastifyInstance) {
@@ -61,6 +67,10 @@ export async function ledgerRoutes(app: FastifyInstance) {
         ...(q.confirmed === undefined ? {} : { confirmed: q.confirmed }),
         ...(q.deleted ? { deletedAt: { not: null } } : { deletedAt: null }),
       };
+
+      console.log("[GET /ledger] User:", request.user);
+      console.log("[GET /ledger] Query:", q);
+      console.log("[GET /ledger] Where:", JSON.stringify(where, null, 2));
 
       return prisma.bankLedgerEntry.findMany({
         where,
@@ -112,7 +122,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
             history: data.history ?? null,
             printOnClose: data.printOnClose ?? false,
             confirmed: data.confirmed ?? false,
-            updatedById: request.user.sub,
+            // updatedById: request.user.sub, // Removed to avoid FK error if user doesn't exist
           },
         });
 
@@ -127,10 +137,13 @@ export async function ledgerRoutes(app: FastifyInstance) {
           });
         }
 
+
+        const user = await tx.user.findUnique({ where: { id: request.user.sub } });
+
         await tx.auditLog.create({
           data: {
             companyId,
-            userId: request.user.sub,
+            userId: user ? request.user.sub : null,
             entity: "LEDGER_ENTRY",
             entityId: entry.id,
             action: AuditAction.CREATE,
@@ -167,6 +180,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
       if (existing.companyId !== companyId) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
 
       const updated = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: request.user.sub } });
+
         const entry = await tx.bankLedgerEntry.update({
           where: { id: params.id },
           data: {
@@ -182,7 +197,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
             history: data.history ?? null,
             printOnClose: data.printOnClose ?? false,
             confirmed: data.confirmed ?? false,
-            updatedById: request.user.sub,
+            updatedById: user ? request.user.sub : null,
           },
         });
 
@@ -201,7 +216,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
         await tx.auditLog.create({
           data: {
             companyId,
-            userId: request.user.sub,
+            userId: user ? request.user.sub : null,
             entity: "LEDGER_ENTRY",
             entityId: entry.id,
             action: AuditAction.UPDATE,
@@ -240,15 +255,17 @@ export async function ledgerRoutes(app: FastifyInstance) {
         }
       }
 
+      const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+
       const updated = await prisma.bankLedgerEntry.update({
         where: { id: params.id },
-        data: { confirmed: body.confirmed, updatedById: request.user.sub },
+        data: { confirmed: body.confirmed, updatedById: user ? request.user.sub : null },
       });
 
       await prisma.auditLog.create({
         data: {
           companyId,
-          userId: request.user.sub,
+          userId: user ? request.user.sub : null,
           entity: "LEDGER_ENTRY",
           entityId: params.id,
           action: AuditAction.CONFIRM,
@@ -271,15 +288,17 @@ export async function ledgerRoutes(app: FastifyInstance) {
       if (!entry) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (entry.companyId !== companyId) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
 
+      const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+
       const updated = await prisma.bankLedgerEntry.update({
         where: { id: params.id },
-        data: { deletedAt: new Date(), updatedById: request.user.sub },
+        data: { deletedAt: new Date(), updatedById: user ? request.user.sub : null },
       });
 
       await prisma.auditLog.create({
         data: {
           companyId,
-          userId: request.user.sub,
+          userId: user ? request.user.sub : null,
           entity: "LEDGER_ENTRY",
           entityId: params.id,
           action: AuditAction.DELETE,

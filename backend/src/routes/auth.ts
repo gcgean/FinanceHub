@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
@@ -19,9 +19,15 @@ const RegisterBody = z.object({
   companyId: z.string().optional().nullable(),
 });
 
+type LoginRequest = FastifyRequest<{ Body: z.infer<typeof LoginBody> }>;
+
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/login", async (request) => {
-    const { email, password } = parseBody(LoginBody, request.body);
+  app.post("/login", async (request: LoginRequest) => {
+    const parsed = LoginBody.safeParse(request.body);
+    if (!parsed.success) {
+      throw Object.assign(new Error("INVALID_PAYLOAD"), { statusCode: 400 });
+    }
+    const { email, password } = parsed.data;
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw Object.assign(new Error("INVALID_CREDENTIALS"), { statusCode: 401 });
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -45,7 +51,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/me", { preHandler: [requireAuth(app)] }, async (request) => {
+  app.get("/me", { preHandler: [requireAuth(app)] }, async (request: FastifyRequest) => {
     const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
     if (!user) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
     return {
@@ -60,7 +66,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     "/register",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN])] },
-    async (request) => {
+    async (request: FastifyRequest) => {
       const { email, name, password, role, companyId } = parseBody(RegisterBody, request.body);
       const passwordHash = await bcrypt.hash(password, 10);
 
@@ -84,4 +90,3 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 }
-

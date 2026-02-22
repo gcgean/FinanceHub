@@ -41,7 +41,7 @@ export function ChartAccountDialog(props: {
 }) {
   const defaultValues = useMemo<ChartAccountFormValues>(
     () => ({
-      code: "",
+      code: undefined,
       description: "",
       active: true,
       planType: "SINTETICA",
@@ -99,7 +99,7 @@ export function ChartAccountDialog(props: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="code">Código</Label>
-              <Input id="code" placeholder="2.01" {...form.register("code")} />
+              <Input id="code" placeholder={props.value ? "Informe o código" : "(gerado automaticamente)"} {...form.register("code")} disabled={!props.value} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>

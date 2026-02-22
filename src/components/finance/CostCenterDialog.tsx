@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch"
 import type { CostCenter } from "@/api/finance"
 
 const Schema = z.object({
-  code: z.string().min(1),
+  code: z.string().optional(),
+  externalCode: z.string().optional().nullable(),
   description: z.string().min(1),
   active: z.boolean().optional(),
 })
@@ -24,13 +25,13 @@ export function CostCenterDialog(props: {
   loading?: boolean
   onSubmit: (values: CostCenterFormValues) => Promise<void>
 }) {
-  const defaultValues = useMemo<CostCenterFormValues>(() => ({ code: "", description: "", active: true }), [])
+  const defaultValues = useMemo<CostCenterFormValues>(() => ({ code: undefined, externalCode: null, description: "", active: true }), [])
   const form = useForm<CostCenterFormValues>({ resolver: zodResolver(Schema), defaultValues })
 
   useEffect(() => {
     if (!props.open) return
     if (props.value) {
-      form.reset({ code: props.value.code, description: props.value.description, active: props.value.active })
+      form.reset({ code: props.value.code, externalCode: props.value.externalCode, description: props.value.description, active: props.value.active })
     } else {
       form.reset(defaultValues)
     }
@@ -52,7 +53,11 @@ export function CostCenterDialog(props: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="code">Código</Label>
-              <Input id="code" placeholder="ADM" {...form.register("code")} />
+              <Input id="code" placeholder="(gerado automaticamente)" {...form.register("code")} disabled={!props.value} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="externalCode">Código externo (ERP)</Label>
+              <Input id="externalCode" placeholder="Ex.: CC-ADM" {...form.register("externalCode")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
@@ -81,4 +86,3 @@ export function CostCenterDialog(props: {
     </Dialog>
   )
 }
-

@@ -34,6 +34,10 @@ import { mockTransactions, categories, accounts, type Transaction, type Transact
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
+import { getPresetRange, getLastNDays, getLastNWeeks, getLastNMonths } from "@/utils/dateRange";
+import { downloadCsv } from "@/utils/csv";
+import { downloadXlsx } from "@/utils/xlsx";
 
 const statusConfig: Record<TransactionStatus, { label: string; icon: typeof CheckCircle; className: string }> = {
   novo: { label: 'Novo', icon: AlertCircle, className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
@@ -51,13 +55,17 @@ export default function Transactions() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [range, setRange] = useState<{ from?: string; to?: string }>({})
 
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || t.status === statusFilter;
     const matchesType = typeFilter === "all" || t.type === typeFilter;
     const matchesAccount = accountFilter === "all" || t.account === accountFilter;
-    return matchesSearch && matchesStatus && matchesType && matchesAccount;
+    const d = new Date(t.date)
+    const fromOk = !range.from || d >= new Date(range.from)
+    const toOk = !range.to || d <= new Date(range.to)
+    return matchesSearch && matchesStatus && matchesType && matchesAccount && fromOk && toOk;
   });
 
   const toggleSelect = (id: string) => {
@@ -99,9 +107,41 @@ export default function Transactions() {
             <Upload className="w-4 h-4 mr-2" />
             Importar
           </Button>
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const headers = ["Data", "Descrição", "Categoria", "Conta", "Valor", "Status"]
+              const rows = filteredTransactions.map((t) => [
+                format(new Date(t.date), "yyyy-MM-dd"),
+                t.description,
+                t.category,
+                t.account,
+                t.value,
+                t.status,
+              ])
+              downloadCsv("transacoes.csv", headers, rows)
+            }}
+          >
             <Download className="w-4 h-4 mr-2" />
             Exportar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const headers = ["Data", "Descrição", "Categoria", "Conta", "Valor", "Status"]
+              const rows = filteredTransactions.map((t) => [
+                format(new Date(t.date), "yyyy-MM-dd"),
+                t.description,
+                t.category,
+                t.account,
+                t.value,
+                t.status,
+              ])
+              downloadXlsx("transacoes.xlsx", headers, rows, "Transacoes")
+            }}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            XLSX
           </Button>
         </div>
       </div>
@@ -118,6 +158,60 @@ export default function Transactions() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
               />
+            </div>
+          </div>
+          <div className="w-[260px]">
+            <DateRangePicker value={range} onChange={setRange} label="Período" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setRange(getPresetRange("current_month"))}>Mês atual</Button>
+            <Button variant="outline" onClick={() => setRange(getPresetRange("last_30"))}>Últimos 30</Button>
+            <Button variant="outline" onClick={() => setRange(getPresetRange("quarter"))}>Trimestre</Button>
+            <Button variant="outline" onClick={() => setRange(getPresetRange("year"))}>Ano</Button>
+            <div className="flex items-center gap-1">
+              <Input
+                className="w-20"
+                type="number"
+                min={1}
+                defaultValue={30}
+                onChange={(e) => {
+                  const n = Math.max(1, Number(e.target.value || 1))
+                  const { from, to } = getLastNDays(n)
+                  setRange({ from, to })
+                }}
+                placeholder="N dias"
+              />
+              <span className="text-xs text-muted-foreground">Últimos N dias</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Input
+                className="w-20"
+                type="number"
+                min={1}
+                defaultValue={12}
+                onChange={(e) => {
+                  const n = Math.max(1, Number(e.target.value || 1))
+                  const { from, to } = getLastNWeeks(n)
+                  setRange({ from, to })
+                }}
+                placeholder="N semanas"
+              />
+              <span className="text-xs text-muted-foreground">Últimas N semanas</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Input
+                className="w-20"
+                type="number"
+                min={1}
+                defaultValue={6}
+                onChange={(e) => {
+                  const n = Math.max(1, Number(e.target.value || 1))
+                  const { from, to } = getLastNMonths(n)
+                  setRange({ from, to })
+                }}
+                placeholder="N meses"
+              />
+              <span className="text-xs text-muted-foreground">Últimos N meses</span>
             </div>
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>

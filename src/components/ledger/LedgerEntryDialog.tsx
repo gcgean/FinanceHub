@@ -1,9 +1,12 @@
 import { z } from "zod"
 import { useEffect, useMemo } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { format } from "date-fns"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/DatePicker"
+import { CurrencyInput } from "@/components/ui/CurrencyInput"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,12 +28,8 @@ const Schema = z.object({
 type FormValues = z.infer<typeof Schema>
 
 function toDateInput(value: string) {
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ""
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, "0")
-  const dd = String(d.getDate()).padStart(2, "0")
-  return `${yyyy}-${mm}-${dd}`
+  if (!value) return ""
+  return value.split("T")[0]
 }
 
 export function LedgerEntryDialog(props: {
@@ -53,7 +52,7 @@ export function LedgerEntryDialog(props: {
 }) {
   const defaultValues = useMemo<FormValues>(
     () => ({
-      issueDate: toDateInput(new Date().toISOString()),
+      issueDate: format(new Date(), "yyyy-MM-dd"),
       accountId: "",
       operation: "CREDITO",
       amount: 0,
@@ -118,7 +117,16 @@ export function LedgerEntryDialog(props: {
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label>Data</Label>
-              <Input type="date" {...form.register("issueDate")} />
+              <Controller
+                control={form.control}
+                name="issueDate"
+                render={({ field }) => (
+                  <DatePicker
+                    value={field.value}
+                    onChange={(date) => field.onChange(date)}
+                  />
+                )}
+              />
             </div>
             <div className="space-y-2">
               <Label>Operação</Label>
@@ -132,7 +140,16 @@ export function LedgerEntryDialog(props: {
             </div>
             <div className="space-y-2">
               <Label>Valor</Label>
-              <Input type="number" step="0.01" {...form.register("amount")} />
+              <Controller
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <CurrencyInput
+                    value={field.value}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                )}
+              />
             </div>
           </div>
 

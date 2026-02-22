@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { parseQuery } from "../lib/validation";
@@ -19,8 +19,8 @@ export async function aiRoutes(app: FastifyInstance) {
 
       const txs = await prisma.transaction.findMany({ where: companyId ? { companyId } : undefined, orderBy: { date: "desc" }, take: 200 });
 
-      const revenue = txs.filter((t) => t.type === TransactionType.REVENUE).reduce((a, b) => a + b.value, 0);
-      const expense = txs.filter((t) => t.type === TransactionType.EXPENSE).reduce((a, b) => a + Math.abs(b.value), 0);
+      const revenue = txs.filter((t) => t.type === TransactionType.REVENUE).reduce<number>((a, b) => a + b.value, 0);
+      const expense = txs.filter((t) => t.type === TransactionType.EXPENSE).reduce<number>((a, b) => a + Math.abs(b.value), 0);
       const net = revenue - expense;
 
       const factor = horizon === "30d" ? 1.03 : horizon === "90d" ? 1.08 : 1.2;
@@ -57,7 +57,7 @@ export async function aiRoutes(app: FastifyInstance) {
   app.get(
     "/insights",
     { preHandler: [requireAuth(app), requireCompanyScope()] },
-    async (request) => {
+    async (request: FastifyRequest) => {
       const companyId = request.user.role === UserRole.ADMIN ? undefined : request.user.companyId!;
 
 

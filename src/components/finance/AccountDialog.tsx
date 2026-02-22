@@ -12,6 +12,7 @@ import type { Account, AccountType } from "@/api/finance"
 
 const Schema = z.object({
   code: z.string().optional(),
+  externalCode: z.string().optional().nullable(),
   description: z.string().min(1),
   accountTypeId: z.string().nullable().optional(),
   active: z.boolean().optional(),
@@ -28,7 +29,7 @@ export function AccountDialog(props: {
   onSubmit: (values: AccountFormValues) => Promise<void>
 }) {
   const defaultValues = useMemo<AccountFormValues>(
-    () => ({ code: "", description: "", accountTypeId: null, active: true }),
+    () => ({ code: undefined, externalCode: null, description: "", accountTypeId: null, active: true }),
     []
   )
 
@@ -67,7 +68,16 @@ export function AccountDialog(props: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="code">Código</Label>
-              <Input id="code" placeholder="01" {...form.register("code")} />
+              <Input
+                id="code"
+                placeholder={props.value ? "Informe o código" : "(gerado automaticamente)"}
+                {...form.register("code")}
+                disabled={!props.value}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="externalCode">Código externo (ERP)</Label>
+              <Input id="externalCode" placeholder="Ex.: COD123" {...form.register("externalCode")} />
             </div>
             <div className="space-y-2">
               <Label>Tipo</Label>

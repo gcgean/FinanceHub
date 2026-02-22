@@ -1,0 +1,99 @@
+﻿unit uMain;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uDM, uFinanceHubAPI, uSyncService;
+
+type
+  TfrmMain = class(TForm)
+    btnConnectDB: TButton;
+    btnLoginAPI: TButton;
+    btnSync: TButton;
+    MemoLog: TMemo;
+    edtEmail: TEdit;
+    edtPass: TEdit;
+    Label1: TLabel;
+    Label2: TLabel;
+    procedure btnConnectDBClick(Sender: TObject);
+    procedure btnLoginAPIClick(Sender: TObject);
+    procedure btnSyncClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+  private
+    FAPI: TFinanceHubAPI;
+    FSync: TSyncService;
+    procedure Log(const AMsg: string);
+  public
+    { Public declarations }
+  end;
+
+var
+  frmMain: TfrmMain;
+
+implementation
+
+{$R *.dfm}
+
+procedure TfrmMain.FormCreate(Sender: TObject);
+begin
+  // URL do servidor de produção/homologação
+  FAPI := TFinanceHubAPI.Create('http://26.241.132.21:4000');
+  FSync := TSyncService.Create(FAPI, DM.fdConCommand);
+end;
+
+procedure TfrmMain.FormDestroy(Sender: TObject);
+begin
+  FSync.Free;
+  FAPI.Free;
+end;
+
+procedure TfrmMain.Log(const AMsg: string);
+begin
+  MemoLog.Lines.Add(FormatDateTime('hh:nn:ss', Now) + ' - ' + AMsg);
+end;
+
+procedure TfrmMain.btnConnectDBClick(Sender: TObject);
+begin
+  try
+    DM.fdConCommand.Connected := True;
+    Log('Conectado ao Firebird com sucesso!');
+  except
+    on E: Exception do
+      Log('Erro ao conectar Firebird: ' + E.Message);
+  end;
+end;
+
+procedure TfrmMain.btnLoginAPIClick(Sender: TObject);
+begin
+  if FAPI.Login(edtEmail.Text, edtPass.Text) then
+    Log('Login na API realizado! Token obtido.')
+  else
+    Log('Falha no login da API.');
+end;
+
+procedure TfrmMain.btnSyncClick(Sender: TObject);
+begin
+  if not DM.fdConCommand.Connected then
+  begin
+    Log('Conecte no banco primeiro.');
+    Exit;
+  end;
+  
+  if FAPI.Token = '' then
+  begin
+    Log('Faça login na API primeiro.');
+    Exit;
+  end;
+  
+  Log('Iniciando sincronização...');
+  // Aqui chamaria FSync.SyncAll ou métodos individuais
+  // Exemplo:
+  // var Count := FSync.SyncCustomers;
+  // Log(Format('Clientes sincronizados: %d', [Count]));
+  
+  Log('Sincronização finalizada (Simulação - implemente os SELECTs no uSyncService).');
+end;
+
+end.

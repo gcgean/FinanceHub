@@ -16,6 +16,7 @@ import {
   FixedVariable,
   CostExpense,
 } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -29,8 +30,8 @@ async function main() {
 
   const company = await prisma.company.upsert({
     where: { cnpj: "12.345.678/0001-90" },
-    update: { name: "Tech Solutions Ltda" },
-    create: { name: "Tech Solutions Ltda", cnpj: "12.345.678/0001-90" },
+    update: ({ name: "Tech Solutions Ltda", email: "financeiro@techsolutions.com.br", phone: "(11) 99999-9999", plan: "PROFESSIONAL", status: "ACTIVE" } as Prisma.CompanyUpdateInput),
+    create: ({ name: "Tech Solutions Ltda", cnpj: "12.345.678/0001-90", email: "financeiro@techsolutions.com.br", phone: "(11) 99999-9999", plan: "PROFESSIONAL", status: "ACTIVE" } as Prisma.CompanyCreateInput),
   });
 
   await prisma.user.upsert({
@@ -406,6 +407,30 @@ async function main() {
       splitAmount: 1850.45,
     },
   });
+
+  // Geo data: States and Cities from IBGE (populate if empty)
+  const statesCount = await prisma.state.count();
+  if (statesCount === 0) {
+    const ibgeStates = await fetch("https://servicodados.ibge.gov.br/api/v1/localidades/estados").then((r: Response) => r.json()) as Array<{ sigla: string; nome: string }>;
+    for (const s of ibgeStates) {
+      await prisma.state.upsert({
+        where: { code: s.sigla },
+        update: { name: s.nome },
+        create: { code: s.sigla, name: s.nome },
+      });
+    }
+  }
+  const statesForCities = await fetch("https://servicodados.ibge.gov.br/api/v1/localidades/estados").then((r: Response) => r.json()) as Array<{ id: number; sigla: string; nome: string }>;
+  for (const st of statesForCities) {
+    const ibgeCities = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${st.id}/municipios?orderBy=nome`).then((r: Response) => r.json()) as Array<{ id: number; nome: string }>;
+    for (const c of ibgeCities) {
+      await prisma.city.upsert({
+        where: { id: String(c.id) },
+        update: { name: c.nome, stateCode: st.sigla },
+        create: { id: String(c.id), name: c.nome, stateCode: st.sigla },
+      });
+    }
+  }
 }
 
 main()

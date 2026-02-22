@@ -98,10 +98,26 @@ enum AuditAction {
   CONFIRM
 }
 
+enum CompanyPlan {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
 model Company {
   id        String        @id @default(cuid())
   name      String
   cnpj      String?       @unique
+  email     String?
+  phone     String?
+  plan      CompanyPlan   @default(PROFESSIONAL)
+  status    CompanyStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
   users     User[]
   txs       Transaction[]
@@ -113,6 +129,45 @@ model Company {
   chartAccounts  ChartAccount[]
   ledgerEntries  BankLedgerEntry[]
   audit          AuditLog[]
+
+  dataSources    DataSource[]
+  importFiles    ImportFile[]
+  rawEvents      RawEvent[]
+  importErrors   ImportError[]
+  externalRefs   ExternalRef[]
+  stgCustomers   StgCustomer[]
+  stgSuppliers   StgSupplier[]
+  stgProducts    StgProduct[]
+  stgInventories StgInventory[]
+  stgSalesInvoices StgSalesInvoice[]
+  stgPurchaseInvoices StgPurchaseInvoice[]
+
+  customers      Customer[]
+  suppliers      Supplier[]
+  products       Product[]
+  apTitles       ApTitle[]
+  arTitles       ArTitle[]
+  customerDeactivations CustomerDeactivation[]
+  sales          Sale[]
+  paymentMethods PaymentMethod[]
+  integrations   Integration[]
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  erp       String
+  apiUrl    String
+  apiKey    String   // TODO: Encrypt this field
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lastSyncStatus   String?
+  lastSyncAt       DateTime?
+  syncErrorMessage String?
+
+  @@unique([companyId, erp])
 }
 
 model User {
@@ -127,6 +182,9 @@ model User {
 
   updatedLedgerEntries BankLedgerEntry[] @relation("LedgerUpdatedBy")
   audit                AuditLog[]
+
+  requestedImportJobs  ImportJob[] @relation("UserRequestedJobs")
+  importFilesUploaded  ImportFile[]
 }
 
 model Transaction {
@@ -165,6 +223,7 @@ model Account {
   company           Company       @relation(fields: [companyId], references: [id])
   code             String
   description      String
+  externalCode     String?
   active           Boolean       @default(true)
   useInCashFlow    Boolean       @default(true)
   superOnly        Boolean       @default(false)
@@ -176,6 +235,7 @@ model Account {
   ledgerEntries BankLedgerEntry[]
 
   @@unique([companyId, code])
+  @@unique([companyId, externalCode])
   @@index([companyId])
 }
 
@@ -184,6 +244,7 @@ model CostCenter {
   companyId    String
   company      Company  @relation(fields: [companyId], references: [id])
   code        String
+  externalCode String?
   description String
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -191,6 +252,7 @@ model CostCenter {
   ledgerSplits BankLedgerEntrySplit[]
 
   @@unique([companyId, code])
+  @@unique([companyId, externalCode])
   @@index([companyId])
 }
 
@@ -358,5 +420,509 @@ model ImportJob {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
+  dataSourceId      String?
+  dataSource        DataSource? @relation(fields: [dataSourceId], references: [id])
+  origin            String?
+  entity            String?
+  requestedByUserId String?
+  requestedBy       User?        @relation("UserRequestedJobs", fields: [requestedByUserId], references: [id])
+  idempotencyKey    String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  statsJson         String?
+  errorSummary      String?
+
   @@index([companyId, status])
+
+  rawEvents   RawEvent[]
+  importErrors ImportError[]
+}
+
+enum DataSourceType {
+  ERP_API
+  EXCEL
+  MANUAL
+}
+
+enum DataSourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum AuthType {
+  NONE
+  API_KEY
+  OAUTH2
+  BASIC
+  JWT
+}
+
+enum RawEventStatus {
+  RECEIVED
+  PARSED
+  REJECTED
+}
+
+model DataSource {
+  id          String            @id @default(cuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id])
+  type        DataSourceType
+  providerKey String
+  name        String
+  status      DataSourceStatus  @default(ACTIVE)
+  baseUrl     String?
+  authType    AuthType          @default(NONE)
+  authData    String?
+  settings    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  importJobs  ImportJob[]
+  importFiles ImportFile[]
+  rawEvents   RawEvent[]
+  externalRefs ExternalRef[]
+
+  @@unique([companyId, providerKey, name])
+  @@index([companyId, status])
+}
+
+model ImportFile {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  dataSourceId       String?
+  dataSource         DataSource? @relation(fields: [dataSourceId], references: [id])
+  filename           String
+  mimeType           String
+  sizeBytes          Int
+  storagePath        String
+  checksumSha256     String
+  uploadedByUserId   String
+  uploadedBy         User     @relation(fields: [uploadedByUserId], references: [id])
+  uploadedAt         DateTime @default(now())
+
+
+  @@unique([companyId, checksumSha256])
+}
+
+model RawEvent {
+  id            String         @id @default(cuid())
+  companyId     String
+  company       Company        @relation(fields: [companyId], references: [id])
+  dataSourceId  String
+  dataSource    DataSource     @relation(fields: [dataSourceId], references: [id])
+  importJobId   String
+  importJob     ImportJob      @relation(fields: [importJobId], references: [id])
+  entity        String
+  externalId    String?
+  payload       String
+  payloadHash   String
+  receivedAt    DateTime       @default(now())
+  status        RawEventStatus @default(RECEIVED)
+  error         String?
+
+  @@unique([companyId, dataSourceId, entity, payloadHash])
+  @@index([companyId, dataSourceId, entity, receivedAt])
+
+  importErrors ImportError[]
+}
+
+model ImportError {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id])
+  importJobId  String
+  importJob    ImportJob @relation(fields: [importJobId], references: [id])
+  rawEventId   String?
+  rawEvent     RawEvent? @relation(fields: [rawEventId], references: [id])
+  entity       String
+  externalId   String?
+  errorCode    String
+  message      String
+  detailsJson  String?
+  createdAt    DateTime  @default(now())
+}
+
+model ExternalRef {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  dataSourceId  String?
+  dataSource    DataSource? @relation(fields: [dataSourceId], references: [id])
+  entity        String
+  externalId    String
+  targetTable   String
+  targetId      String
+  createdAt     DateTime @default(now())
+
+  @@unique([companyId, entity, externalId])
+}
+
+enum TitleStatus {
+  OPEN
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  knownName String?
+  externalId String?
+  document  String?  @unique
+  email     String?
+  phone     String?
+  phone2    String?
+  birthDate DateTime?
+  city      String?
+  state     String?
+  cityId    String?
+  cityRef   City?    @relation(fields: [cityId], references: [id])
+  stateCode String?
+  stateRef  State?   @relation(fields: [stateCode], references: [code])
+  neighborhood String?
+  value      Float?
+  deactivatedAt DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  arTitles  ArTitle[]
+  deactivations CustomerDeactivation[]
+  sales     Sale[]
+
+  @@unique([companyId, externalId])
+}
+
+model CustomerDeactivation {
+  id           String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  value         Float?
+  reason        String?
+  deactivatedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([companyId, customerId])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  externalId String?
+  document  String?  @unique
+  email     String?
+  phone     String?
+  phone2    String?
+  city      String?
+  state     String?
+  cityId    String?
+  cityRef   City?    @relation(fields: [cityId], references: [id])
+  stateCode String?
+  stateRef  State?   @relation(fields: [stateCode], references: [code])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  apTitles  ApTitle[]
+
+  @@unique([companyId, externalId])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  code          String
+  externalId    String?
+  sku           String?
+  barcode       String?
+  name          String
+  section       String?
+  group         String?
+  subgroup      String?
+  brandName     String?
+  costPrice     Float?
+  salePrice     Float?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  saleItems     SaleItem[]
+
+  @@unique([companyId, code])
+  @@unique([companyId, externalId])
+}
+
+model ApTitle {
+  id              String     @id @default(cuid())
+  companyId       String
+  company         Company    @relation(fields: [companyId], references: [id])
+  supplierId      String?
+  supplier        Supplier?  @relation(fields: [supplierId], references: [id])
+  issueDate       DateTime
+  dueDate         DateTime
+  amount          Float
+  openAmount      Float
+  status          TitleStatus
+  documentNumber  String?
+  notes           String?
+  externalId      String?
+  createdAt       DateTime   @default(now())
+
+  @@unique([companyId, externalId])
+}
+
+model ArTitle {
+  id              String     @id @default(cuid())
+  companyId       String
+  company         Company    @relation(fields: [companyId], references: [id])
+  customerId      String?
+  customer        Customer?  @relation(fields: [customerId], references: [id])
+  issueDate       DateTime
+  dueDate         DateTime
+  amount          Float
+  openAmount      Float
+  status          TitleStatus
+  documentNumber  String?
+  notes           String?
+  externalId      String?
+  createdAt       DateTime   @default(now())
+
+  @@unique([companyId, externalId])
+}
+
+model StgCustomer {
+  id                String   @id @default(cuid())
+  companyId         String
+  company           Company  @relation(fields: [companyId], references: [id])
+  dataSourceId      String
+  importJobId       String
+  rawEventId        String
+  externalCustomerId String
+  name              String
+  document          String?
+  email             String?
+  phone             String?
+  city              String?
+  state             String?
+  isActive          Boolean  @default(true)
+  updatedAtSource   DateTime?
+  createdAt         DateTime @default(now())
+
+  @@unique([companyId, dataSourceId, externalCustomerId])
+}
+
+model StgSupplier {
+  id                  String   @id @default(cuid())
+  companyId           String
+  company             Company  @relation(fields: [companyId], references: [id])
+  dataSourceId        String
+  importJobId         String
+  rawEventId          String
+  externalSupplierId  String
+  name                String
+  document            String?
+  email               String?
+  phone               String?
+  city                String?
+  state               String?
+  isActive            Boolean  @default(true)
+  updatedAtSource     DateTime?
+  createdAt           DateTime @default(now())
+
+  @@unique([companyId, dataSourceId, externalSupplierId])
+}
+
+model StgProduct {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  dataSourceId       String
+  importJobId        String
+  rawEventId         String
+  externalProductId  String
+  sku                String?
+  barcode            String?
+  name               String
+  categoryPath       String?
+  brandName          String?
+  costPrice          Float?
+  salePrice          Float?
+  active             Boolean @default(true)
+  updatedAtSource    DateTime?
+  createdAt          DateTime @default(now())
+
+  @@unique([companyId, dataSourceId, externalProductId])
+}
+
+model StgInventory {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  dataSourceId       String
+  importJobId        String
+  rawEventId         String
+  externalProductId  String
+  externalLocationId String?
+  locationName       String?
+  qtyOnHand          Float
+  updatedAtSource    DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([companyId, externalProductId])
+}
+
+model StgSalesInvoice {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  dataSourceId       String
+  importJobId        String
+  rawEventId         String
+  externalInvoiceId  String
+  invoiceNumber      String
+  issueDate          DateTime
+  externalCustomerId String?
+  totalAmount        Float
+  discountAmount     Float?
+  freightAmount      Float?
+  status             String
+  updatedAtSource    DateTime?
+  createdAt          DateTime @default(now())
+
+  items StgSalesInvoiceItem[]
+}
+
+model StgSalesInvoiceItem {
+  id                   String   @id @default(cuid())
+  companyId            String
+  stgSalesInvoiceId    String
+  stgSalesInvoice      StgSalesInvoice @relation(fields: [stgSalesInvoiceId], references: [id])
+  externalProductId    String?
+  description          String
+  qty                  Float
+  unitPrice            Float
+  totalPrice           Float
+  costEstimate         Float?
+  createdAt            DateTime @default(now())
+}
+
+model StgPurchaseInvoice {
+  id                  String   @id @default(cuid())
+  companyId           String
+  company             Company  @relation(fields: [companyId], references: [id])
+  dataSourceId        String
+  importJobId         String
+  rawEventId          String
+  externalInvoiceId   String
+  invoiceNumber       String
+  issueDate           DateTime
+  externalSupplierId  String?
+  totalAmount         Float
+  discountAmount      Float?
+  freightAmount       Float?
+  status              String
+  updatedAtSource     DateTime?
+  createdAt           DateTime @default(now())
+
+  items StgPurchaseInvoiceItem[]
+}
+
+model StgPurchaseInvoiceItem {
+  id                    String   @id @default(cuid())
+  companyId             String
+  stgPurchaseInvoiceId  String
+  stgPurchaseInvoice    StgPurchaseInvoice @relation(fields: [stgPurchaseInvoiceId], references: [id])
+  externalProductId     String?
+  description           String
+  qty                   Float
+  unitPrice             Float
+  totalPrice            Float
+  costEstimate          Float?
+  createdAt             DateTime @default(now())
+}
+
+model State {
+  code      String   @id
+  name      String
+  createdAt DateTime @default(now())
+
+  cities    City[]
+  customers Customer[]
+  suppliers Supplier[]
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  stateCode String
+  state     State    @relation(fields: [stateCode], references: [code])
+  createdAt DateTime @default(now())
+
+  customers Customer[]
+  suppliers Supplier[]
+  @@index([stateCode, name])
+}
+
+model Sale {
+  id              String       @id @default(cuid())
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id])
+  customerId      String?
+  customer        Customer?    @relation(fields: [customerId], references: [id])
+  date            DateTime
+  total           Float
+  status          String?
+  paymentMethodId String?
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  externalId      String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  items           SaleItem[]
+
+  @@index([companyId])
+  @@unique([companyId, externalId])
+}
+
+model SaleItem {
+  id          String   @id @default(cuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  externalId  String?
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  description String
+  quantity    Float
+  unitPrice   Float
+  totalPrice  Float
+  createdAt   DateTime @default(now())
+
+  @@index([saleId])
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  externalId String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales     Sale[]
+
+  @@index([companyId])
+  @@unique([companyId, externalId])
 }

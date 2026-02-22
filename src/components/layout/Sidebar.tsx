@@ -36,11 +36,13 @@ const navigation = [
   { id: "pendencies", label: "Pendências", icon: AlertCircle },
   { id: "reports", label: "Relatórios", icon: FileText },
   { id: "imports", label: "Importações", icon: Upload },
+  { id: "mapping", label: "Mapeamento", icon: FileText },
 ];
 
 const adminNavigation = [
   { id: "companies", label: "Empresas", icon: Building2 },
   { id: "users", label: "Usuários", icon: Users },
+  { id: "integrations", label: "Integrações", icon: ArrowUpDown },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
 
@@ -79,6 +81,8 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     return (a + b).toUpperCase()
   }, [user?.name])
 
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
   return (
     <aside className="w-64 bg-sidebar h-screen flex flex-col border-r border-sidebar-border">
       {/* Logo */}
@@ -97,7 +101,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
       {/* Company Selector */}
       <div className="p-4 border-b border-sidebar-border">
         {isAdmin ? (
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <button className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent/80 transition-colors">
                 <div className="flex items-center gap-3">
@@ -130,7 +134,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                             "w-full flex items-center justify-between rounded-md px-3 py-2 text-left hover:bg-accent",
                             companyId === c.id && "bg-accent"
                           )}
-                          onClick={() => setCompanyId(c.id)}
+                          onClick={() => {
+                            setCompanyId(c.id)
+                            setIsDialogOpen(false)
+                          }}
                         >
                           <div className="min-w-0">
                             <div className="text-sm font-medium truncate">{c.name}</div>
@@ -147,7 +154,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                   </div>
                 </ScrollArea>
                 <div className="flex justify-end">
-                  <Button variant="secondary" onClick={() => setCompanyId(null)}>
+                  <Button variant="secondary" onClick={() => {
+                    setCompanyId(null)
+                    setIsDialogOpen(false)
+                  }}>
                     Limpar empresa
                   </Button>
                 </div>

@@ -13,6 +13,7 @@ export type Account = {
   companyId: string
   code: string
   description: string
+  externalCode: string | null
   active: boolean
   useInCashFlow: boolean
   superOnly: boolean
@@ -27,6 +28,7 @@ export type CostCenter = {
   id: string
   companyId: string
   code: string
+  externalCode: string | null
   description: string
   active: boolean
   createdAt: string
@@ -67,6 +69,7 @@ export async function listAccounts() {
 export async function createAccount(body: {
   code?: string
   description: string
+  externalCode?: string | null
   accountTypeId?: string | null
   active?: boolean
   useInCashFlow?: boolean
@@ -86,21 +89,33 @@ export async function updateAccount(id: string, body: Partial<Parameters<typeof 
   })
 }
 
+export async function deleteAccount(id: string) {
+  return apiFetch<{ ok: true }>(`/accounts/${id}`, {
+    method: "DELETE",
+  })
+}
+
 export async function listCostCenters() {
   return apiFetch<CostCenter[]>("/cost-centers")
 }
 
-export async function createCostCenter(body: { code: string; description: string; active?: boolean }) {
+export async function createCostCenter(body: { code?: string; externalCode?: string | null; description: string; active?: boolean }) {
   return apiFetch<CostCenter>("/cost-centers", {
     method: "POST",
     body: JSON.stringify(body),
   })
 }
 
-export async function updateCostCenter(id: string, body: Partial<{ code: string; description: string; active: boolean }>) {
+export async function updateCostCenter(id: string, body: Partial<{ code: string; externalCode: string | null; description: string; active: boolean }>) {
   return apiFetch<CostCenter>(`/cost-centers/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  })
+}
+
+export async function deleteCostCenter(id: string) {
+  return apiFetch<{ ok: true }>(`/cost-centers/${id}`, {
+    method: "DELETE",
   })
 }
 
@@ -154,4 +169,3 @@ export async function deleteChartAccount(id: string) {
     method: "DELETE",
   })
 }
-

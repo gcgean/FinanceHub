@@ -31,10 +31,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (token) headers.set("authorization", `Bearer ${token}`)
   if (companyId) headers.set("x-company-id", companyId)
 
-  const res = await fetch(url, {
-    ...init,
-    headers,
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers,
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "NETWORK_ERROR"
+    throw new ApiResponseError({ status: 0, code: msg })
+  }
 
   const contentType = res.headers.get("content-type") || ""
   const isJson = contentType.includes("application/json")

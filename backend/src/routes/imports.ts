@@ -9,6 +9,7 @@ import { parseBody, parseQuery } from "../lib/validation";
 import { ensureDir, safeJoin } from "../lib/files";
 import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
 import { ImportSource, ImportStatus, Prisma, UserRole } from "@prisma/client";
+import crypto from "crypto";
 
 type MultipartFile = { filename: string; mimetype: string; toBuffer: () => Promise<Buffer> }
 
@@ -68,69 +69,91 @@ export async function importsRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/excel",
+    "/upload",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request) => {
       const { companyId: companyIdFromQuery } = parseQuery(AdminCompanyQuery, request.query);
       const companyId = request.user.role === UserRole.ADMIN ? (companyIdFromQuery ?? request.user.companyId) : request.user.companyId;
       if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const entityParam = (request.query as unknown as { entity?: string }).entity ?? (request.body as unknown as { entity?: string }).entity;
+      const entity = typeof entityParam === "string" && entityParam ? entityParam : null;
+      if (!entity) throw Object.assign(new Error("ENTITY_REQUIRED"), { statusCode: 400 });
+
       const file = await (request as unknown as { file: () => Promise<MultipartFile | undefined> }).file();
       if (!file) throw Object.assign(new Error("FILE_REQUIRED"), { statusCode: 400 });
       const saved = await saveUploadedFile(companyId, file);
 
-      return prisma.importJob.create({
+      const buffer = await file.toBuffer();
+      const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+
+      const importFile = await prisma.importFile.create({
+        data: {
+          companyId,
+          filename: saved.filename,
+          mimeType: saved.mimeType,
+          sizeBytes: buffer.length,
+          storagePath: saved.path,
+          checksumSha256: checksum,
+          uploadedByUserId: request.user.sub,
+        },
+      });
+
+      const job = await prisma.importJob.create({
         data: {
           companyId,
           source: ImportSource.EXCEL,
           status: ImportStatus.QUEUED,
-          filename: saved.filename,
-          mimeType: saved.mimeType,
-          path: saved.path,
+          origin: "EXCEL",
+          entity,
+          requestedByUserId: request.user.sub,
+          filename: importFile.filename,
+          mimeType: importFile.mimeType,
+          path: importFile.storagePath,
         },
       });
+
+      return { importJobId: job.id };
+    }
+  );
+
+  app.get(
+    "/:id",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const job = await prisma.importJob.findUnique({ where: { id: params.id } });
+      if (!job) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (request.user.role !== UserRole.ADMIN && job.companyId !== request.user.companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      return job;
+    }
+  );
+
+  app.get(
+    "/:id/errors",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const job = await prisma.importJob.findUnique({ where: { id: params.id } });
+      if (!job) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (request.user.role !== UserRole.ADMIN && job.companyId !== request.user.companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const items = await prisma.importError.findMany({ where: { importJobId: job.id }, orderBy: { createdAt: "desc" } });
+      return { items };
     }
   );
 
   app.post(
-    "/receipts",
-    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    "/:id/reprocess",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
-      const { companyId: companyIdFromQuery } = parseQuery(AdminCompanyQuery, request.query);
-      const companyId = request.user.role === UserRole.ADMIN ? (companyIdFromQuery ?? request.user.companyId) : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
-      const file = await (request as unknown as { file: () => Promise<MultipartFile | undefined> }).file();
-      if (!file) throw Object.assign(new Error("FILE_REQUIRED"), { statusCode: 400 });
-      const saved = await saveUploadedFile(companyId, file);
-
-      return prisma.importJob.create({
-        data: {
-          companyId,
-          source: ImportSource.RECEIPT,
-          status: ImportStatus.QUEUED,
-          filename: saved.filename,
-          mimeType: saved.mimeType,
-          path: saved.path,
-        },
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const job = await prisma.importJob.findUnique({ where: { id: params.id } });
+      if (!job) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (request.user.role !== UserRole.ADMIN && job.companyId !== request.user.companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: { status: ImportStatus.QUEUED, error: null, errorSummary: null, startedAt: null, finishedAt: null },
       });
-    }
-  );
-
-  app.post(
-    "/api",
-    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
-    async (request) => {
-      const { companyId: companyIdFromQuery } = parseQuery(AdminCompanyQuery, request.query);
-      const companyId = request.user.role === UserRole.ADMIN ? (companyIdFromQuery ?? request.user.companyId) : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
-      const { provider, credentialsRef } = parseBody(ApiBody, request.body);
-      return prisma.importJob.create({
-        data: {
-          companyId,
-          source: ImportSource.API,
-          status: ImportStatus.QUEUED,
-          resultJson: JSON.stringify({ provider, credentialsRef }),
-        },
-      });
+      return { ok: true };
     }
   );
 }

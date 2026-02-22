@@ -9,11 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { listAccounts } from "@/api/finance"
 import { getStatement, runDre } from "@/api/reports"
+import { getPresetRange } from "@/utils/dateRange"
+import { downloadCsv } from "@/utils/csv"
+import { downloadXlsx } from "@/utils/xlsx"
+import { downloadXlsxMulti } from "@/utils/xlsx"
+import { getLastNDays, getLastNWeeks, getLastNMonths } from "@/utils/dateRange"
+import { mockTransactions } from "@/data/mockTransactionsData"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
-
 function toDateInput(value: string) {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return ""
@@ -23,37 +28,33 @@ function toDateInput(value: string) {
   return `${yyyy}-${mm}-${dd}`
 }
 
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
+
 export default function Reports() {
   const accounts = useQuery({ queryKey: ["finance", "accounts"], queryFn: listAccounts })
 
   const [tab, setTab] = useState<"statement" | "dre">("statement")
 
-  const [statementFilters, setStatementFilters] = useState({
-    dateFrom: "2026-01-01",
-    dateTo: "2026-01-31",
-    accountId: "all" as "all" | string,
-  })
+  const [statementRange, setStatementRange] = useState<{ from?: string; to?: string }>({ from: "2026-01-01", to: "2026-01-31" })
+  const [statementAccountId, setStatementAccountId] = useState<"all" | string>("all")
   const [statementRun, setStatementRun] = useState(0)
   const statement = useQuery({
-    queryKey: ["reports", "statement", statementFilters, statementRun],
+    queryKey: ["reports", "statement", { range: statementRange, accountId: statementAccountId }, statementRun],
     enabled: statementRun > 0,
     queryFn: () =>
       getStatement({
-        dateFrom: statementFilters.dateFrom || undefined,
-        dateTo: statementFilters.dateTo || undefined,
-        accountId: statementFilters.accountId === "all" ? undefined : statementFilters.accountId,
+        dateFrom: statementRange.from || undefined,
+        dateTo: statementRange.to || undefined,
+        accountId: statementAccountId === "all" ? undefined : statementAccountId,
       }),
   })
 
-  const [dreFilters, setDreFilters] = useState({
-    dateFrom: "2026-01-01",
-    dateTo: "2026-01-31",
-  })
+  const [dreRange, setDreRange] = useState<{ from?: string; to?: string }>({ from: "2026-01-01", to: "2026-01-31" })
   const [dreRun, setDreRun] = useState(0)
   const dre = useQuery({
-    queryKey: ["reports", "dre", dreFilters, dreRun],
+    queryKey: ["reports", "dre", dreRange, dreRun],
     enabled: dreRun > 0,
-    queryFn: () => runDre({ dateFrom: dreFilters.dateFrom, dateTo: dreFilters.dateTo }),
+    queryFn: () => runDre({ dateFrom: dreRange.from ?? "2026-01-01", dateTo: dreRange.to ?? "2026-01-31" }),
   })
 
   const statementTotals = statement.data?.totals
@@ -81,17 +82,43 @@ export default function Reports() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">De</div>
-                  <Input type="date" value={statementFilters.dateFrom} onChange={(e) => setStatementFilters((p) => ({ ...p, dateFrom: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Até</div>
-                  <Input type="date" value={statementFilters.dateTo} onChange={(e) => setStatementFilters((p) => ({ ...p, dateTo: e.target.value }))} />
+                <div className="space-y-1 col-span-2">
+                  <div className="text-xs text-muted-foreground">Período</div>
+                  <DateRangePicker value={statementRange} onChange={(v) => setStatementRange(v)} />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setStatementRange(getPresetRange("current_month"))}>Mês atual</Button>
+                    <Button variant="outline" size="sm" onClick={() => setStatementRange(getPresetRange("last_30"))}>Últimos 30</Button>
+                    <Button variant="outline" size="sm" onClick={() => setStatementRange(getPresetRange("quarter"))}>Trimestre</Button>
+                    <Button variant="outline" size="sm" onClick={() => setStatementRange(getPresetRange("year"))}>Ano</Button>
+                    <Input
+                      className="w-20"
+                      type="number"
+                      min={1}
+                      defaultValue={30}
+                      onChange={(e) => setStatementRange(getLastNDays(Math.max(1, Number(e.target.value || 1))))}
+                      placeholder="N dias"
+                    />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      min={1}
+                      defaultValue={12}
+                      onChange={(e) => setStatementRange(getLastNWeeks(Math.max(1, Number(e.target.value || 1))))}
+                      placeholder="N semanas"
+                    />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      min={1}
+                      defaultValue={6}
+                      onChange={(e) => setStatementRange(getLastNMonths(Math.max(1, Number(e.target.value || 1))))}
+                      placeholder="N meses"
+                    />
+                  </div>
                 </div>
                 <div className="col-span-2 space-y-1">
                   <div className="text-xs text-muted-foreground">Conta</div>
-                  <Select value={statementFilters.accountId} onValueChange={(v) => setStatementFilters((p) => ({ ...p, accountId: v }))}>
+                  <Select value={statementAccountId} onValueChange={(v) => setStatementAccountId(v)}>
                     <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
@@ -100,7 +127,104 @@ export default function Reports() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <div className="mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!statement.data?.items?.length}
+                      onClick={() => {
+                        const items = statement.data?.items ?? []
+                        const headers = ["Data", "Operação", "Valor", "Histórico", "Conta", "Saldo após", "Confirmado"]
+                        const rows = items.map((i) => [
+                          toDateInput(i.issueDate),
+                          i.operation,
+                          i.amount,
+                          i.history ?? "",
+                          i.accountDescription ?? "",
+                          i.balanceAfter ?? "",
+                          i.confirmed ? "Sim" : "Não",
+                        ])
+                        downloadCsv("extrato.csv", headers, rows)
+                      }}
+                    >
+                      Exportar CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-2"
+                      disabled={!statement.data?.items?.length}
+                      onClick={() => {
+                        const items = statement.data?.items ?? []
+                        const headers = ["Data", "Operação", "Valor", "Histórico", "Conta", "Saldo após", "Confirmado"]
+                        const rows = items.map((i) => [
+                          toDateInput(i.issueDate),
+                          i.operation,
+                          i.amount,
+                          i.history ?? "",
+                          i.accountDescription ?? "",
+                          i.balanceAfter ?? "",
+                          i.confirmed ? "Sim" : "Não",
+                        ])
+                        downloadXlsx("extrato.xlsx", headers, rows, "Extrato")
+                      }}
+                    >
+                      Exportar XLSX
+                    </Button>
+                  </div>
                 </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!statement.data?.items?.length && !dreList.length}
+                  onClick={() => {
+                    const tRange = dreRange.from || statementRange.from ? dreRange : statementRange
+                    const tFrom = tRange.from
+                    const tTo = tRange.to
+                    const tx = mockTransactions.filter((t) => {
+                      const d = new Date(t.date)
+                      const fromOk = !tFrom || d >= new Date(tFrom)
+                      const toOk = !tTo || d <= new Date(tTo)
+                      const accOk = statementAccountId === "all"
+                        ? true
+                        : (() => {
+                            const acc = (accounts.data ?? []).find((a) => a.id === statementAccountId)
+                            return acc ? t.account === acc.description : true
+                          })()
+                      return fromOk && toOk && accOk
+                    })
+                    const txHeaders = ["Data", "Descrição", "Categoria", "Conta", "Valor", "Status"]
+                    const txRows = tx.map((t) => [
+                      (new Date(t.date)).toISOString().slice(0, 10),
+                      t.description,
+                      t.category,
+                      t.account,
+                      t.value,
+                      t.status,
+                    ])
+                    const stHeaders = ["Data", "Operação", "Valor", "Histórico", "Conta", "Saldo após", "Confirmado"]
+                    const stRows = (statement.data?.items ?? []).map((i) => [
+                      toDateInput(i.issueDate),
+                      i.operation,
+                      i.amount,
+                      i.history ?? "",
+                      i.accountDescription ?? "",
+                      i.balanceAfter ?? "",
+                      i.confirmed ? "Sim" : "Não",
+                    ])
+                    const dreHeaders = ["Código", "Descrição", "Tipo", "Valor", "Total", "RE"]
+                    const dreRows = dreList.map((l) => [l.code, l.description, l.type, l.value, l.total, l.revenueExpense])
+                    downloadXlsxMulti("financehub.xlsx", [
+                      { name: "Transacoes", headers: txHeaders, rows: txRows, currencyColumns: [4], dateColumns: [0] },
+                      { name: "Extrato", headers: stHeaders, rows: stRows, currencyColumns: [2, 5], dateColumns: [0] },
+                      { name: "DRE", headers: dreHeaders, rows: dreRows, currencyColumns: [3, 4] },
+                    ])
+                  }}
+                >
+                  Exportar XLSX (multi-aba)
+                </Button>
               </div>
 
               {statementTotals ? (
@@ -180,13 +304,40 @@ export default function Reports() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">De</div>
-                  <Input type="date" value={dreFilters.dateFrom} onChange={(e) => setDreFilters((p) => ({ ...p, dateFrom: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Até</div>
-                  <Input type="date" value={dreFilters.dateTo} onChange={(e) => setDreFilters((p) => ({ ...p, dateTo: e.target.value }))} />
+                <div className="space-y-1 col-span-2">
+                  <div className="text-xs text-muted-foreground">Período</div>
+                  <DateRangePicker value={dreRange} onChange={(v) => setDreRange(v)} />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setDreRange(getPresetRange("current_month"))}>Mês atual</Button>
+                    <Button variant="outline" size="sm" onClick={() => setDreRange(getPresetRange("last_30"))}>Últimos 30</Button>
+                    <Button variant="outline" size="sm" onClick={() => setDreRange(getPresetRange("quarter"))}>Trimestre</Button>
+                    <Button variant="outline" size="sm" onClick={() => setDreRange(getPresetRange("year"))}>Ano</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!dreList.length}
+                      onClick={() => {
+                        const headers = ["Código", "Descrição", "Tipo", "Valor", "Total", "RE"]
+                        const rows = dreList.map((l) => [l.code, l.description, l.type, l.value, l.total, l.revenueExpense])
+                        downloadCsv("dre.csv", headers, rows)
+                      }}
+                    >
+                      Exportar CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-2"
+                      disabled={!dreList.length}
+                      onClick={() => {
+                        const headers = ["Código", "Descrição", "Tipo", "Valor", "Total", "RE"]
+                        const rows = dreList.map((l) => [l.code, l.description, l.type, l.value, l.total, l.revenueExpense])
+                        downloadXlsx("dre.xlsx", headers, rows, "DRE")
+                      }}
+                    >
+                      Exportar XLSX
+                    </Button>
+                  </div>
                 </div>
               </div>
 

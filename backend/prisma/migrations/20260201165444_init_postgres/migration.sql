@@ -2,6 +2,12 @@
 CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'OPERATOR', 'CLIENT');
 
 -- CreateEnum
+CREATE TYPE "CompanyPlan" AS ENUM ('FREE', 'PROFESSIONAL', 'ENTERPRISE');
+
+-- CreateEnum
+CREATE TYPE "CompanyStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
+
+-- CreateEnum
 CREATE TYPE "TransactionType" AS ENUM ('REVENUE', 'EXPENSE');
 
 -- CreateEnum
@@ -48,6 +54,13 @@ CREATE TABLE "Company" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "cnpj" TEXT,
+    "email" TEXT,
+    "phone" TEXT,
+    "city" TEXT,
+    "state" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "plan" TEXT,
+    "status" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
@@ -102,6 +115,7 @@ CREATE TABLE "Account" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "code" TEXT NOT NULL,
+    "externalCode" TEXT,
     "description" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "useInCashFlow" BOOLEAN NOT NULL DEFAULT true,
@@ -118,6 +132,7 @@ CREATE TABLE "CostCenter" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "code" TEXT NOT NULL,
+    "externalCode" TEXT,
     "description" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -4,6 +4,7 @@ import { listAccounts, listChartAccounts, listCostCenters } from "@/api/finance"
 import { confirmLedgerEntry, createLedgerEntry, deleteLedgerEntry, listLedger, updateLedgerEntry, type LedgerEntry } from "@/api/ledger"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/DatePicker"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -12,37 +13,55 @@ import { Pencil, Plus, Trash2, CheckCircle } from "lucide-react"
 import { LedgerEntryDialog } from "@/components/ledger/LedgerEntryDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
+import { useAuthStore } from "@/stores/authStore"
+import { endOfMonth, format, startOfMonth } from "date-fns"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
-function toDateInput(value: string) {
-  const d = new Date(value)
+function toDateInput(value: string | Date) {
+  const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return ""
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, "0")
-  const dd = String(d.getDate()).padStart(2, "0")
-  return `${yyyy}-${mm}-${dd}`
+  return format(d, "yyyy-MM-dd")
+}
+
+function formatDate(value: string | Date) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [y, m, d] = value.slice(0, 10).split("-")
+    return `${d}/${m}/${y}`
+  }
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  return format(d, "dd/MM/yyyy")
 }
 
 export function LedgerSection() {
   const qc = useQueryClient()
+  const role = useAuthStore((s) => s.user?.role)
+  const companyId = useAuthStore((s) => s.companyId)
+  const hydrated = useAuthStore((s) => s.hydrated)
+  const canQuery = hydrated && (role !== "ADMIN" || Boolean(companyId))
   const [filters, setFilters] = useState({
-    dateFrom: "",
-    dateTo: "",
+    dateFrom: toDateInput(startOfMonth(new Date())),
+    dateTo: toDateInput(endOfMonth(new Date())),
     confirmed: "all" as "all" | "true" | "false",
     accountId: "all" as "all" | string,
   })
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<LedgerEntry | null>(null)
 
-  const accounts = useQuery({ queryKey: ["finance", "accounts"], queryFn: listAccounts })
-  const chartAccounts = useQuery({ queryKey: ["finance", "chartAccounts"], queryFn: () => listChartAccounts({ includeGlobal: true }) })
-  const costCenters = useQuery({ queryKey: ["finance", "costCenters"], queryFn: listCostCenters })
+  const accounts = useQuery({ queryKey: ["finance", "accounts", companyId], enabled: canQuery, queryFn: listAccounts })
+  const chartAccounts = useQuery({
+    queryKey: ["finance", "chartAccounts", companyId],
+    enabled: canQuery,
+    queryFn: () => listChartAccounts({ includeGlobal: true }),
+  })
+  const costCenters = useQuery({ queryKey: ["finance", "costCenters", companyId], enabled: canQuery, queryFn: listCostCenters })
 
   const ledger = useQuery({
-    queryKey: ["ledger", filters],
+    queryKey: ["ledger", companyId, filters],
+    enabled: canQuery,
     queryFn: () =>
       listLedger({
         dateFrom: filters.dateFrom || undefined,
@@ -94,12 +113,27 @@ export function LedgerSection() {
   })
 
   const rows = useMemo(() => ledger.data ?? [], [ledger.data])
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (acc, entry) => {
+        if (entry.operation === "CREDITO") {
+          acc.credits += entry.amount
+        } else {
+          acc.debits += entry.amount
+        }
+        acc.periodBalance = acc.credits - acc.debits
+        acc.finalBalance = acc.periodBalance
+        return acc
+      },
+      { credits: 0, debits: 0, periodBalance: 0, finalBalance: 0 }
+    )
+  }, [rows])
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Livro-caixa</CardTitle>
-        <Button onClick={() => { setEditing(null); setOpen(true) }}>
+        <Button disabled={!canQuery} onClick={() => { setEditing(null); setOpen(true) }}>
           <Plus className="w-4 h-4 mr-2" />
           Novo lançamento
         </Button>
@@ -108,11 +142,11 @@ export function LedgerSection() {
         <div className="grid grid-cols-4 gap-3">
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">De</div>
-            <Input type="date" value={filters.dateFrom} onChange={(e) => setFilters((p) => ({ ...p, dateFrom: e.target.value }))} />
+            <DatePicker value={filters.dateFrom} onChange={(v) => setFilters((p) => ({ ...p, dateFrom: v }))} />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Até</div>
-            <Input type="date" value={filters.dateTo} onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))} />
+            <DatePicker value={filters.dateTo} onChange={(v) => setFilters((p) => ({ ...p, dateTo: v }))} />
           </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Status</div>
@@ -140,6 +174,30 @@ export function LedgerSection() {
         </div>
 
         <div className="rounded-md border">
+          <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
+            <div className="grid grid-cols-4 gap-3 p-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Créditos</div>
+                <div className="text-sm font-semibold text-emerald-600">{formatCurrency(totals.credits)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Débitos</div>
+                <div className="text-sm font-semibold text-rose-600">{formatCurrency(totals.debits)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Saldo do período</div>
+                <div className={"text-sm font-semibold " + (totals.periodBalance >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                  {formatCurrency(totals.periodBalance)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Saldo final</div>
+                <div className={"text-sm font-semibold " + (totals.finalBalance >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                  {formatCurrency(totals.finalBalance)}
+                </div>
+              </div>
+            </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -154,23 +212,28 @@ export function LedgerSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ledger.isLoading ? (
+              {role === "ADMIN" && !companyId ? (
+                <TableRow><TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">Selecione uma empresa para consultar.</TableCell></TableRow>
+              ) : ledger.isLoading ? (
                 <TableRow><TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : ledger.isError ? (
+                <TableRow><TableCell colSpan={8} className="py-10 text-center text-sm text-red-500">Erro ao carregar lançamentos: {(ledger.error as Error).message}</TableCell></TableRow>
               ) : rows.length ? (
                 rows.map((e) => {
                   const split = e.splits?.[0]
                   const plan = split?.chartAccount ? `${split.chartAccount.code} — ${split.chartAccount.description}` : "—"
                   const cc = split?.costCenter ? `${split.costCenter.code} — ${split.costCenter.description}` : "—"
                   const acc = e.account ? `${e.account.code} — ${e.account.description}` : "—"
-                  const amount = e.operation === "CREDITO" ? e.amount : -e.amount
+                  const isCredit = e.operation === "CREDITO"
+                  const amount = isCredit ? e.amount : -e.amount
                   return (
                     <TableRow key={e.id}>
-                      <TableCell className="text-muted-foreground">{toDateInput(e.issueDate)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(e.issueDate)}</TableCell>
                       <TableCell>{e.history ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{acc}</TableCell>
                       <TableCell className="text-muted-foreground">{plan}</TableCell>
                       <TableCell className="text-muted-foreground">{cc}</TableCell>
-                      <TableCell className={"text-right tabular-nums " + (amount >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      <TableCell className={"text-right tabular-nums " + (isCredit ? "text-emerald-600" : "text-rose-600")}>
                         {formatCurrency(amount)}
                       </TableCell>
                       <TableCell>
@@ -225,6 +288,7 @@ export function LedgerSection() {
             </TableBody>
           </Table>
         </div>
+
 
         <LedgerEntryDialog
           open={open}
