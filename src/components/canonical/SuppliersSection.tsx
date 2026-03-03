@@ -11,6 +11,7 @@ import { SupplierDialog } from "@/components/canonical/SupplierDialog"
 import { useAuthStore } from "@/stores/authStore"
 import * as XLSX from "xlsx"
 import { downloadXlsx } from "@/utils/xlsx"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 type ImportRow = {
   externalId?: string | null
   name?: string | null
@@ -28,14 +29,15 @@ export function SuppliersSection() {
   const qc = useQueryClient()
   const companyId = useAuthStore((s) => s.companyId)
   const [search, setSearch] = useState("")
+  const [status, setStatus] = useState<"all" | "active" | "inactive">("all")
   const [editing, setEditing] = useState<Supplier | null>(null)
   const [open, setOpen] = useState(false)
 
   const [take, setTake] = useState(20)
   const [page, setPage] = useState(0)
   const suppliers = useQuery<{ items: Supplier[]; total: number; take: number; skip: number }>({
-    queryKey: ["canonical", "suppliers", { companyId, q: search, take, page }],
-    queryFn: async () => listSuppliers({ q: search, take, skip: page * take }),
+    queryKey: ["canonical", "suppliers", { companyId, q: search, status, take, page }],
+    queryFn: async () => listSuppliers({ q: search, status, take, skip: page * take }),
   })
 
   const createMut = useMutation({
@@ -77,7 +79,31 @@ export function SuppliersSection() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Fornecedores</CardTitle>
         <div className="flex items-center gap-2">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="w-72" />
+          <Input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(0)
+            }}
+            placeholder="Buscar..."
+            className="w-72"
+          />
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              setStatus(v as "all" | "active" | "inactive")
+              setPage(0)
+            }}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Ativos</SelectItem>
+              <SelectItem value="inactive">Desativados</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" onClick={() => {
             const headers = ["externalId", "name", "document", "email", "phone", "phone2", "city", "stateCode", "isActive"]
             const rows = (suppliers.data?.items ?? []).map((s) => [

@@ -169,3 +169,9 @@ export async function deleteChartAccount(id: string) {
     method: "DELETE",
   })
 }
+
+export async function deleteAllChartAccounts() {
+  return apiFetch<{ count: number }>("/chart-accounts", {
+    method: "DELETE",
+  })
+}

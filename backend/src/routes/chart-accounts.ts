@@ -17,7 +17,7 @@ const ChartAccountBody = z.object({
   revenueExpense: z.nativeEnum(RevenueExpense),
   debitCredit: z.nativeEnum(DebitCredit),
   fixedVariable: z.nativeEnum(FixedVariable),
-  costExpense: z.nativeEnum(CostExpense),
+  costExpense: z.nativeEnum(CostExpense).optional().nullable(),
   accountingCode: z.string().optional().nullable(),
   dreHide: z.boolean().optional(),
   dreGroupOtherFinIncome: z.boolean().optional(),
@@ -108,6 +108,8 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       const autoCode = !data.code;
       const { isGlobal: _isGlobal, ...rest } = data;
       const base: typeof rest = { ...rest };
+      if (base.code) base.code = base.code.trim();
+      base.description = base.description.trim();
       base.code = base.code ?? (await generateNextCode(scopeCompanyId, base.parentId ?? null));
 
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -116,6 +118,48 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
             const exists = await prisma.chartAccount.findFirst({ where: { companyId: null, code: base.code } });
             if (exists) throw Object.assign(new Error("CHART_ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
           }
+
+          // Update-or-create by (companyId, code). If duplicates already exist, keep the oldest one,
+          // rewire references, and delete extras.
+          const matches = await prisma.chartAccount.findMany({
+            where: { companyId: scopeCompanyId, code: base.code },
+            select: { id: true, createdAt: true },
+            orderBy: { createdAt: "asc" },
+          });
+          const keeper = matches[0];
+          if (keeper) {
+            const extras = matches.slice(1).map((m) => m.id);
+            if (extras.length) {
+              await prisma.$transaction([
+                prisma.chartAccount.updateMany({ where: { parentId: { in: extras } }, data: { parentId: keeper.id } }),
+                prisma.bankLedgerEntrySplit.updateMany({ where: { chartAccountId: { in: extras } }, data: { chartAccountId: keeper.id } }),
+                prisma.chartAccount.deleteMany({ where: { id: { in: extras } } }),
+              ]);
+            }
+            return await prisma.chartAccount.update({
+              where: { id: keeper.id },
+              data: {
+                description: base.description,
+                planType: base.planType,
+                parentId: base.parentId ?? null,
+                revenueExpense: base.revenueExpense,
+                debitCredit: base.debitCredit,
+                fixedVariable: base.fixedVariable,
+                costExpense: base.costExpense ?? null,
+                accountingCode: base.accountingCode ?? null,
+                active: base.active ?? true,
+                isSuper: base.isSuper ?? false,
+                dreHide: base.dreHide ?? false,
+                dreGroupOtherFinIncome: base.dreGroupOtherFinIncome ?? false,
+                dreGroupDeductionsTaxes: base.dreGroupDeductionsTaxes ?? false,
+                dreGroupInvestments: base.dreGroupInvestments ?? false,
+                dreGroupSalesMarketing: base.dreGroupSalesMarketing ?? false,
+                dreGroupProfitSharing: base.dreGroupProfitSharing ?? false,
+                cashflowHide: base.cashflowHide ?? false,
+              },
+            });
+          }
+
           return await prisma.chartAccount.create({
             data: {
               code: base.code,
@@ -125,7 +169,7 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
               revenueExpense: base.revenueExpense,
               debitCredit: base.debitCredit,
               fixedVariable: base.fixedVariable,
-              costExpense: base.costExpense,
+              costExpense: base.costExpense ?? null,
               accountingCode: base.accountingCode ?? null,
               companyId: scopeCompanyId,
               active: base.active ?? true,
@@ -219,6 +263,46 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       if (childCount > 0) throw Object.assign(new Error("CANNOT_DELETE_WITH_CHILDREN"), { statusCode: 400 });
       await prisma.chartAccount.delete({ where: { id: existing.id } });
       return { ok: true };
+    }
+  );
+
+  app.delete(
+    "/",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      
+      // 1. Check if any account is used in Ledger Splits
+      // We can't delete if there are transactions using these accounts
+      const accounts = await prisma.chartAccount.findMany({
+        where: { companyId },
+        select: { id: true }
+      });
+
+      if (accounts.length === 0) return { count: 0 };
+      const ids = accounts.map(a => a.id);
+
+      const usedCount = await prisma.bankLedgerEntrySplit.count({
+        where: { chartAccountId: { in: ids } }
+      });
+
+      if (usedCount > 0) {
+        throw Object.assign(new Error("CANNOT_DELETE_USED_ACCOUNTS"), { statusCode: 400 });
+      }
+
+      // 2. Break hierarchy (set parentId = null for all company accounts)
+      // This prevents foreign key constraints on self-relation during deletion
+      await prisma.chartAccount.updateMany({
+        where: { companyId },
+        data: { parentId: null }
+      });
+
+      // 3. Delete all accounts for this company
+      const result = await prisma.chartAccount.deleteMany({
+        where: { companyId }
+      });
+
+      return { count: result.count };
     }
   );
 }

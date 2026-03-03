@@ -59,6 +59,44 @@ export type Product = {
   updatedAt: string
 }
 
+export type ProductSection = {
+  id: string
+  companyId: string
+  code: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProductGroup = {
+  id: string
+  companyId: string
+  sectionId: string
+  code: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProductSubgroup = {
+  id: string
+  companyId: string
+  groupId: string
+  code: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProductManufacturer = {
+  id: string
+  companyId: string
+  code: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type TitleStatus = "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
 
 export type ApTitle = {
@@ -89,7 +127,7 @@ export type ArTitle = {
   createdAt: string
 }
 
-export async function listCustomers(params?: { q?: string; take?: number; skip?: number }) {
+export async function listCustomers(params?: { q?: string; take?: number; skip?: number; status?: "active" | "inactive" | "all" }) {
   return apiFetch<{ items: Customer[]; total: number; take: number; skip: number }>(`/customers${toQueryString(params ?? {})}`)
 }
 
@@ -106,14 +144,47 @@ export async function deleteCustomer(id: string) {
 }
 
 export async function listCustomerDeactivations() {
-  return apiFetch<Array<{ id: string; customerId: string; value: number | null; reason: string | null; deactivatedAt: string; customer: { name: string; document: string | null; externalId: string | null } }>>("/customers/deactivations")
+  return apiFetch<
+    Array<{
+      id: string
+      customerId: string
+      value: number | null
+      reason: string | null
+      reasonId: string | null
+      deactivatedAt: string
+      customer: { name: string; document: string | null; externalId: string | null }
+      reasonRef: { id: string; description: string; externalId: string | null } | null
+    }>
+  >("/customers/deactivations")
 }
 
-export async function createCustomerDeactivation(id: string, body: { value?: number | null; reason?: string | null; deactivatedAt?: string }) {
+export async function createCustomerDeactivation(id: string, body: { value?: number | null; reason?: string | null; reasonId?: string | null; deactivatedAt?: string }) {
   return apiFetch<{ id: string }>(`/customers/${id}/deactivations`, { method: "POST", body: JSON.stringify(body) })
 }
 
-export async function listSuppliers(params?: { q?: string; take?: number; skip?: number }) {
+export type CustomerDeactivationReason = {
+  id: string
+  companyId: string
+  description: string
+  externalId?: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listCustomerDeactivationReasons() {
+  return apiFetch<CustomerDeactivationReason[]>("/customers/deactivation-reasons")
+}
+
+export async function createCustomerDeactivationReason(body: { description: string; externalId?: string | null; active?: boolean }) {
+  return apiFetch<CustomerDeactivationReason>("/customers/deactivation-reasons", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateCustomerDeactivationReason(id: string, body: Partial<CustomerDeactivationReason>) {
+  return apiFetch<CustomerDeactivationReason>(`/customers/deactivation-reasons/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function listSuppliers(params?: { q?: string; take?: number; skip?: number; status?: "active" | "inactive" | "all" }) {
   return apiFetch<{ items: Supplier[]; total: number; take: number; skip: number }>(`/suppliers${toQueryString(params ?? {})}`)
 }
 
@@ -143,6 +214,70 @@ export async function updateProduct(id: string, body: Partial<Product>) {
 
 export async function deleteProduct(id: string) {
   return apiFetch<{ ok: true }>(`/products/${id}`, { method: "DELETE" })
+}
+
+export async function listProductSections(params?: { q?: string }) {
+  return apiFetch<ProductSection[]>(`/products/sections${toQueryString(params ?? {})}`)
+}
+
+export async function createProductSection(body: { code?: string; name: string }) {
+  return apiFetch<ProductSection>("/products/sections", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateProductSection(id: string, body: Partial<{ code: string; name: string }>) {
+  return apiFetch<ProductSection>(`/products/sections/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteProductSection(id: string) {
+  return apiFetch<{ ok: true }>(`/products/sections/${id}`, { method: "DELETE" })
+}
+
+export async function listProductGroups(params?: { q?: string }) {
+  return apiFetch<ProductGroup[]>(`/products/groups${toQueryString(params ?? {})}`)
+}
+
+export async function createProductGroup(body: { sectionId: string; code?: string; name: string }) {
+  return apiFetch<ProductGroup>("/products/groups", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateProductGroup(id: string, body: Partial<{ sectionId: string; code: string; name: string }>) {
+  return apiFetch<ProductGroup>(`/products/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteProductGroup(id: string) {
+  return apiFetch<{ ok: true }>(`/products/groups/${id}`, { method: "DELETE" })
+}
+
+export async function listProductSubgroups(params?: { q?: string }) {
+  return apiFetch<ProductSubgroup[]>(`/products/subgroups${toQueryString(params ?? {})}`)
+}
+
+export async function createProductSubgroup(body: { groupId: string; code?: string; name: string }) {
+  return apiFetch<ProductSubgroup>("/products/subgroups", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateProductSubgroup(id: string, body: Partial<{ groupId: string; code: string; name: string }>) {
+  return apiFetch<ProductSubgroup>(`/products/subgroups/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteProductSubgroup(id: string) {
+  return apiFetch<{ ok: true }>(`/products/subgroups/${id}`, { method: "DELETE" })
+}
+
+export async function listProductManufacturers(params?: { q?: string }) {
+  return apiFetch<ProductManufacturer[]>(`/products/manufacturers${toQueryString(params ?? {})}`)
+}
+
+export async function createProductManufacturer(body: { code?: string; name: string }) {
+  return apiFetch<ProductManufacturer>("/products/manufacturers", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateProductManufacturer(id: string, body: Partial<{ code: string; name: string }>) {
+  return apiFetch<ProductManufacturer>(`/products/manufacturers/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteProductManufacturer(id: string) {
+  return apiFetch<{ ok: true }>(`/products/manufacturers/${id}`, { method: "DELETE" })
 }
 
 export type InventoryItem = {

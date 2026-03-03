@@ -148,9 +148,14 @@ model Company {
   apTitles       ApTitle[]
   arTitles       ArTitle[]
   customerDeactivations CustomerDeactivation[]
+  customerDeactivationReasons CustomerDeactivationReason[]
   sales          Sale[]
   paymentMethods PaymentMethod[]
   integrations   Integration[]
+  productSections ProductSection[]
+  productGroups ProductGroup[]
+  productSubgroups ProductSubgroup[]
+  productManufacturers ProductManufacturer[]
 }
 
 model Integration {
@@ -271,7 +276,7 @@ model ChartAccount {
   revenueExpense                  RevenueExpense
   debitCredit                     DebitCredit
   fixedVariable                   FixedVariable
-  costExpense                     CostExpense
+  costExpense                     CostExpense?
   accountingCode                  String?
   dreHide                         Boolean       @default(false)
   dreGroupOtherFinIncome          Boolean       @default(false)
@@ -285,6 +290,7 @@ model ChartAccount {
   allocations ChartAccountAllocation[]
   ledgerSplits BankLedgerEntrySplit[]
 
+  @@unique([companyId, code])
   @@index([companyId])
   @@index([parentId])
 }
@@ -574,7 +580,7 @@ model Customer {
   name      String
   knownName String?
   externalId String?
-  document  String?  @unique
+  document  String?
   email     String?
   phone     String?
   phone2    String?
@@ -597,6 +603,23 @@ model Customer {
   sales     Sale[]
 
   @@unique([companyId, externalId])
+  @@unique([companyId, document])
+}
+
+model CustomerDeactivationReason {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  description String
+  externalId  String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deactivations CustomerDeactivation[]
+
+  @@unique([companyId, externalId])
+  @@index([companyId])
 }
 
 model CustomerDeactivation {
@@ -607,6 +630,8 @@ model CustomerDeactivation {
   customer      Customer @relation(fields: [customerId], references: [id])
   value         Float?
   reason        String?
+  reasonId      String?
+  reasonRef     CustomerDeactivationReason? @relation(fields: [reasonId], references: [id])
   deactivatedAt DateTime @default(now())
   createdAt     DateTime @default(now())
 
@@ -619,7 +644,7 @@ model Supplier {
   company   Company  @relation(fields: [companyId], references: [id])
   name      String
   externalId String?
-  document  String?  @unique
+  document  String?
   email     String?
   phone     String?
   phone2    String?
@@ -629,6 +654,8 @@ model Supplier {
   cityRef   City?    @relation(fields: [cityId], references: [id])
   stateCode String?
   stateRef  State?   @relation(fields: [stateCode], references: [code])
+  neighborhood String?
+  value      Float?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -636,6 +663,7 @@ model Supplier {
   apTitles  ApTitle[]
 
   @@unique([companyId, externalId])
+  @@unique([companyId, document])
 }
 
 model Product {
@@ -661,6 +689,64 @@ model Product {
 
   @@unique([companyId, code])
   @@unique([companyId, externalId])
+}
+
+model ProductSection {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups    ProductGroup[]
+
+  @@unique([companyId, code])
+}
+
+model ProductGroup {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  sectionId String
+  section   ProductSection @relation(fields: [sectionId], references: [id])
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subgroups ProductSubgroup[]
+
+  @@unique([sectionId, code])
+  @@index([companyId])
+}
+
+model ProductSubgroup {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  groupId   String
+  group     ProductGroup @relation(fields: [groupId], references: [id])
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, code])
+  @@index([companyId])
+}
+
+model ProductManufacturer {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  code      String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, code])
 }
 
 model ApTitle {

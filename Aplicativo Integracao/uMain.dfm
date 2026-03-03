@@ -15,27 +15,10 @@ object frmMain: TfrmMain
   OnDestroy = FormDestroy
   PixelsPerInch = 96
   TextHeight = 15
-  object clbEntidades: TCheckListBox
-    Left = 24
-    Top = 50
-    Width = 273
-    Height = 105
-    ItemHeight = 15
-    Items.Strings = (
-      '1. Empresa (Cadastro)'
-      '2. Contas Bancárias'
-      '3. Clientes'
-      '4. Fornecedores'
-      '5. Produtos'
-      '6. Vendas'
-      '7. Contas a Pagar'
-      '8. Contas a Receber')
-    TabOrder = 7
-  end
   object Label4: TLabel
     Left = 24
     Top = 35
-    Width = 100
+    Width = 97
     Height = 15
     Caption = 'O que sincronizar?'
   end
@@ -56,9 +39,37 @@ object frmMain: TfrmMain
   object Label3: TLabel
     Left = 312
     Top = 35
-    Width = 47
+    Width = 53
     Height = 15
     Caption = 'Empresas:'
+  end
+  object lblProgress: TLabel
+    Left = 24
+    Top = 229
+    Width = 39
+    Height = 15
+    Caption = 'Pronto.'
+  end
+  object clbEntidades: TCheckListBox
+    Left = 24
+    Top = 50
+    Width = 273
+    Height = 105
+    ItemHeight = 15
+    Items.Strings = (
+      '1. Empresa (Cadastro)'
+      '2. Contas Banc'#195#161'rias'
+      '3. Clientes'
+      '4. Fornecedores'
+      '5. Produtos'
+      '6. Vendas'
+      '7. Contas a Pagar'
+      '8. Contas a Receber'
+      '9. Centro de Custos'
+      '10. Plano de Contas'
+      '11. Motivos de desativa'#195#167#195#163'o'
+      '12. Hist'#195#179'rico de desativa'#195#167#195#163'o')
+    TabOrder = 7
   end
   object edtEmail: TEdit
     Left = 80
@@ -112,11 +123,18 @@ object frmMain: TfrmMain
     TabOrder = 2
     OnClick = btnSyncClick
   end
-  object MemoLog: TMemo
+  object ProgressBar1: TProgressBar
     Left = 24
     Top = 208
     Width = 577
-    Height = 217
+    Height = 17
+    TabOrder = 8
+  end
+  object MemoLog: TMemo
+    Left = 24
+    Top = 248
+    Width = 577
+    Height = 177
     Lines.Strings = (
       'Logs do sistema...')
     ScrollBars = ssVertical

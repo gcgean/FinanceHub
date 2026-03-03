@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { createChartAccount, deleteChartAccount, listChartAccounts, updateChartAccount, type ChartAccount } from "@/api/finance"
+import { createChartAccount, deleteChartAccount, listChartAccounts, updateChartAccount, deleteAllChartAccounts, type ChartAccount } from "@/api/finance"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pencil, Plus, Trash2, Upload, Download } from "lucide-react"
+import { Pencil, Plus, Trash2, Upload, Download, AlertTriangle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { ChartAccountDialog } from "@/components/finance/ChartAccountDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -116,34 +116,86 @@ export function ChartAccountsSection() {
     },
   })
 
+  const deleteAllMut = useMutation({
+    mutationFn: deleteAllChartAccounts,
+    onSuccess: async (data) => {
+      toast({ title: "Plano de contas limpo", description: `${data.count} contas removidas` })
+      await qc.invalidateQueries({ queryKey: ["finance", "chartAccounts"] })
+    },
+    onError: (e: unknown) => {
+      const code = e instanceof ApiResponseError ? e.code : undefined
+      const msg = code === "CANNOT_DELETE_USED_ACCOUNTS"
+        ? "Não é possível excluir contas que possuem lançamentos vinculados"
+        : e instanceof Error ? e.message : "Erro desconhecido"
+      toast({ title: "Erro ao limpar", description: msg, variant: "destructive" })
+    }
+  })
+
   const items = useMemo(() => {
-    const list = chart.data ?? []
-    const q = search.trim().toLowerCase()
-    if (!q) return list
-    return list.filter((c) => c.description.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+    if (!chart.data) return []
+    return chart.data.filter((c) => {
+      const s = search.toLowerCase()
+      return c.description.toLowerCase().includes(s) || c.code.toLowerCase().includes(s)
+    })
   }, [chart.data, search])
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Plano de contas</CardTitle>
-        <div className="flex items-center gap-2">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por descrição ou código..." className="w-72" />
-          <Button variant="outline" onClick={() => {
-            const headers = ["externalCode", "code", "description", "planType", "revenueExpense", "debitCredit", "parentCode", "active", "isGlobal"]
-            const rows: (string | number | null)[][] = [
-              ["EXT-RECEITA", "1", "Receitas", "SINTETICA", "RECEITA", "CREDITO", "", 1, 0],
-              ["EXT-ENERGIA", "", "Energia", "ANALITICA", "DESPESA", "DEBITO", "1", 1, 0],
-            ]
-            downloadXlsx("modelo_plano_contas.xlsx", headers, rows, "PlanoContas")
-          }}>
-            <Download className="w-4 h-4 mr-2" />
-            Modelo XLSX
-          </Button>
+        <CardTitle>Plano de Contas</CardTitle>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Buscar..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-[200px]"
+          />
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="w-4 h-4 mr-2" />
             Importar
           </Button>
+          <Button variant="outline" onClick={() => downloadXlsx(chart.data ?? [], "plano_contas")}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar
+          </Button>
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Limpar Tudo
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+              </AlertDialogHeader>
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-amber-600 font-semibold">
+                  <AlertTriangle className="w-4 h-4" />
+                  Atenção: Ação Irreversível
+                </div>
+                <p>
+                  Isso excluirá <strong>TODAS</strong> as contas do plano de contas desta empresa.
+                </p>
+                <p>
+                  Se houver lançamentos financeiros vinculados a qualquer conta, a operação será bloqueada para garantir a integridade dos dados.
+                </p>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={async () => {
+                    await deleteAllMut.mutateAsync()
+                  }}
+                >
+                  Confirmar Exclusão
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           <Button onClick={() => { setEditing(null); setOpen(true) }}>
             <Plus className="w-4 h-4 mr-2" />
             Nova

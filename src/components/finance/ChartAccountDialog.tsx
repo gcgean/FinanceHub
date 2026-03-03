@@ -21,6 +21,14 @@ const Schema = z
     debitCredit: z.enum(["DEBITO", "CREDITO"]),
     fixedVariable: z.enum(["FIXO", "VARIAVEL"]),
     costExpense: z.enum(["CUSTO", "DESPESA"]),
+    accountingCode: z.string().nullable().optional(),
+    dreHide: z.boolean().optional(),
+    dreGroupOtherFinIncome: z.boolean().optional(),
+    dreGroupDeductionsTaxes: z.boolean().optional(),
+    dreGroupInvestments: z.boolean().optional(),
+    dreGroupSalesMarketing: z.boolean().optional(),
+    dreGroupProfitSharing: z.boolean().optional(),
+    cashflowHide: z.boolean().optional(),
     isGlobal: z.boolean().optional(),
   })
   .refine((v) => (v.planType === "ANALITICA" ? Boolean(v.parentId) : true), {
@@ -183,6 +191,40 @@ export function ChartAccountDialog(props: {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <div className="text-sm font-medium mb-2">Configurações DRE e Fluxo</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Ocultar no DRE</div>
+                  <Switch checked={form.watch("dreHide") ?? false} onCheckedChange={(v) => form.setValue("dreHide", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Ocultar no Fluxo</div>
+                  <Switch checked={form.watch("cashflowHide") ?? false} onCheckedChange={(v) => form.setValue("cashflowHide", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Conta de Investimento</div>
+                  <Switch checked={form.watch("dreGroupInvestments") ?? false} onCheckedChange={(v) => form.setValue("dreGroupInvestments", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Conta de Imposto</div>
+                  <Switch checked={form.watch("dreGroupDeductionsTaxes") ?? false} onCheckedChange={(v) => form.setValue("dreGroupDeductionsTaxes", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Receita Financeira</div>
+                  <Switch checked={form.watch("dreGroupOtherFinIncome") ?? false} onCheckedChange={(v) => form.setValue("dreGroupOtherFinIncome", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Outras Desp. Comerciais</div>
+                  <Switch checked={form.watch("dreGroupSalesMarketing") ?? false} onCheckedChange={(v) => form.setValue("dreGroupSalesMarketing", v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="text-xs">Participação Lucros</div>
+                  <Switch checked={form.watch("dreGroupProfitSharing") ?? false} onCheckedChange={(v) => form.setValue("dreGroupProfitSharing", v)} />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
                 <div className="text-sm font-medium">Ativa</div>

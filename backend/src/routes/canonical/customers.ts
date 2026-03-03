@@ -10,6 +10,7 @@ const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
   skip: z.coerce.number().int().min(0).optional().default(0),
   q: z.string().optional(),
+  status: z.enum(["active", "inactive", "all"]).optional(),
 });
 
 const Body = z.object({
@@ -35,10 +36,12 @@ export async function customersRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
-      const { take, skip, q } = parseQuery(ListQuery, request.query);
+      const { take, skip, q, status } = parseQuery(ListQuery, request.query);
       const companyId = await resolveCompanyId(request);
       const where: Prisma.CustomerWhereInput = {
         companyId,
+        ...(status === "active" ? { isActive: true } : {}),
+        ...(status === "inactive" ? { isActive: false } : {}),
         ...(q
           ? {
               OR: [
@@ -64,6 +67,9 @@ export async function customersRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const b = parseBody(Body, request.body);
+      const normalizeDoc = (s: string) => s.replace(/[^\d]/g, "");
+      const docDigits = b.document ? normalizeDoc(b.document) : null;
+      const docKey = docDigits ? (docDigits.length === 14 ? docDigits.slice(0, 8) : docDigits) : null;
       let cityName = b.city ?? null;
       let stateCode = (b.stateCode ?? b.state ?? null) as string | null;
       const cityId = b.cityId ?? null;
@@ -79,7 +85,7 @@ export async function customersRoutes(app: FastifyInstance) {
         name: b.name,
         knownName: b.knownName ?? null,
         externalId: b.externalId ?? null,
-        document: b.document ?? null,
+        document: docDigits ?? null,
         email: b.email ?? null,
         phone: b.phone ?? null,
         phone2: b.phone2 ?? null,
@@ -92,6 +98,27 @@ export async function customersRoutes(app: FastifyInstance) {
         value: b.value ?? null,
         isActive: b.isActive ?? true,
       };
+
+      if (docKey) {
+        const existingByDoc = await prisma.customer.findFirst({
+          where: {
+            companyId,
+            document: docDigits && docDigits.length === 14 ? { startsWith: docKey } : docKey,
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        if (existingByDoc) {
+          return prisma.customer.update({
+            where: { id: existingByDoc.id },
+            data: {
+              ...data,
+              companyId: undefined,
+              document: undefined,
+              externalId: existingByDoc.externalId ? undefined : b.externalId ?? undefined,
+            },
+          });
+        }
+      }
 
       if (b.externalId) {
         return prisma.customer.upsert({
@@ -165,6 +192,71 @@ export async function customersRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    "/deactivation-reasons",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const list = await prisma.customerDeactivationReason.findMany({
+        where: { companyId, active: true },
+        orderBy: { description: "asc" },
+      });
+      return list;
+    }
+  );
+
+  app.post(
+    "/deactivation-reasons",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const b = z.object({
+        description: z.string().min(1),
+        externalId: z.string().optional().nullable(),
+        active: z.boolean().optional(),
+      }).parse(request.body);
+      const created = await prisma.customerDeactivationReason.upsert({
+        where: b.externalId ? { companyId_externalId: { companyId, externalId: b.externalId } } : { companyId_externalId: { companyId, externalId: "__NA__" } },
+        create: {
+          companyId,
+          description: b.description,
+          externalId: b.externalId ?? null,
+          active: b.active ?? true,
+        },
+        update: {
+          description: b.description,
+          active: b.active ?? true,
+        },
+      });
+      return created;
+    }
+  );
+
+  app.patch(
+    "/deactivation-reasons/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const b = z.object({
+        description: z.string().optional(),
+        externalId: z.string().optional().nullable(),
+        active: z.boolean().optional(),
+      }).parse(request.body);
+      const existing = await prisma.customerDeactivationReason.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      return prisma.customerDeactivationReason.update({
+        where: { id: params.id },
+        data: {
+          description: b.description === undefined ? undefined : b.description,
+          externalId: b.externalId === undefined ? undefined : b.externalId,
+          active: b.active === undefined ? undefined : b.active,
+        },
+      });
+    }
+  );
+
+  app.get(
     "/deactivations",
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
@@ -172,7 +264,10 @@ export async function customersRoutes(app: FastifyInstance) {
       const list = await prisma.customerDeactivation.findMany({
         where: { companyId },
         orderBy: { deactivatedAt: "desc" },
-        include: { customer: { select: { name: true, document: true, externalId: true } } },
+        include: {
+          customer: { select: { name: true, document: true, externalId: true } },
+          reasonRef: { select: { description: true, id: true, externalId: true } },
+        },
       });
       return list;
     }
@@ -190,14 +285,22 @@ export async function customersRoutes(app: FastifyInstance) {
       const body = z.object({
         value: z.coerce.number().optional().nullable(),
         reason: z.string().optional().nullable(),
+        reasonId: z.string().optional().nullable(),
         deactivatedAt: z.string().optional(),
       }).parse(request.body);
+      let reasonId: string | null = null;
+      if (body.reasonId) {
+        const rr = await prisma.customerDeactivationReason.findUnique({ where: { id: body.reasonId } });
+        if (!rr || rr.companyId !== companyId) throw Object.assign(new Error("INVALID_REASON"), { statusCode: 400 });
+        reasonId = rr.id;
+      }
       const deact = await prisma.customerDeactivation.create({
         data: {
           companyId,
           customerId: existing.id,
           value: body.value ?? existing.value ?? null,
           reason: body.reason ?? null,
+          reasonId,
           deactivatedAt: body.deactivatedAt ? new Date(body.deactivatedAt) : new Date(),
         },
       });

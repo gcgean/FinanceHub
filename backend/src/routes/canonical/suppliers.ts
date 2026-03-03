@@ -10,6 +10,7 @@ const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
   skip: z.coerce.number().int().min(0).optional().default(0),
   q: z.string().optional(),
+  status: z.enum(["active", "inactive", "all"]).optional(),
 });
 
 const Body = z.object({
@@ -30,10 +31,12 @@ export async function suppliersRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
-      const { take, skip, q } = parseQuery(ListQuery, request.query);
+      const { take, skip, q, status } = parseQuery(ListQuery, request.query);
       const companyId = await resolveCompanyId(request);
       const where: Prisma.SupplierWhereInput = {
         companyId,
+        ...(status === "active" ? { isActive: true } : {}),
+        ...(status === "inactive" ? { isActive: false } : {}),
         ...(q
           ? {
               OR: [
@@ -57,9 +60,11 @@ export async function suppliersRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request) => {
-      const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const companyId = await resolveCompanyId(request);
       const b = parseBody(Body, request.body);
+      const normalizeDoc = (s: string) => s.replace(/[^\d]/g, "");
+      const docDigits = b.document ? normalizeDoc(b.document) : null;
+      const docKey = docDigits ? (docDigits.length === 14 ? docDigits.slice(0, 8) : docDigits) : null;
       let cityName = b.city ?? null;
       let stateCode = (b.stateCode ?? b.state ?? null) as string | null;
       const cityId = b.cityId ?? null;
@@ -74,7 +79,7 @@ export async function suppliersRoutes(app: FastifyInstance) {
         companyId,
         name: b.name,
         externalId: b.externalId ?? null,
-        document: b.document ?? null,
+        document: docDigits ?? null,
         email: b.email ?? null,
         phone: b.phone ?? null,
         city: cityName,
@@ -83,6 +88,27 @@ export async function suppliersRoutes(app: FastifyInstance) {
         stateCode,
         isActive: b.isActive ?? true,
       };
+
+      if (docKey) {
+        const existingByDoc = await prisma.supplier.findFirst({
+          where: {
+            companyId,
+            document: docDigits && docDigits.length === 14 ? { startsWith: docKey } : docKey,
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        if (existingByDoc) {
+          return prisma.supplier.update({
+            where: { id: existingByDoc.id },
+            data: {
+              ...data,
+              companyId: undefined,
+              document: undefined,
+              externalId: existingByDoc.externalId ? undefined : b.externalId ?? undefined,
+            },
+          });
+        }
+      }
 
       if (b.externalId) {
         return prisma.supplier.upsert({

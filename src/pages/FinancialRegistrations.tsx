@@ -7,7 +7,6 @@ import { SuppliersSection } from "@/components/canonical/SuppliersSection"
 import { ProductsSection } from "@/components/canonical/ProductsSection"
 import { ApTitlesSection } from "@/components/canonical/ApTitlesSection"
 import { ArTitlesSection } from "@/components/canonical/ArTitlesSection"
-import { CustomerDeactivationsSection } from "@/components/canonical/CustomerDeactivationsSection"
 import { InventorySection } from "@/components/canonical/InventorySection"
 import { SalesSection } from "@/components/canonical/SalesSection"
 
@@ -20,7 +19,6 @@ export default function FinancialRegistrations() {
           <TabsTrigger value="costCenters">Centros de custo</TabsTrigger>
           <TabsTrigger value="chartAccounts">Plano de contas</TabsTrigger>
           <TabsTrigger value="customers">Clientes</TabsTrigger>
-          <TabsTrigger value="customerDeactivations">Desativações</TabsTrigger>
           <TabsTrigger value="suppliers">Fornecedores</TabsTrigger>
           <TabsTrigger value="products">Produtos</TabsTrigger>
           <TabsTrigger value="inventory">Estoque</TabsTrigger>
@@ -43,9 +41,6 @@ export default function FinancialRegistrations() {
 
         <TabsContent value="customers">
           <CustomersSection />
-        </TabsContent>
-        <TabsContent value="customerDeactivations">
-          <CustomerDeactivationsSection />
         </TabsContent>
 
         <TabsContent value="suppliers">

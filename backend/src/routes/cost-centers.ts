@@ -39,6 +39,30 @@ export async function costCentersRoutes(app: FastifyInstance) {
             const next = (numeric.length ? Math.max(...numeric) : 0) + 1;
             return String(next).padStart(2, "0");
           })();
+      const matchByCode = data.code ? { code: data.code } : null;
+      const matchByExternal = data.externalCode ? { externalCode: data.externalCode } : null;
+      const matchConditions = [matchByCode, matchByExternal].filter(Boolean) as Array<{
+        code?: string;
+        externalCode?: string;
+      }>;
+      const existing = matchConditions.length
+        ? await prisma.costCenter.findFirst({ where: { companyId, OR: matchConditions } })
+        : null;
+      if (existing) {
+        const updateData = {
+          description: data.description,
+          active: data.active ?? existing.active,
+        } as { description: string; active: boolean; code?: string; externalCode?: string | null };
+        if (data.code) updateData.code = data.code;
+        if (data.externalCode !== undefined) updateData.externalCode = data.externalCode ?? null;
+        try {
+          return await prisma.costCenter.update({ where: { id: existing.id }, data: updateData });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("COST_CENTER_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+      }
       try {
         return await prisma.costCenter.create({
           data: {

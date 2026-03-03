@@ -116,6 +116,28 @@ export async function importsRoutes(app: FastifyInstance) {
     }
   );
 
+  app.post(
+    "/api",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const { companyId: companyIdFromQuery } = parseQuery(AdminCompanyQuery, request.query);
+      const companyId = request.user.role === UserRole.ADMIN ? (companyIdFromQuery ?? request.user.companyId) : request.user.companyId;
+      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const body = parseBody(ApiBody, request.body);
+      const job = await prisma.importJob.create({
+        data: {
+          companyId,
+          source: ImportSource.API,
+          status: ImportStatus.QUEUED,
+          origin: "API",
+          requestedByUserId: request.user.sub,
+          statsJson: JSON.stringify({ provider: body.provider, credentialsRef: body.credentialsRef }),
+        },
+      });
+      return { importJobId: job.id };
+    }
+  );
+
   app.get(
     "/:id",
     { preHandler: [requireAuth(app), requireCompanyScope()] },

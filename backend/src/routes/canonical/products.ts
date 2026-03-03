@@ -27,6 +27,45 @@ const Body = z.object({
   active: z.boolean().optional(),
 });
 
+const SimpleQuery = z.object({
+  q: z.string().optional(),
+});
+
+const SectionBody = z.object({
+  code: z.string().min(1).optional(),
+  name: z.string().min(1),
+});
+
+const GroupBody = z.object({
+  sectionId: z.string().min(1).optional(),
+  sectionCode: z.string().min(1).optional(),
+  sectionName: z.string().min(1).optional(),
+  code: z.string().min(1).optional(),
+  name: z.string().min(1),
+});
+
+const SubgroupBody = z.object({
+  groupId: z.string().min(1).optional(),
+  groupCode: z.string().min(1).optional(),
+  groupName: z.string().min(1).optional(),
+  sectionId: z.string().min(1).optional(),
+  sectionCode: z.string().min(1).optional(),
+  sectionName: z.string().min(1).optional(),
+  code: z.string().min(1).optional(),
+  name: z.string().min(1),
+});
+
+const ManufacturerBody = z.object({
+  code: z.string().min(1).optional(),
+  name: z.string().min(1),
+});
+
+const nextCodeFrom = (existing: Array<{ code: string }>, pad: number) => {
+  const numeric = existing.map((x) => Number.parseInt(x.code, 10)).filter((n) => Number.isFinite(n));
+  const next = (numeric.length ? Math.max(...numeric) : 0) + 1;
+  return String(next).padStart(pad, "0");
+};
+
 export async function productsRoutes(app: FastifyInstance) {
   app.get(
     "/",
@@ -159,6 +198,511 @@ export async function productsRoutes(app: FastifyInstance) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
       }
       await prisma.product.delete({ where: { id: params.id } });
+      return { ok: true };
+    }
+  );
+
+  app.get(
+    "/sections",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const { q } = parseQuery(SimpleQuery, request.query);
+      const companyId = await resolveCompanyId(request);
+      const where: Prisma.ProductSectionWhereInput = {
+        companyId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { code: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      return prisma.productSection.findMany({ where, orderBy: { code: "asc" } });
+    }
+  );
+
+  app.post(
+    "/sections",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(SectionBody, request.body);
+      const inputCode = data.code?.trim() || "";
+      const existing = inputCode
+        ? await prisma.productSection.findFirst({ where: { companyId, code: inputCode } })
+        : await prisma.productSection.findFirst({
+            where: { companyId, name: { equals: data.name, mode: "insensitive" } },
+          });
+      if (existing) {
+        try {
+          return await prisma.productSection.update({
+            where: { id: existing.id },
+            data: {
+              code: inputCode ? inputCode : undefined,
+              name: data.name,
+            },
+          });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("SECTION_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+      }
+      const code = inputCode
+        ? inputCode
+        : nextCodeFrom(await prisma.productSection.findMany({ where: { companyId }, select: { code: true } }), 2);
+      try {
+        return await prisma.productSection.create({
+          data: {
+            companyId,
+            code,
+            name: data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("SECTION_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/sections/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(SectionBody.partial(), request.body);
+      const existing = await prisma.productSection.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      try {
+        return await prisma.productSection.update({
+          where: { id: params.id },
+          data: {
+            code: data.code === undefined ? undefined : data.code,
+            name: data.name === undefined ? undefined : data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("SECTION_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.delete(
+    "/sections/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const existing = await prisma.productSection.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const inUse = await prisma.productGroup.count({ where: { sectionId: params.id } });
+      if (inUse > 0) throw Object.assign(new Error("CANNOT_DELETE_IN_USE"), { statusCode: 400 });
+      await prisma.productSection.delete({ where: { id: params.id } });
+      return { ok: true };
+    }
+  );
+
+  app.get(
+    "/groups",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const { q } = parseQuery(SimpleQuery, request.query);
+      const companyId = await resolveCompanyId(request);
+      const where: Prisma.ProductGroupWhereInput = {
+        companyId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { code: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      return prisma.productGroup.findMany({ where, orderBy: { code: "asc" } });
+    }
+  );
+
+  app.post(
+    "/groups",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(GroupBody, request.body);
+      const sectionId =
+        data.sectionId ||
+        (data.sectionCode
+          ? (await prisma.productSection.findFirst({
+              where: { companyId, code: data.sectionCode },
+              select: { id: true },
+            }))?.id
+          : data.sectionName
+            ? (await prisma.productSection.findFirst({
+                where: { companyId, name: { equals: data.sectionName, mode: "insensitive" } },
+                select: { id: true },
+              }))?.id
+            : undefined);
+      if (!sectionId) throw Object.assign(new Error("SECTION_REQUIRED"), { statusCode: 400 });
+      const section = await prisma.productSection.findUnique({ where: { id: sectionId } });
+      if (!section) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (section.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const inputCode = data.code?.trim() || "";
+      const existing = inputCode
+        ? await prisma.productGroup.findFirst({ where: { sectionId, code: inputCode } })
+        : await prisma.productGroup.findFirst({
+            where: { sectionId, name: { equals: data.name, mode: "insensitive" } },
+          });
+      if (existing) {
+        try {
+          return await prisma.productGroup.update({
+            where: { id: existing.id },
+            data: {
+              sectionId,
+              code: inputCode ? inputCode : undefined,
+              name: data.name,
+            },
+          });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("GROUP_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+      }
+      const code = inputCode
+        ? inputCode
+        : nextCodeFrom(await prisma.productGroup.findMany({ where: { sectionId }, select: { code: true } }), 2);
+      try {
+        return await prisma.productGroup.create({
+          data: {
+            companyId,
+            sectionId,
+            code,
+            name: data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("GROUP_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/groups/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(GroupBody.partial(), request.body);
+      const existing = await prisma.productGroup.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      if (data.sectionId) {
+        const section = await prisma.productSection.findUnique({ where: { id: data.sectionId } });
+        if (!section) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+        if (section.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      try {
+        return await prisma.productGroup.update({
+          where: { id: params.id },
+          data: {
+            sectionId: data.sectionId === undefined ? undefined : data.sectionId,
+            code: data.code === undefined ? undefined : data.code,
+            name: data.name === undefined ? undefined : data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("GROUP_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.delete(
+    "/groups/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const existing = await prisma.productGroup.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const inUse = await prisma.productSubgroup.count({ where: { groupId: params.id } });
+      if (inUse > 0) throw Object.assign(new Error("CANNOT_DELETE_IN_USE"), { statusCode: 400 });
+      await prisma.productGroup.delete({ where: { id: params.id } });
+      return { ok: true };
+    }
+  );
+
+  app.get(
+    "/subgroups",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const { q } = parseQuery(SimpleQuery, request.query);
+      const companyId = await resolveCompanyId(request);
+      const where: Prisma.ProductSubgroupWhereInput = {
+        companyId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { code: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      return prisma.productSubgroup.findMany({ where, orderBy: { code: "asc" } });
+    }
+  );
+
+  app.post(
+    "/subgroups",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(SubgroupBody, request.body);
+      const sectionId =
+        data.sectionId ||
+        (data.sectionCode
+          ? (await prisma.productSection.findFirst({
+              where: { companyId, code: data.sectionCode },
+              select: { id: true },
+            }))?.id
+          : data.sectionName
+            ? (await prisma.productSection.findFirst({
+                where: { companyId, name: { equals: data.sectionName, mode: "insensitive" } },
+                select: { id: true },
+              }))?.id
+            : undefined);
+      let groupId = data.groupId;
+      if (!groupId) {
+        const baseWhere: Prisma.ProductGroupWhereInput = {
+          companyId,
+          ...(sectionId ? { sectionId } : {}),
+        };
+        if (data.groupCode) {
+          const matches = await prisma.productGroup.findMany({
+            where: { ...baseWhere, code: data.groupCode },
+            select: { id: true },
+          });
+          if (matches.length === 1) groupId = matches[0].id;
+          if (matches.length > 1) throw Object.assign(new Error("GROUP_AMBIGUOUS"), { statusCode: 400 });
+        } else if (data.groupName) {
+          const matches = await prisma.productGroup.findMany({
+            where: { ...baseWhere, name: { equals: data.groupName, mode: "insensitive" } },
+            select: { id: true },
+          });
+          if (matches.length === 1) groupId = matches[0].id;
+          if (matches.length > 1) throw Object.assign(new Error("GROUP_AMBIGUOUS"), { statusCode: 400 });
+        }
+      }
+      if (!groupId) throw Object.assign(new Error("GROUP_REQUIRED"), { statusCode: 400 });
+      const group = await prisma.productGroup.findUnique({ where: { id: groupId } });
+      if (!group) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (group.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const inputCode = data.code?.trim() || "";
+      const existing = inputCode
+        ? await prisma.productSubgroup.findFirst({ where: { groupId, code: inputCode } })
+        : await prisma.productSubgroup.findFirst({
+            where: { groupId, name: { equals: data.name, mode: "insensitive" } },
+          });
+      if (existing) {
+        try {
+          return await prisma.productSubgroup.update({
+            where: { id: existing.id },
+            data: {
+              groupId,
+              code: inputCode ? inputCode : undefined,
+              name: data.name,
+            },
+          });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("SUBGROUP_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+      }
+      const code = inputCode
+        ? inputCode
+        : nextCodeFrom(await prisma.productSubgroup.findMany({ where: { groupId }, select: { code: true } }), 2);
+      try {
+        return await prisma.productSubgroup.create({
+          data: {
+            companyId,
+            groupId,
+            code,
+            name: data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("SUBGROUP_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/subgroups/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(SubgroupBody.partial(), request.body);
+      const existing = await prisma.productSubgroup.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      if (data.groupId) {
+        const group = await prisma.productGroup.findUnique({ where: { id: data.groupId } });
+        if (!group) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+        if (group.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      try {
+        return await prisma.productSubgroup.update({
+          where: { id: params.id },
+          data: {
+            groupId: data.groupId === undefined ? undefined : data.groupId,
+            code: data.code === undefined ? undefined : data.code,
+            name: data.name === undefined ? undefined : data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("SUBGROUP_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.delete(
+    "/subgroups/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const existing = await prisma.productSubgroup.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      await prisma.productSubgroup.delete({ where: { id: params.id } });
+      return { ok: true };
+    }
+  );
+
+  app.get(
+    "/manufacturers",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const { q } = parseQuery(SimpleQuery, request.query);
+      const companyId = await resolveCompanyId(request);
+      const where: Prisma.ProductManufacturerWhereInput = {
+        companyId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { code: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      return prisma.productManufacturer.findMany({ where, orderBy: { code: "asc" } });
+    }
+  );
+
+  app.post(
+    "/manufacturers",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(ManufacturerBody, request.body);
+      const inputCode = data.code?.trim() || "";
+      const existing = inputCode
+        ? await prisma.productManufacturer.findFirst({ where: { companyId, code: inputCode } })
+        : await prisma.productManufacturer.findFirst({
+            where: { companyId, name: { equals: data.name, mode: "insensitive" } },
+          });
+      if (existing) {
+        try {
+          return await prisma.productManufacturer.update({
+            where: { id: existing.id },
+            data: {
+              code: inputCode ? inputCode : undefined,
+              name: data.name,
+            },
+          });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("MANUFACTURER_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+      }
+      const code = inputCode
+        ? inputCode
+        : nextCodeFrom(await prisma.productManufacturer.findMany({ where: { companyId }, select: { code: true } }), 2);
+      try {
+        return await prisma.productManufacturer.create({
+          data: {
+            companyId,
+            code,
+            name: data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "P2002") throw Object.assign(new Error("MANUFACTURER_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/manufacturers/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const data = parseBody(ManufacturerBody.partial(), request.body);
+      const existing = await prisma.productManufacturer.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      try {
+        return await prisma.productManufacturer.update({
+          where: { id: params.id },
+          data: {
+            code: data.code === undefined ? undefined : data.code,
+            name: data.name === undefined ? undefined : data.name,
+          },
+        });
+      } catch (e: unknown) {
+        const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+        if (errCode === "MANUFACTURER_CODE_EXISTS") throw Object.assign(new Error("MANUFACTURER_CODE_EXISTS"), { statusCode: 409 });
+        if (errCode === "P2002") throw Object.assign(new Error("MANUFACTURER_CODE_EXISTS"), { statusCode: 409 });
+        throw e;
+      }
+    }
+  );
+
+  app.delete(
+    "/manufacturers/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const companyId = await resolveCompanyId(request);
+      const existing = await prisma.productManufacturer.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      await prisma.productManufacturer.delete({ where: { id: params.id } });
       return { ok: true };
     }
   );
