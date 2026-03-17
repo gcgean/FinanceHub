@@ -43,9 +43,30 @@ object frmMain: TfrmMain
     Height = 15
     Caption = 'Empresas:'
   end
+  object Label5: TLabel
+    Left = 24
+    Top = 200
+    Width = 61
+    Height = 15
+    Caption = 'Data inicial:'
+  end
+  object Label6: TLabel
+    Left = 200
+    Top = 200
+    Width = 53
+    Height = 15
+    Caption = 'Data final:'
+  end
+  object Label7: TLabel
+    Left = 376
+    Top = 200
+    Width = 80
+    Height = 15
+    Caption = 'Filtrar por data:'
+  end
   object lblProgress: TLabel
     Left = 24
-    Top = 229
+    Top = 309
     Width = 39
     Height = 15
     Caption = 'Pronto.'
@@ -68,7 +89,11 @@ object frmMain: TfrmMain
       '9. Centro de Custos'
       '10. Plano de Contas'
       '11. Motivos de desativa'#195#167#195#163'o'
-      '12. Hist'#195#179'rico de desativa'#195#167#195#163'o')
+      '12. Hist'#195#179'rico de desativa'#195#167#195#163'o'
+      '13. Classifica'#195#167#195#181'es de clientes'
+      '14. Formas de Pagamento'
+      '15. Vendedores'
+      '16. Caixas')
     TabOrder = 7
   end
   object edtEmail: TEdit
@@ -116,23 +141,53 @@ object frmMain: TfrmMain
   end
   object btnSync: TButton
     Left = 312
-    Top = 168
+    Top = 169
     Width = 129
     Height = 25
     Caption = '3. Sincronizar'
     TabOrder = 2
     OnClick = btnSyncClick
   end
+  object dtpFrom: TDateTimePicker
+    Left = 24
+    Top = 218
+    Width = 153
+    Height = 23
+    Date = 45290.000000000000000000
+    Time = 45290.000000000000000000
+    ShowCheckbox = True
+    Checked = False
+    TabOrder = 9
+  end
+  object dtpTo: TDateTimePicker
+    Left = 200
+    Top = 218
+    Width = 153
+    Height = 23
+    Date = 45290.000000000000000000
+    Time = 45290.000000000000000000
+    ShowCheckbox = True
+    Checked = False
+    TabOrder = 10
+  end
+  object cbTitleDate: TComboBox
+    Left = 376
+    Top = 218
+    Width = 225
+    Height = 23
+    Style = csDropDownList
+    TabOrder = 11
+  end
   object ProgressBar1: TProgressBar
     Left = 24
-    Top = 208
+    Top = 288
     Width = 577
     Height = 17
     TabOrder = 8
   end
   object MemoLog: TMemo
     Left = 24
-    Top = 248
+    Top = 328
     Width = 577
     Height = 177
     Lines.Strings = (

@@ -5,6 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Download } from "lucide-react"
+import { downloadXlsx } from "@/utils/xlsx"
 
 export function SaleItemsTab() {
   const [search, setSearch] = useState("")
@@ -25,6 +27,21 @@ export function SaleItemsTab() {
         <CardTitle>Itens de Venda</CardTitle>
         <div className="flex items-center gap-2">
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por descrição..." className="w-72" />
+            <Button variant="outline" onClick={() => {
+              const headers = ["saleExternalId", "description", "quantity", "unitPrice", "totalPrice", "saleDate"]
+              const rows = items.map((item) => [
+                item.sale?.externalId ?? null,
+                item.description,
+                item.quantity,
+                item.unitPrice,
+                item.totalPrice,
+                item.sale?.date ?? null,
+              ])
+              downloadXlsx("itens_venda.xlsx", headers, rows, "ItensVenda")
+            }}>
+              <Download className="w-4 h-4 mr-2" />
+              Exportar XLSX
+            </Button>
         </div>
       </CardHeader>
       <CardContent>

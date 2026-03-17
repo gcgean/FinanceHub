@@ -1,86 +1,95 @@
-import { AlertTriangle, Lightbulb, TrendingUp, Activity } from "lucide-react";
+import { AlertTriangle, Lightbulb, TrendingUp, Activity, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AIInsight } from "@/data/mockAIData";
+import { AIInsightEvent } from "@/api/ai";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface AIInsightCardProps {
-  insight: AIInsight;
+  insight: AIInsightEvent;
+  onFeedback?: (id: string, type: 'USEFUL' | 'IRRELEVANT') => void;
 }
 
-export function AIInsightCard({ insight }: AIInsightCardProps) {
+export function AIInsightCard({ insight, onFeedback }: AIInsightCardProps) {
   const getIcon = () => {
-    switch (insight.tipo) {
-      case 'alerta': return AlertTriangle;
-      case 'oportunidade': return Lightbulb;
-      case 'previsao': return TrendingUp;
-      case 'tendencia': return Activity;
+    switch (insight.severity) {
+      case 'CRITICAL':
+      case 'HIGH': return AlertTriangle;
+      case 'MEDIUM': return Activity;
+      case 'LOW': return Lightbulb;
+      default: return Lightbulb;
     }
   };
 
   const getVariant = (): "default" | "secondary" | "destructive" | "outline" => {
-    switch (insight.tipo) {
-      case 'alerta': return 'destructive';
-      case 'oportunidade': return 'default';
-      case 'previsao': return 'secondary';
-      case 'tendencia': return 'outline';
+    switch (insight.severity) {
+      case 'CRITICAL':
+      case 'HIGH': return 'destructive';
+      case 'MEDIUM': return 'secondary';
+      case 'LOW': return 'default';
+      default: return 'outline';
     }
   };
 
   const Icon = getIcon();
-  const isPositive = insight.impacto > 0;
 
   return (
     <div className={cn(
       "p-4 rounded-xl border transition-all hover:shadow-md",
-      insight.tipo === 'alerta' && "border-destructive/30 bg-destructive/5",
-      insight.tipo === 'oportunidade' && "border-success/30 bg-success/5",
-      insight.tipo === 'previsao' && "border-primary/30 bg-primary/5",
-      insight.tipo === 'tendencia' && "border-warning/30 bg-warning/5"
+      (insight.severity === 'CRITICAL' || insight.severity === 'HIGH') && "border-destructive/30 bg-destructive/5",
+      insight.severity === 'MEDIUM' && "border-warning/30 bg-warning/5",
+      insight.severity === 'LOW' && "border-primary/30 bg-primary/5"
     )}>
       <div className="flex items-start gap-3">
         <div className={cn(
           "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
-          insight.tipo === 'alerta' && "bg-destructive/10",
-          insight.tipo === 'oportunidade' && "bg-success/10",
-          insight.tipo === 'previsao' && "bg-primary/10",
-          insight.tipo === 'tendencia' && "bg-warning/10"
+          (insight.severity === 'CRITICAL' || insight.severity === 'HIGH') && "bg-destructive/10",
+          insight.severity === 'MEDIUM' && "bg-warning/10",
+          insight.severity === 'LOW' && "bg-primary/10"
         )}>
           <Icon className={cn(
             "w-5 h-5",
-            insight.tipo === 'alerta' && "text-destructive",
-            insight.tipo === 'oportunidade' && "text-success",
-            insight.tipo === 'previsao' && "text-primary",
-            insight.tipo === 'tendencia' && "text-warning"
+            (insight.severity === 'CRITICAL' || insight.severity === 'HIGH') && "text-destructive",
+            insight.severity === 'MEDIUM' && "text-warning",
+            insight.severity === 'LOW' && "text-primary"
           )} />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <Badge variant={getVariant()} className="text-xs">
-              {insight.tipo.charAt(0).toUpperCase() + insight.tipo.slice(1)}
+              {insight.severity}
             </Badge>
             <Badge variant="outline" className="text-xs">
-              {insight.categoria}
+              {insight.insightType}
             </Badge>
             <span className="text-xs text-muted-foreground ml-auto">
-              {insight.confianca}% confiança
+              {new Date(insight.occurredAt).toLocaleDateString()}
             </span>
           </div>
 
-          <h4 className="font-semibold text-foreground mb-1">{insight.titulo}</h4>
-          <p className="text-sm text-muted-foreground">{insight.descricao}</p>
+          <h4 className="font-semibold text-foreground mb-1">{insight.title}</h4>
+          <p className="text-sm text-muted-foreground">{insight.summary}</p>
 
-          <div className="mt-3 flex items-center gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Impacto estimado</p>
-              <p className={cn(
-                "text-lg font-bold",
-                isPositive ? "text-success" : "text-destructive"
-              )}>
-                {isPositive ? '+' : ''}R$ {Math.abs(insight.impacto).toLocaleString('pt-BR')}
-                <span className="text-xs font-normal text-muted-foreground">/ano</span>
-              </p>
-            </div>
+          {/* Ações de Feedback (Validação) */}
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 px-2 text-muted-foreground hover:text-foreground"
+              onClick={() => onFeedback?.(insight.id, 'IRRELEVANT')}
+            >
+              <ThumbsDown className="w-4 h-4 mr-1" />
+              Não útil
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 px-2 text-muted-foreground hover:text-primary"
+              onClick={() => onFeedback?.(insight.id, 'USEFUL')}
+            >
+              <ThumbsUp className="w-4 h-4 mr-1" />
+              Útil
+            </Button>
           </div>
         </div>
       </div>

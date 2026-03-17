@@ -14,10 +14,14 @@ import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
 import FinancialRegistrations from "@/pages/FinancialRegistrations";
 import Ledger from "@/pages/Ledger";
+import AIAdmin from "@/pages/AIAdmin";
+import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: "Dashboard", subtitle: "Visão geral financeira" },
+  executiveDashboard: { title: "Painel Executivo", subtitle: "Impacto e Métricas de IA" },
   aiInsights: { title: "Inteligência Artificial", subtitle: "Insights preditivos e análise de mercado" },
+  aiAdmin: { title: "Admin IA", subtitle: "Calibração e Monitoramento" },
   financialRegistrations: { title: "Cadastros", subtitle: "Contas, centros de custo e plano de contas" },
   ledger: { title: "Livro-caixa", subtitle: "Lançamentos e conciliação" },
   transactions: { title: "Transações", subtitle: "Gerenciar movimentações" },
@@ -36,8 +40,12 @@ const Index = () => {
     switch (currentPage) {
       case "dashboard":
         return <Dashboard onNavigate={setCurrentPage} />;
+      case "executiveDashboard":
+        return <ExecutiveDashboard />;
       case "aiInsights":
         return <AIInsights />;
+      case "aiAdmin":
+        return <AIAdmin />;
       case "financialRegistrations":
         return <FinancialRegistrations />;
       case "ledger":

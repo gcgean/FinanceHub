@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { 
   Settings as SettingsIcon, Building2, Bell, Lock, Palette, 
-  Database, CreditCard, Users, Check, ChevronRight
+  Database, CreditCard, Users, Check, ChevronRight, Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { NotificationsTab } from "@/components/settings/NotificationsTab";
+import { AIProfileTab } from "@/components/settings/AIProfileTab";
 
 interface SettingSection {
   id: string;
@@ -27,6 +29,7 @@ interface SettingSection {
 
 const sections: SettingSection[] = [
   { id: 'company', icon: Building2, title: 'Dados da Empresa', description: 'Informações do escritório de BPO' },
+  { id: 'ai_profile', icon: Brain, title: 'Comportamento da IA', description: 'Personalizar tom e análise' },
   { id: 'notifications', icon: Bell, title: 'Notificações', description: 'Configurar alertas e e-mails' },
   { id: 'security', icon: Lock, title: 'Segurança', description: 'Senhas e autenticação' },
   { id: 'appearance', icon: Palette, title: 'Aparência', description: 'Tema e personalização' },
@@ -107,43 +110,12 @@ export default function Settings() {
             </Card>
           )}
 
+          {activeSection === 'ai_profile' && (
+            <AIProfileTab />
+          )}
+
           {activeSection === 'notifications' && (
-            <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-6">Notificações</h3>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">E-mail de pendências</p>
-                    <p className="text-sm text-muted-foreground">Receber e-mail quando houver novas pendências</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">Alerta de SLA</p>
-                    <p className="text-sm text-muted-foreground">Notificar quando pendências estiverem próximas do vencimento</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">Resumo diário</p>
-                    <p className="text-sm text-muted-foreground">Receber resumo das atividades do dia</p>
-                  </div>
-                  <Switch />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">Insights de IA</p>
-                    <p className="text-sm text-muted-foreground">Receber alertas de oportunidades e riscos detectados pela IA</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </div>
-            </Card>
+            <NotificationsTab />
           )}
 
           {activeSection === 'security' && (

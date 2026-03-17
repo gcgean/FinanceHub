@@ -1,7 +1,16 @@
 import { env } from "./lib/env";
 import { buildApp } from "./index";
+import { queueService } from "./modules/ai/services/queue.service";
+import { taskService } from "./modules/ai/services/task.service";
 
 const app = buildApp();
+
+// Iniciar Queue Service Handlers
+queueService.registerHandler("AI_TASK_PROCESSOR", async (job) => {
+  const { taskId } = JSON.parse(job.payload);
+  console.log(`[Worker] Processando tarefa ${taskId}...`);
+  await taskService.processTask(taskId);
+});
 
 app.listen({ port: env.PORT, host: env.HOST })
   .then((address) => {

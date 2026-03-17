@@ -14,11 +14,13 @@ import { useQuery } from "@tanstack/react-query"
 import { listStates, listCities } from "@/api/geo"
 import { CityCombobox } from "@/components/geo/CityCombobox"
 import { StateCombobox } from "@/components/geo/StateCombobox"
+import { listCustomerClassifications } from "@/api/canonical"
 
 const Schema = z.object({
   name: z.string().min(1),
   knownName: z.string().optional().nullable(),
   externalId: z.string().optional().nullable(),
+  classificationId: z.string().optional().nullable(),
   document: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
@@ -44,7 +46,7 @@ export function CustomerDialog(props: {
   onSubmit: (values: CustomerFormValues) => Promise<void>
 }) {
   const defaultValues = useMemo<CustomerFormValues>(
-    () => ({ name: "", knownName: null, externalId: null, document: null, email: null, phone: null, phone2: null, city: null, cityId: null, state: null, stateCode: null, neighborhood: null, value: null, isActive: true, deactivationReason: null }),
+    () => ({ name: "", knownName: null, externalId: null, classificationId: null, document: null, email: null, phone: null, phone2: null, city: null, cityId: null, state: null, stateCode: null, neighborhood: null, value: null, isActive: true, deactivationReason: null }),
     []
   )
 
@@ -57,6 +59,7 @@ export function CustomerDialog(props: {
         name: props.value.name,
         knownName: props.value.knownName ?? null,
         externalId: props.value.externalId ?? null,
+        classificationId: props.value.classificationId ?? props.value.classification?.id ?? null,
         document: props.value.document,
         email: props.value.email,
         phone: props.value.phone,
@@ -83,6 +86,11 @@ export function CustomerDialog(props: {
   const cities = useQuery({
     queryKey: ["geo", "cities", form.watch("state"), citySearch, cityTake, cityPage],
     queryFn: async () => listCities({ state: form.watch("state") ?? undefined, search: citySearch, take: cityTake, skip: cityPage * cityTake }),
+  })
+  const classifications = useQuery({
+    queryKey: ["canonical", "customerClassifications"],
+    queryFn: async () => listCustomerClassifications(),
+    enabled: props.open,
   })
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -137,6 +145,26 @@ export function CustomerDialog(props: {
               <Label>Data de Nascimento</Label>
               <Input type="date" {...form.register("birthDate")} />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Classificação</Label>
+              <Select
+                value={form.watch("classificationId") ?? ""}
+                onValueChange={(v) => form.setValue("classificationId", v ? v : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem classificação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sem classificação</SelectItem>
+                  {(classifications.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}{c.externalId ? ` · ${c.externalId}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"></div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

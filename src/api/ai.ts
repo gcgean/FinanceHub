@@ -1,0 +1,198 @@
+import { apiFetch } from "@/utils/api";
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+}
+
+export interface MetricSnapshot {
+  label: string;
+  valorAtual: number;
+  valorPrevisto: number;
+  tendencia: 'up' | 'down' | 'stable';
+  confianca: number;
+}
+
+export interface Insight {
+  id: string;
+  tipo: 'alerta' | 'tendencia' | 'oportunidade';
+  titulo: string;
+  descricao: string;
+  impacto: number;
+  confianca: number;
+  categoria: string;
+}
+
+export interface AITask {
+  id: string;
+  type: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  resultSummary?: string;
+  createdAt: string;
+}
+
+export interface NotificationChannel {
+  id: string;
+  type: 'EMAIL' | 'WHATSAPP' | 'TELEGRAM' | 'IN_APP';
+  target: string;
+  enabled: boolean;
+}
+
+export interface NotificationEvent {
+  id: string;
+  title: string;
+  summary: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+export interface Notification {
+  id: string;
+  channelType: string;
+  deliveryStatus: string;
+  readAt: string | null;
+  createdAt: string;
+  insightEvent: NotificationEvent;
+}
+
+export interface AIInsightEvent {
+  id: string;
+  title: string;
+  summary: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  insightType: string;
+  metricReference?: string;
+  payloadJson?: string;
+  occurredAt: string;
+  status: 'NEW' | 'SENT' | 'READ' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED';
+}
+
+export interface AIProfile {
+  id: string;
+  tone: string;
+  level: string;
+  segment?: string;
+}
+
+export const aiApi = {
+  // Profile
+  getProfile: async () => {
+    return apiFetch<AIProfile>('/ai/profile');
+  },
+  updateProfile: async (data: Partial<AIProfile>) => {
+    return apiFetch<AIProfile>('/ai/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  // Chat
+  createChat: async (title?: string) => {
+    return apiFetch<ChatSession>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ title })
+    });
+  },
+
+  listChats: async () => {
+    return apiFetch<ChatSession[]>('/ai/chat');
+  },
+
+  getChat: async (chatId: string) => {
+    return apiFetch<ChatSession>(`/ai/chat/${chatId}`);
+  },
+
+  sendMessage: async (chatId: string, content: string) => {
+    return apiFetch<ChatMessage>(`/ai/chat/${chatId}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    });
+  },
+
+  // Insights
+  getPredictiveMetrics: async (horizon: '30d' | '90d' | '12m') => {
+    const data = await apiFetch<{ metrics: MetricSnapshot[] }>(`/ai/predictive-metrics?horizon=${horizon}`);
+    return data.metrics;
+  },
+
+  getInsights: async () => {
+    const data = await apiFetch<{ insights: Insight[] }>('/ai/insights');
+    return data.insights;
+  },
+
+  getInsightEvents: async () => {
+    return apiFetch<AIInsightEvent[]>('/ai/insights/events');
+  },
+
+  // Tasks (New Phase 8)
+  listTasks: async () => {
+    return apiFetch<AITask[]>('/ai/tasks');
+  },
+  createTask: async (type: string) => {
+    return apiFetch<AITask>('/ai/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ type })
+    });
+  },
+
+  // Reports
+  downloadFinancialReport: async () => {
+    const response = await apiFetch<Blob>('/ai/reports/financial', {
+      headers: {
+        'Accept': 'application/pdf',
+      },
+      responseType: 'blob'
+    } as any); // Type assertion needed because apiFetch wrapper might not support blob natively yet or types are strict
+    return response;
+  },
+
+  // Notifications
+  getNotifications: async () => {
+    return apiFetch<Notification[]>('/ai/notifications');
+  },
+  markNotificationAsRead: async (id: string) => {
+    return apiFetch(`/ai/notifications/${id}/read`, { method: 'PUT' });
+  },
+  markAllNotificationsAsRead: async () => {
+    return apiFetch(`/ai/notifications/read-all`, { method: 'PUT' });
+  },
+  getNotificationChannels: async () => {
+    return apiFetch<NotificationChannel[]>('/ai/notifications/channels');
+  },
+  saveNotificationChannel: async (channel: Omit<NotificationChannel, 'id'>) => {
+    return apiFetch<NotificationChannel>('/ai/notifications/channels', {
+      method: 'POST',
+      body: JSON.stringify(channel),
+    });
+  },
+  deleteNotificationChannel: async (id: string) => {
+    return apiFetch(`/ai/notifications/channels/${id}`, { method: 'DELETE' });
+  },
+
+  // Admin
+  getAdminStats: async () => {
+    return apiFetch<{
+      totalInsights: number;
+      totalTasks: number;
+      failedJobs: number;
+      calibrationRules: number;
+    }>('/ai/admin/stats');
+  },
+  listBackgroundJobs: async () => {
+    return apiFetch<any[]>('/ai/admin/jobs');
+  },
+  retryJob: async (id: string) => {
+    return apiFetch(`/ai/admin/jobs/${id}/retry`, { method: 'POST' });
+  },
+  getCalibrationStats: async () => {
+    return apiFetch<any[]>('/ai/admin/calibration');
+  }
+};

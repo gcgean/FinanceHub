@@ -26,6 +26,7 @@ type
     function SyncCostCenter(ACostCenter: TJSONObject): Boolean;
     function SyncChartAccount(AChartAccount: TJSONObject; out AId: string): Boolean;
     function SyncCustomer(ACustomer: TJSONObject): Boolean;
+    function SyncCustomerClassification(AClassificacao: TJSONObject): Boolean;
     function SyncCustomerDeactivationReason(AMotivo: TJSONObject): Boolean;
     function CreateCustomerDeactivation(const ACustomerId: string; ABody: TJSONObject): Boolean;
     function ListCustomers(ATake, ASkip: Integer): TJSONArray;
@@ -37,6 +38,9 @@ type
     function SyncProductManufacturer(AManufacturer: TJSONObject): Boolean;
     function SyncProduct(AProduct: TJSONObject): Boolean;
     function SyncSale(ASale: TJSONObject): Boolean;
+    function SyncPaymentMethod(AMethod: TJSONObject): Boolean;
+    function SyncSeller(ASeller: TJSONObject): Boolean;
+    function SyncCashier(ACashier: TJSONObject): Boolean;
     function SyncApTitle(AApTitle: TJSONObject): Boolean;
     function SyncArTitle(AArTitle: TJSONObject): Boolean;
     
@@ -690,6 +694,16 @@ begin
   if Assigned(LResp) then LResp.Free;
 end;
 
+function TFinanceHubAPI.SyncCustomerClassification(AClassificacao: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('customers/classifications', AClassificacao);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if not Result and (FLastErrorMessage = '') then
+     FLastErrorMessage := 'Falha desconhecida ao sincronizar classificação de cliente.';
+  if Assigned(LResp) then LResp.Free;
+end;
+
 function TFinanceHubAPI.CreateCustomerDeactivation(const ACustomerId: string; ABody: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
@@ -769,7 +783,7 @@ end;
 function TFinanceHubAPI.SyncProduct(AProduct: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
-  LResp := Post('canonical/products', AProduct);
+  LResp := Post('products', AProduct);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;
@@ -777,7 +791,31 @@ end;
 function TFinanceHubAPI.SyncSale(ASale: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
-  LResp := Post('canonical/sales', ASale);
+  LResp := Post('sales', ASale);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncPaymentMethod(AMethod: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('payment-methods', AMethod);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncSeller(ASeller: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('sellers', ASeller);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncCashier(ACashier: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('cashiers', ACashier);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;
@@ -785,7 +823,7 @@ end;
 function TFinanceHubAPI.SyncApTitle(AApTitle: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
-  LResp := Post('canonical/ap-titles', AApTitle);
+  LResp := Post('ap-titles', AApTitle);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;
@@ -793,7 +831,7 @@ end;
 function TFinanceHubAPI.SyncArTitle(AArTitle: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
-  LResp := Post('canonical/ar-titles', AArTitle);
+  LResp := Post('ar-titles', AArTitle);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;

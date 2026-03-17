@@ -15,10 +15,15 @@ const ListQuery = z.object({
 
 const Body = z.object({
   customerId: z.string().optional().nullable(),
+  customerExternalId: z.string().optional().nullable(),
   issueDate: z.string().min(1),
   dueDate: z.string().min(1),
+  paymentDate: z.string().optional().nullable(),
   amount: z.number(),
   openAmount: z.number(),
+  paidAmount: z.number().optional().nullable(),
+  discountReceived: z.number().optional().nullable(),
+  interestReceived: z.number().optional().nullable(),
   status: z.nativeEnum(TitleStatus),
   documentNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -59,13 +64,26 @@ export async function arTitlesRoutes(app: FastifyInstance) {
       const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
       if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
       const b = parseBody(Body, request.body);
+      let customerId = b.customerId ?? null;
+      if (!customerId && b.customerExternalId) {
+        const customer = await prisma.customer.findFirst({
+          where: { companyId, externalId: b.customerExternalId },
+          select: { id: true },
+        });
+        customerId = customer?.id ?? null;
+      }
+
       const data = {
         companyId,
-        customerId: b.customerId ?? null,
+        customerId,
         issueDate: new Date(b.issueDate),
         dueDate: new Date(b.dueDate),
+        paymentDate: b.paymentDate ? new Date(b.paymentDate) : null,
         amount: b.amount,
         openAmount: b.openAmount,
+        paidAmount: b.paidAmount ?? null,
+        discountReceived: b.discountReceived ?? null,
+        interestReceived: b.interestReceived ?? null,
         status: b.status,
         documentNumber: b.documentNumber ?? null,
         notes: b.notes ?? null,
@@ -101,8 +119,12 @@ export async function arTitlesRoutes(app: FastifyInstance) {
           customerId: b.customerId === undefined ? undefined : b.customerId,
           issueDate: b.issueDate ? new Date(b.issueDate) : undefined,
           dueDate: b.dueDate ? new Date(b.dueDate) : undefined,
+          paymentDate: b.paymentDate === undefined ? undefined : (b.paymentDate ? new Date(b.paymentDate) : null),
           amount: b.amount === undefined ? undefined : b.amount,
           openAmount: b.openAmount === undefined ? undefined : b.openAmount,
+          paidAmount: b.paidAmount === undefined ? undefined : b.paidAmount,
+          discountReceived: b.discountReceived === undefined ? undefined : b.discountReceived,
+          interestReceived: b.interestReceived === undefined ? undefined : b.interestReceived,
           status: b.status === undefined ? undefined : b.status,
           documentNumber: b.documentNumber === undefined ? undefined : b.documentNumber,
           notes: b.notes === undefined ? undefined : b.notes,

@@ -31,6 +31,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (token) headers.set("authorization", `Bearer ${token}`)
   if (companyId) headers.set("x-company-id", companyId)
 
+  // Handle blob requests manually in apiFetch wrapper or extended logic
+  // For now we just pass through fetch
   let res: Response
   try {
     res = await fetch(url, {
@@ -43,6 +45,12 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   const contentType = res.headers.get("content-type") || ""
+  
+  // Special handling for Blob/PDF
+  if (contentType.includes("application/pdf") || (init as any)?.responseType === 'blob') {
+    return await res.blob() as unknown as T;
+  }
+
   const isJson = contentType.includes("application/json")
   const payload: unknown = isJson ? await res.json().catch(() => null) : await res.text().catch(() => "")
 

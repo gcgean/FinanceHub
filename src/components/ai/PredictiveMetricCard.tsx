@@ -1,26 +1,19 @@
 import { TrendingUp, TrendingDown, Minus, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PredictiveMetric } from "@/data/mockAIData";
+import { MetricSnapshot } from "@/api/ai";
 
 interface PredictiveMetricCardProps {
-  metric: PredictiveMetric;
+  metric: MetricSnapshot;
   horizon: '30d' | '90d' | '12m';
 }
 
 export function PredictiveMetricCard({ metric, horizon }: PredictiveMetricCardProps) {
-  const getPredictedValue = () => {
-    switch (horizon) {
-      case '30d': return metric.valorPrevisto30d;
-      case '90d': return metric.valorPrevisto90d;
-      case '12m': return metric.valorPrevisto12m;
-    }
-  };
-
-  const predictedValue = getPredictedValue();
+  const predictedValue = metric.valorPrevisto;
   const isPercentage = metric.label.includes('Taxa');
-  const change = ((predictedValue - metric.valorAtual) / metric.valorAtual) * 100;
+  const change = metric.valorAtual ? ((predictedValue - metric.valorAtual) / metric.valorAtual) * 100 : 0;
   
-  const formatValue = (value: number) => {
+  const formatValue = (value: number | undefined | null) => {
+    if (value === undefined || value === null) return 'R$ 0';
     if (isPercentage) return `${value.toFixed(1)}%`;
     if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(1)}M`;
     return `R$ ${value.toLocaleString('pt-BR')}`;

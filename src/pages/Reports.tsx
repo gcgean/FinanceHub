@@ -9,12 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { listAccounts } from "@/api/finance"
 import { getStatement, runDre } from "@/api/reports"
+import { aiApi } from "@/api/ai"
 import { getPresetRange } from "@/utils/dateRange"
 import { downloadCsv } from "@/utils/csv"
 import { downloadXlsx } from "@/utils/xlsx"
 import { downloadXlsxMulti } from "@/utils/xlsx"
 import { getLastNDays, getLastNWeeks, getLastNMonths } from "@/utils/dateRange"
 import { mockTransactions } from "@/data/mockTransactionsData"
+import { FileDown, Loader2 } from "lucide-react"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -64,8 +66,36 @@ export default function Reports() {
     return dre.data?.listagem ?? []
   }, [dre.data?.listagem])
 
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsDownloadingPdf(true);
+      const blob = await aiApi.downloadFinancialReport();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `relatorio-financeiro-${new Date().toISOString().slice(0, 10)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Falha no download:", error);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-foreground">Relatórios</h2>
+        <Button onClick={handleDownloadPdf} disabled={isDownloadingPdf}>
+          {isDownloadingPdf ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
+          Relatório Inteligente (PDF)
+        </Button>
+      </div>
+
       <Tabs value={tab} onValueChange={(v) => setTab(v === "dre" ? "dre" : "statement")}>
         <TabsList>
           <TabsTrigger value="statement">Extrato</TabsTrigger>

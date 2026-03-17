@@ -15,18 +15,35 @@ const ListQuery = z.object({
 const SaleItemBody = z.object({
   id: z.string().optional(),
   productId: z.string().optional().nullable(),
+  productExternalId: z.string().optional().nullable(),
   description: z.string().min(1),
   quantity: z.number().min(0),
   unitPrice: z.number().min(0),
 });
 
+const SalePaymentBody = z.object({
+  paymentMethodId: z.string().optional().nullable(),
+  paymentMethodExternalId: z.string().optional().nullable(),
+  paymentMethodName: z.string().optional().nullable(),
+  amount: z.number().min(0),
+});
+
 const Body = z.object({
   customerId: z.string().optional().nullable(),
+  customerExternalId: z.string().optional().nullable(),
   externalId: z.string().optional().nullable(),
   date: z.string().datetime().or(z.string()),
   status: z.string().optional().nullable(),
   paymentMethodId: z.string().optional().nullable(),
+  paymentMethodExternalId: z.string().optional().nullable(),
+  sellerId: z.string().optional().nullable(),
+  sellerExternalId: z.string().optional().nullable(),
+  sellerName: z.string().optional().nullable(),
+  cashierId: z.string().optional().nullable(),
+  cashierExternalId: z.string().optional().nullable(),
+  cashierName: z.string().optional().nullable(),
   items: z.array(SaleItemBody).optional(),
+  payments: z.array(SalePaymentBody).optional(),
 });
 
 export async function salesRoutes(app: FastifyInstance) {
@@ -54,7 +71,7 @@ export async function salesRoutes(app: FastifyInstance) {
           take: query.take,
           skip: query.skip,
           orderBy: { date: "desc" },
-          include: { customer: true, paymentMethod: true, items: true },
+          include: { customer: true, paymentMethod: true, items: true, seller: true, cashier: true, payments: { include: { paymentMethod: true } } },
         }),
         prisma.sale.count({ where }),
       ]);
@@ -70,25 +87,139 @@ export async function salesRoutes(app: FastifyInstance) {
       const companyId = await resolveCompanyId(request);
       const data = parseBody(Body, request.body);
 
+      const resolveCustomerId = async () => {
+        if (data.customerId) return data.customerId;
+        if (!data.customerExternalId) return null;
+        const customer = await prisma.customer.findFirst({
+          where: { companyId, externalId: data.customerExternalId },
+          select: { id: true },
+        });
+        return customer?.id ?? null;
+      };
+
+      const resolveSellerId = async () => {
+        if (data.sellerId) return data.sellerId;
+        if (!data.sellerExternalId) return null;
+        const existing = await prisma.seller.findFirst({
+          where: { companyId, externalId: data.sellerExternalId },
+        });
+        if (existing) return existing.id;
+        const created = await prisma.seller.create({
+          data: {
+            companyId,
+            externalId: data.sellerExternalId,
+            name: data.sellerName ?? data.sellerExternalId,
+            active: true,
+          },
+        });
+        return created.id;
+      };
+
+      const resolveCashierId = async () => {
+        if (data.cashierId) return data.cashierId;
+        if (!data.cashierExternalId) return null;
+        const existing = await prisma.cashier.findFirst({
+          where: { companyId, externalId: data.cashierExternalId },
+        });
+        if (existing) return existing.id;
+        const created = await prisma.cashier.create({
+          data: {
+            companyId,
+            externalId: data.cashierExternalId,
+            name: data.cashierName ?? data.cashierExternalId,
+            active: true,
+          },
+        });
+        return created.id;
+      };
+
+      const resolvePaymentMethodId = async () => {
+        if (data.paymentMethodId) return data.paymentMethodId;
+        if (!data.paymentMethodExternalId) return null;
+        const existing = await prisma.paymentMethod.findFirst({
+          where: { companyId, externalId: data.paymentMethodExternalId },
+        });
+        if (existing) return existing.id;
+        const created = await prisma.paymentMethod.create({
+          data: {
+            companyId,
+            externalId: data.paymentMethodExternalId,
+            name: data.paymentMethodExternalId,
+            enabled: true,
+          },
+        });
+        return created.id;
+      };
+
       const items = data.items ?? [];
       const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+      const payments = data.payments ?? [];
+      const customerId = await resolveCustomerId();
+      const sellerId = await resolveSellerId();
+      const cashierId = await resolveCashierId();
+      const paymentMethodId = await resolvePaymentMethodId();
+
+      const resolveProductId = async (item: z.infer<typeof SaleItemBody>) => {
+        if (item.productId) return item.productId;
+        if (!item.productExternalId) return null;
+        const product = await prisma.product.findFirst({
+          where: { companyId, externalId: item.productExternalId },
+          select: { id: true },
+        });
+        return product?.id ?? null;
+      };
 
       const saleData = {
         companyId,
-        customerId: data.customerId,
+        customerId,
         externalId: data.externalId ?? null,
         date: new Date(data.date),
         total,
         status: data.status,
-        paymentMethodId: data.paymentMethodId,
+        paymentMethodId,
+        sellerId,
+        cashierId,
         items: {
-          create: items.map((item) => ({
-            productId: item.productId,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.quantity * item.unitPrice,
-          })),
+          create: await Promise.all(
+            items.map(async (item) => ({
+              productId: await resolveProductId(item),
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.quantity * item.unitPrice,
+              externalId: item.id ?? null,
+            }))
+          ),
+        },
+        payments: {
+          create: await Promise.all(
+            payments.map(async (payment) => {
+              let paymentMethodIdResolved = payment.paymentMethodId ?? null;
+              if (!paymentMethodIdResolved && payment.paymentMethodExternalId) {
+                const existing = await prisma.paymentMethod.findFirst({
+                  where: { companyId, externalId: payment.paymentMethodExternalId },
+                });
+                if (existing) {
+                  paymentMethodIdResolved = existing.id;
+                } else {
+                  const created = await prisma.paymentMethod.create({
+                    data: {
+                      companyId,
+                      externalId: payment.paymentMethodExternalId,
+                      name: payment.paymentMethodName ?? payment.paymentMethodExternalId,
+                      enabled: true,
+                    },
+                  });
+                  paymentMethodIdResolved = created.id;
+                }
+              }
+              return {
+                paymentMethodId: paymentMethodIdResolved,
+                externalPaymentMethodId: payment.paymentMethodExternalId ?? null,
+                amount: payment.amount,
+              };
+            })
+          ),
         },
       };
 
@@ -106,31 +237,67 @@ export async function salesRoutes(app: FastifyInstance) {
           if (existing) {
             // Delete old items
             await tx.saleItem.deleteMany({ where: { saleId: existing.id } });
+            await tx.salePayment.deleteMany({ where: { saleId: existing.id } });
             // Update sale and create new items
             return tx.sale.update({
               where: { id: existing.id },
               data: {
-                customerId: data.customerId,
+                customerId,
                 date: new Date(data.date),
                 total,
                 status: data.status,
-                paymentMethodId: data.paymentMethodId,
+                paymentMethodId,
+                sellerId,
+                cashierId,
                 items: {
-                  create: items.map((item) => ({
-                    productId: item.productId,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    totalPrice: item.quantity * item.unitPrice,
-                  })),
+                  create: await Promise.all(
+                    items.map(async (item) => ({
+                      productId: await resolveProductId(item),
+                      description: item.description,
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      totalPrice: item.quantity * item.unitPrice,
+                      externalId: item.id ?? null,
+                    }))
+                  ),
+                },
+                payments: {
+                  create: await Promise.all(
+                    payments.map(async (payment) => {
+                      let paymentMethodIdResolved = payment.paymentMethodId ?? null;
+                      if (!paymentMethodIdResolved && payment.paymentMethodExternalId) {
+                        const existingPm = await tx.paymentMethod.findFirst({
+                          where: { companyId, externalId: payment.paymentMethodExternalId },
+                        });
+                        if (existingPm) {
+                          paymentMethodIdResolved = existingPm.id;
+                        } else {
+                          const created = await tx.paymentMethod.create({
+                            data: {
+                              companyId,
+                              externalId: payment.paymentMethodExternalId,
+                              name: payment.paymentMethodName ?? payment.paymentMethodExternalId,
+                              enabled: true,
+                            },
+                          });
+                          paymentMethodIdResolved = created.id;
+                        }
+                      }
+                      return {
+                        paymentMethodId: paymentMethodIdResolved,
+                        externalPaymentMethodId: payment.paymentMethodExternalId ?? null,
+                        amount: payment.amount,
+                      };
+                    })
+                  ),
                 },
               },
-              include: { items: true },
+              include: { items: true, payments: { include: { paymentMethod: true } } },
             });
           } else {
             return tx.sale.create({
               data: saleData,
-              include: { items: true },
+              include: { items: true, payments: { include: { paymentMethod: true } } },
             });
           }
         });
@@ -138,7 +305,7 @@ export async function salesRoutes(app: FastifyInstance) {
 
       return prisma.sale.create({
         data: saleData,
-        include: { items: true },
+        include: { items: true, payments: { include: { paymentMethod: true } } },
       });
     }
   );
@@ -151,7 +318,7 @@ export async function salesRoutes(app: FastifyInstance) {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
       const data = parseBody(Body.partial(), request.body);
 
-      const existing = await prisma.sale.findUnique({ where: { id: params.id }, include: { items: true } });
+      const existing = await prisma.sale.findUnique({ where: { id: params.id }, include: { items: true, payments: true } });
       if (!existing || existing.companyId !== companyId) {
         throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       }
@@ -163,21 +330,71 @@ export async function salesRoutes(app: FastifyInstance) {
       let itemsUpdate = {};
       let total = existing.total;
 
+      let paymentsUpdate = {};
       if (data.items) {
+        const resolveProductId = async (item: z.infer<typeof SaleItemBody>) => {
+          if (item.productId) return item.productId;
+          if (!item.productExternalId) return null;
+          const product = await prisma.product.findFirst({
+            where: { companyId, externalId: item.productExternalId },
+            select: { id: true },
+          });
+          return product?.id ?? null;
+        };
+
         // Calculate new total
         total = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
         
         itemsUpdate = {
             items: {
                 deleteMany: {},
-                create: data.items.map((item) => ({
-                    productId: item.productId,
+                create: await Promise.all(
+                  data.items.map(async (item) => ({
+                    productId: await resolveProductId(item),
                     description: item.description,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
                     totalPrice: item.quantity * item.unitPrice,
-                })),
+                    externalId: item.id ?? null,
+                  }))
+                ),
             }
+        };
+      }
+
+      if (data.payments) {
+        paymentsUpdate = {
+          payments: {
+            deleteMany: {},
+            create: await Promise.all(
+              data.payments.map(async (payment) => {
+                let paymentMethodIdResolved = payment.paymentMethodId ?? null;
+                if (!paymentMethodIdResolved && payment.paymentMethodExternalId) {
+                  const existingPm = await prisma.paymentMethod.findFirst({
+                    where: { companyId, externalId: payment.paymentMethodExternalId },
+                  });
+                  if (existingPm) {
+                    paymentMethodIdResolved = existingPm.id;
+                  } else {
+                    const created = await prisma.paymentMethod.create({
+                      data: {
+                        companyId,
+                        externalId: payment.paymentMethodExternalId,
+                        name: payment.paymentMethodName ?? payment.paymentMethodExternalId,
+                        enabled: true,
+                      },
+                    });
+                    paymentMethodIdResolved = created.id;
+                  }
+                }
+                return {
+                  paymentMethodId: paymentMethodIdResolved,
+                  externalPaymentMethodId: payment.paymentMethodExternalId ?? null,
+                  amount: payment.amount,
+                };
+              })
+            ),
+          },
         };
       } else if (data.date || data.customerId || data.status || data.paymentMethodId) {
         // Just updating header fields
@@ -187,13 +404,16 @@ export async function salesRoutes(app: FastifyInstance) {
         where: { id: params.id },
         data: {
           customerId: data.customerId,
+          sellerId: data.sellerId,
+          cashierId: data.cashierId,
           date: data.date ? new Date(data.date) : undefined,
           status: data.status,
           paymentMethodId: data.paymentMethodId,
           total: data.items ? total : undefined,
           ...itemsUpdate,
+          ...paymentsUpdate,
         },
-        include: { items: true },
+        include: { items: true, payments: { include: { paymentMethod: true } } },
       });
     }
   );

@@ -11,7 +11,9 @@ import {
   Users,
   Brain,
   BookOpen,
-  Folders
+  Folders,
+  LineChart,
+  Sliders
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
@@ -29,6 +31,7 @@ interface SidebarProps {
 
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "executiveDashboard", label: "Painel Executivo", icon: LineChart },
   { id: "aiInsights", label: "Inteligência IA", icon: Brain },
   { id: "financialRegistrations", label: "Cadastros", icon: Folders },
   { id: "ledger", label: "Livro-caixa", icon: BookOpen },
@@ -40,6 +43,7 @@ const navigation = [
 ];
 
 const adminNavigation = [
+  { id: "aiAdmin", label: "Admin IA", icon: Sliders },
   { id: "companies", label: "Empresas", icon: Building2 },
   { id: "users", label: "Usuários", icon: Users },
   { id: "integrations", label: "Integrações", icon: ArrowUpDown },

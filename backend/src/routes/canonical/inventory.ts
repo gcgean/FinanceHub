@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { Prisma } from "@prisma/client"
 import { prisma } from "../../lib/prisma"
-import { requireAuth } from "../../lib/auth"
+import { requireAuth, requireRole } from "../../lib/auth"
 import { resolveCompanyId } from "../../lib/company"
 import { requireCompanyScope } from "../../lib/auth"
 import { parseQuery } from "../../lib/validation"
 import { z } from "zod"
+import { UserRole } from "@prisma/client"
 
 const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
@@ -67,11 +68,13 @@ export async function inventoryRoutes(app: FastifyInstance) {
     locationName: z.string().optional().nullable(),
     qtyOnHand: z.number(),
     updatedAtSource: z.string().optional().nullable(),
+  ead: z.string().optional().nullable(),
+  deactivated: z.boolean().optional(),
   });
 
   app.post(
     "/",
-    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const body = z
@@ -98,6 +101,8 @@ export async function inventoryRoutes(app: FastifyInstance) {
           externalLocationId: it.externalLocationId ?? null,
           locationName: it.locationName ?? null,
           qtyOnHand: it.qtyOnHand,
+          ead: it.ead ?? null,
+          deactivated: it.deactivated ?? false,
           updatedAtSource: it.updatedAtSource ? new Date(it.updatedAtSource) : null,
           dataSourceId: "MANUAL",
           importJobId: "MANUAL",
@@ -112,6 +117,107 @@ export async function inventoryRoutes(app: FastifyInstance) {
         }
       }
       return { ok: true, ...results };
+    }
+  );
+
+  const LocationListQuery = z.object({
+    take: z.coerce.number().int().min(1).max(200).optional().default(50),
+    skip: z.coerce.number().int().min(0).optional().default(0),
+    q: z.string().optional(),
+  });
+
+  const LocationSchema = z.object({
+    externalId: z.string().optional().nullable(),
+    name: z.string().min(1),
+    hashTable: z.string().optional().nullable(),
+    updatedAtSource: z.string().optional().nullable(),
+    ignoreConsolidation: z.boolean().optional().default(false),
+  });
+
+  app.get(
+    "/locations",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const { take, skip, q } = parseQuery(LocationListQuery, request.query);
+      const where: Prisma.InventoryLocationWhereInput = {
+        companyId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { externalId: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      const [items, total] = await Promise.all([
+        prisma.inventoryLocation.findMany({ where, take, skip, orderBy: { name: "asc" } }),
+        prisma.inventoryLocation.count({ where }),
+      ]);
+      return { items, total, take, skip };
+    }
+  );
+
+  app.post(
+    "/locations",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const body = z
+        .object({ items: z.array(LocationSchema) })
+        .or(LocationSchema)
+        .parse(request.body);
+
+      const items = Array.isArray((body as { items?: z.infer<typeof LocationSchema>[] }).items)
+        ? (body as { items: z.infer<typeof LocationSchema>[] }).items
+        : [body as z.infer<typeof LocationSchema>];
+
+      const results: { created: number; updated: number } = { created: 0, updated: 0 };
+      for (const it of items) {
+        const externalId = it.externalId ?? null;
+        const existing = externalId
+          ? await prisma.inventoryLocation.findFirst({ where: { companyId, externalId } })
+          : await prisma.inventoryLocation.findFirst({ where: { companyId, externalId: null, name: it.name } });
+        const data = {
+          companyId,
+          externalId,
+          name: it.name,
+          hashTable: it.hashTable ?? null,
+          updatedAtSource: it.updatedAtSource ? new Date(it.updatedAtSource) : null,
+          ignoreConsolidation: it.ignoreConsolidation ?? false,
+        };
+        if (existing) {
+          await prisma.inventoryLocation.update({ where: { id: existing.id }, data });
+          results.updated++;
+        } else {
+          await prisma.inventoryLocation.create({ data });
+          results.created++;
+        }
+      }
+      return { ok: true, ...results };
+    }
+  );
+
+  app.patch(
+    "/locations/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const body = LocationSchema.partial().parse(request.body);
+      const existing = await prisma.inventoryLocation.findFirst({ where: { id: params.id, companyId } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      return prisma.inventoryLocation.update({
+        where: { id: params.id },
+        data: {
+          externalId: body.externalId ?? existing.externalId,
+          name: body.name ?? existing.name,
+          hashTable: body.hashTable ?? existing.hashTable,
+          updatedAtSource: body.updatedAtSource ? new Date(body.updatedAtSource) : existing.updatedAtSource,
+          ignoreConsolidation: body.ignoreConsolidation ?? existing.ignoreConsolidation,
+        },
+      });
     }
   );
 }

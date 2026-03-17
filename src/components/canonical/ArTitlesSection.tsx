@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { listArTitles, createArTitle, updateArTitle, deleteArTitle, type ArTitle, type TitleStatus, listCustomers, type Customer } from "@/api/canonical"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,17 +11,8 @@ import { toast } from "@/hooks/use-toast"
 import { useAuthStore } from "@/stores/authStore"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ArTitleDialog, type ArTitleFormValues } from "./ArTitleDialog"
-import { downloadXlsx, readXlsx } from "@/utils/xlsx";
-type ImportRow = {
-  customerId?: string
-  issueDate: string
-  dueDate: string
-  amount: number
-  openAmount: number
-  status: string
-  documentNumber?: string
-  notes?: string
-}
+import { downloadXlsx } from "@/utils/xlsx"
+import * as XLSX from "xlsx"
 
 export function ArTitlesSection() {
   const qc = useQueryClient()
@@ -33,6 +24,8 @@ export function ArTitlesSection() {
   const [take, setTake] = useState(20)
   const [page, setPage] = useState(0)
   const [range, setRange] = useState<{ from?: string; to?: string }>({})
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
   const titles = useQuery<{ items: ArTitle[]; total: number; take: number; skip: number }>({
     queryKey: ["canonical", "arTitles", { companyId, search, range, take, page }],
     queryFn: async () => listArTitles({ q: search, from: range.from, to: range.to, take, skip: page * take }),
@@ -79,12 +72,27 @@ export function ArTitlesSection() {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="w-72" />
           <DateRangePicker value={range} onChange={(v) => { setRange(v); setPage(0) }} />
           <Button variant="outline" onClick={() => {
-            const headers = ["customerId", "chartAccountId", "issueDate", "dueDate", "amount", "openAmount", "status", "documentNumber", "notes"]
-            const rows = (titles.data?.items ?? []).map((t) => [t.customerId, t.chartAccountId, t.issueDate, t.dueDate, t.amount, t.openAmount, t.status, t.documentNumber, t.notes])
+            const headers = ["externalId", "customerExternalId", "issueDate", "dueDate", "paymentDate", "amount", "openAmount", "paidAmount", "discountReceived", "interestReceived", "status", "documentNumber", "notes"]
+            const rows: (string | number | null)[][] = [
+              ["CTR-1001-1", "200", "2026-03-01", "2026-03-10", "2026-03-05", 120.5, 0, 120.5, 5, 0, "PAID", "NF-123", "Recebido no caixa"],
+              ["CTR-1002-1", "201", "2026-03-02", "2026-03-12", null, 200, 200, 0, 0, 0, "OPEN", "NF-124", "Aberto"],
+            ]
+            downloadXlsx("modelo_contas_a_receber.xlsx", headers, rows, "Contas a Receber")
+          }}>
+            <Download className="w-4 h-4 mr-2" />
+            Modelo XLSX
+          </Button>
+          <Button variant="outline" onClick={() => {
+            const headers = ["customerId", "chartAccountId", "issueDate", "dueDate", "paymentDate", "amount", "openAmount", "paidAmount", "discountReceived", "interestReceived", "status", "documentNumber", "notes"]
+            const rows = (titles.data?.items ?? []).map((t) => [t.customerId, t.chartAccountId, t.issueDate, t.dueDate, t.paymentDate ?? null, t.amount, t.openAmount, t.paidAmount ?? null, t.discountReceived ?? null, t.interestReceived ?? null, t.status, t.documentNumber, t.notes])
             downloadXlsx("contas_a_receber.xlsx", headers, rows, "Contas a Receber")
           }}>
             <Download className="w-4 h-4 mr-2" />
             Exportar XLSX
+          </Button>
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
+            <Upload className="w-4 h-4 mr-2" />
+            Importar XLSX
           </Button>
           <Button onClick={() => { setEditing(null); setOpen(true) }}>
             <Plus className="w-4 h-4 mr-2" />
@@ -166,6 +174,95 @@ export function ArTitlesSection() {
         onSubmit={async (values) => {
           if (editing) await updateMut.mutateAsync(values)
           else await createMut.mutateAsync(values)
+        }}
+      />
+      <input
+        ref={fileRef}
+        hidden
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          setImporting(true)
+          try {
+            const buf = await file.arrayBuffer()
+            const wb = XLSX.read(buf, { type: "array" })
+            const ws = wb.Sheets[wb.SheetNames[0]]
+            const rows: Array<Record<string, any>> = XLSX.utils.sheet_to_json(ws, { defval: null })
+
+            const errors: string[] = []
+            let created = 0
+
+            const toIso = (value: any) => {
+              if (!value) return null
+              if (value instanceof Date) return value.toISOString().slice(0, 10)
+              if (typeof value === "number" && XLSX.SSF?.parse_date_code) {
+                const d = XLSX.SSF.parse_date_code(value)
+                if (d) {
+                  const dt = new Date(d.y, d.m - 1, d.d, d.H, d.M, d.S)
+                  return dt.toISOString().slice(0, 10)
+                }
+              }
+              const s = String(value).trim()
+              if (!s) return null
+              return s
+            }
+
+            for (let idx = 0; idx < rows.length; idx++) {
+              const row = rows[idx]
+              const rowIndex = idx + 2
+              const externalId = String(row.externalId ?? "").trim()
+              const issueDate = toIso(row.issueDate)
+              const dueDate = toIso(row.dueDate)
+              if (!externalId) {
+                errors.push(`Linha ${rowIndex}: externalId obrigatório`)
+                continue
+              }
+              if (!issueDate || !dueDate) {
+                errors.push(`Linha ${rowIndex}: issueDate e dueDate obrigatórios`)
+                continue
+              }
+              const amount = Number(row.amount ?? 0)
+              const openAmount = Number(row.openAmount ?? 0)
+              if (!amount && amount !== 0) {
+                errors.push(`Linha ${rowIndex}: amount inválido`)
+                continue
+              }
+              if (!openAmount && openAmount !== 0) {
+                errors.push(`Linha ${rowIndex}: openAmount inválido`)
+                continue
+              }
+              const status = String(row.status ?? "OPEN").trim().toUpperCase()
+              const statusValue = ["OPEN", "PAID", "OVERDUE", "CANCELED"].includes(status) ? status : "OPEN"
+
+              await createArTitle({
+                externalId,
+                customerExternalId: row.customerExternalId ? String(row.customerExternalId).trim() : undefined,
+                issueDate,
+                dueDate,
+                paymentDate: toIso(row.paymentDate),
+                amount,
+                openAmount,
+                paidAmount: row.paidAmount !== null && row.paidAmount !== undefined ? Number(row.paidAmount) : undefined,
+                discountReceived: row.discountReceived !== null && row.discountReceived !== undefined ? Number(row.discountReceived) : undefined,
+                interestReceived: row.interestReceived !== null && row.interestReceived !== undefined ? Number(row.interestReceived) : undefined,
+                status: statusValue as TitleStatus,
+                documentNumber: row.documentNumber ? String(row.documentNumber).trim() : undefined,
+                notes: row.notes ? String(row.notes).trim() : undefined,
+              })
+              created++
+            }
+
+            toast({ title: "Importação concluída", description: `Títulos processados: ${created}` })
+            await qc.invalidateQueries({ queryKey: ["canonical", "arTitles"] })
+            if (errors.length) {
+              toast({ title: "Erros na importação", description: errors.slice(0, 8).join("\n"), variant: "destructive" })
+            }
+          } finally {
+            setImporting(false)
+            if (fileRef.current) fileRef.current.value = ""
+          }
         }}
       />
     </Card>

@@ -1,4 +1,4 @@
-﻿﻿unit uMain;
+﻿unit uMain;
 
 interface
 
@@ -20,8 +20,14 @@ type
     Label1: TLabel;
     Label2: TLabel;
     Label4: TLabel;
+    Label5: TLabel;
+    Label6: TLabel;
+    Label7: TLabel;
+    cbTitleDate: TComboBox;
     clbEmpresas: TCheckListBox;
     clbEntidades: TCheckListBox;
+    dtpFrom: TDateTimePicker;
+    dtpTo: TDateTimePicker;
     procedure btnConnectDBClick(Sender: TObject);
     procedure btnLoginAPIClick(Sender: TObject);
     procedure btnSyncClick(Sender: TObject);
@@ -71,6 +77,19 @@ begin
   if Assigned(clbEntidades) then
     for I := 0 to clbEntidades.Count - 1 do
       clbEntidades.Checked[I] := True;
+
+  if Assigned(dtpFrom) then
+    dtpFrom.Date := Date - 7;
+  if Assigned(dtpTo) then
+    dtpTo.Date := Date;
+  if Assigned(cbTitleDate) then
+  begin
+    cbTitleDate.Items.Clear;
+    cbTitleDate.Items.Add('Emissão');
+    cbTitleDate.Items.Add('Vencimento');
+    cbTitleDate.Items.Add('Pagamento');
+    cbTitleDate.ItemIndex := 0;
+  end;
 end;
 
 procedure TfrmMain.FormDestroy(Sender: TObject);
@@ -261,19 +280,22 @@ begin
         // Vendas (Índice 5)
         if clbEntidades.Checked[5] then
         begin
-          // FSync.SyncSales(LCodEmp);
+          if FSync.SyncSales(LCodEmp, dtpFrom.Date, dtpTo.Date) > 0 then
+            Log('Vendas sincronizadas.');
         end;
         
         // Contas a Pagar (Índice 6)
         if clbEntidades.Checked[6] then
         begin
-          // FSync.SyncApTitles(LCodEmp);
+          if FSync.SyncApTitles(LCodEmp, dtpFrom.Date, dtpTo.Date, cbTitleDate.ItemIndex) > 0 then
+            Log('Contas a pagar sincronizadas.');
         end;
         
         // Contas a Receber (Índice 7)
         if clbEntidades.Checked[7] then
         begin
-          // FSync.SyncArTitles(LCodEmp);
+          if FSync.SyncArTitles(LCodEmp, dtpFrom.Date, dtpTo.Date, cbTitleDate.ItemIndex) > 0 then
+            Log('Contas a receber sincronizadas.');
         end;
 
         // Centros de Custo (Índice 8)
@@ -300,6 +322,30 @@ begin
         begin
           if FSync.SyncCustomerDeactivationHistory(LCodEmp) > 0 then
              Log('Histórico de desativação sincronizado.');
+        end;
+
+        if clbEntidades.Checked[12] then
+        begin
+          if FSync.SyncCustomerClassifications(LCodEmp) > 0 then
+             Log('Classificações de clientes sincronizadas.');
+        end;
+
+        if clbEntidades.Checked[13] then
+        begin
+          if FSync.SyncPaymentMethods(LCodEmp) > 0 then
+            Log('Formas de pagamento sincronizadas.');
+        end;
+
+        if clbEntidades.Checked[14] then
+        begin
+          if FSync.SyncSellers(LCodEmp) > 0 then
+            Log('Vendedores sincronizados.');
+        end;
+
+        if clbEntidades.Checked[15] then
+        begin
+          if FSync.SyncCashiers(LCodEmp) > 0 then
+            Log('Caixas sincronizados.');
         end;
           
         Application.ProcessMessages; // Mantém UI responsiva

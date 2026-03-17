@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Brain, Sparkles, FileText, MessageSquare, BarChart3 } from "lucide-react";
+import { Brain, Sparkles, FileText, MessageSquare, BarChart3, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PredictiveMetricCard } from "@/components/ai/PredictiveMetricCard";
 import { AIInsightCard } from "@/components/ai/AIInsightCard";
@@ -7,16 +7,34 @@ import { ChurnRiskTable } from "@/components/ai/ChurnRiskTable";
 import { OpportunitiesTable } from "@/components/ai/OpportunitiesTable";
 import { RevenueChart } from "@/components/ai/RevenueChart";
 import { AIChat } from "@/components/ai/AIChat";
+import { TaskDashboard } from "@/components/ai/TaskDashboard";
 import { HorizonSelector } from "@/components/ai/HorizonSelector";
 import { 
-  predictiveMetrics, 
-  aiInsights, 
   churnRisks, 
   opportunities 
 } from "@/data/mockAIData";
+import { useQuery } from "@tanstack/react-query";
+import { aiApi } from "@/api/ai";
 
 export default function AIInsights() {
   const [horizon, setHorizon] = useState<'30d' | '90d' | '12m'>('30d');
+
+  // Fetch Predictive Metrics
+  const { data: metrics, isLoading: isLoadingMetrics } = useQuery({
+    queryKey: ['ai-metrics', horizon],
+    queryFn: () => aiApi.getPredictiveMetrics(horizon),
+  });
+
+  // Fetch AI Insights (Real Events)
+  const { data: insights, isLoading: isLoadingInsights } = useQuery({
+    queryKey: ['ai-insights-events'],
+    queryFn: aiApi.getInsightEvents,
+  });
+
+  const handleFeedback = (id: string, type: 'USEFUL' | 'IRRELEVANT') => {
+    // TODO: Implementar chamada de API real para salvar feedback
+    console.log(`Feedback ${type} para insight ${id}`);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -53,12 +71,19 @@ export default function AIInsights() {
 
         {/* Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-6">
+          {/* AI Tasks Dashboard (New) */}
+          <TaskDashboard />
+
           {/* Predictive Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {predictiveMetrics.map((metric, i) => (
-              <PredictiveMetricCard key={i} metric={metric} horizon={horizon} />
-            ))}
-          </div>
+          {isLoadingMetrics ? (
+            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {metrics?.map((metric, i) => (
+                <PredictiveMetricCard key={i} metric={metric} horizon={horizon} />
+              ))}
+            </div>
+          )}
 
           {/* Revenue Chart */}
           <RevenueChart />
@@ -69,11 +94,27 @@ export default function AIInsights() {
               <Sparkles className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold text-foreground">Insights da IA</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {aiInsights.map((insight) => (
-                <AIInsightCard key={insight.id} insight={insight} />
-              ))}
-            </div>
+            {isLoadingInsights ? (
+              <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
+            ) : (
+              <>
+                {insights && insights.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {insights.map((insight) => (
+                      <AIInsightCard 
+                        key={insight.id} 
+                        insight={insight} 
+                        onFeedback={handleFeedback}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                    Nenhum insight gerado recentemente.
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Churn Risks */}

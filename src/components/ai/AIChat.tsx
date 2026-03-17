@@ -1,199 +1,158 @@
-import { useState } from "react";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Send, Bot, User, Sparkles, Loader2, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { ChatMessage, sampleChatHistory, suggestedQuestions } from "@/data/mockAIData";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { aiApi, ChatMessage } from "@/api/ai";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
-const mockResponses: Record<string, string> = {
-  'churn': `📊 **Análise de Churn - Janeiro 2026**
-
-Identifiquei **3 clientes em risco crítico** de cancelamento:
-
-1. **Tech Solutions Ltda** - Risco 78%
-   - Valor em risco: R$ 4.500/mês
-   - Motivo: Reduziu interações em 60%
-   - Ação: Contato urgente do CS
-
-2. **Comercial ABC** - Risco 65%
-   - Valor em risco: R$ 2.800/mês
-   - Motivo: Ticket sem resolução há 20 dias
-   - Ação: Priorizar resolução do chamado
-
-3. **Indústria Norte** - Risco 45%
-   - Valor em risco: R$ 8.200/mês
-   - Motivo: Solicitou info sobre cancelamento
-   - Ação: Agendar reunião de retenção
-
-**Impacto total potencial: R$ 186.000/ano**
-
-Recomendo priorizar ações de retenção esta semana.`,
-
-  'faturamento': `📈 **Previsão de Faturamento - Próximos 3 meses**
-
-Com base no histórico e tendências identificadas:
-
-| Período | Previsão | Confiança |
-|---------|----------|-----------|
-| Fev/26 | R$ 278.000 | 85% |
-| Mar/26 | R$ 295.000 | 78% |
-| Abr/26 | R$ 312.000 | 72% |
-
-**Fatores considerados:**
-- ✅ Sazonalidade: pico histórico em março (+25%)
-- ✅ Pipeline de vendas: 12 oportunidades qualificadas
-- ⚠️ Risco de churn: 3 clientes críticos
-- ✅ Tendência MRR: crescimento de 5% ao mês
-
-**Cenário otimista:** R$ 340.000 em abril
-**Cenário pessimista:** R$ 275.000 em abril
-
-A previsão considera retenção dos clientes em risco.`,
-
-  'oportunidades': `💡 **Top Oportunidades de Vendas**
-
-Identifiquei **5 oportunidades** com alto potencial:
-
-🥇 **Distribuidora Sul** - Upsell
-   - Produto: Plano Enterprise
-   - Potencial: +R$ 15.000/mês
-   - Probabilidade: 82%
-   - Próximo passo: Demo do módulo avançado
-
-🥈 **Grupo Atacado** - Cross-sell
-   - Produto: Módulo Conciliação
-   - Potencial: +R$ 8.500/mês
-   - Probabilidade: 75%
-   - Próximo passo: Apresentar ROI
-
-🥉 **Rede Farmácias** - Expansão
-   - Produto: 3 novas licenças
-   - Potencial: +R$ 12.000/mês
-   - Probabilidade: 68%
-   - Próximo passo: Contato sobre filiais
-
-**Potencial total: R$ 45.300/mês adicional**
-
-Recomendo focar nas 3 primeiras esta semana.`,
-
-  'saude': `🏥 **Saúde Financeira - Resumo Executivo**
-
-**Indicadores Principais:**
-- 💰 Faturamento: R$ 261.000 (+12% vs mês anterior)
-- 📊 MRR: R$ 62.000 (+6.8% vs mês anterior)
-- 📉 Churn Rate: 4.2% (meta: <3%)
-- ⚠️ Inadimplência: 12% (acima da média do setor)
-
-**Pontos Fortes:**
-✅ Crescimento consistente de receita recorrente
-✅ 12 oportunidades qualificadas no pipeline
-✅ Ticket médio aumentou 8% no trimestre
-
-**Pontos de Atenção:**
-⚠️ Taxa de churn acima da meta
-⚠️ 3 clientes em risco crítico (R$ 186k/ano)
-⚠️ Inadimplência precisa de ação
-
-**Score Geral: 7.2/10** 📊
-
-Empresa em crescimento saudável, mas precisa focar em retenção e cobrança.`,
-
-  'priorizar': `📋 **Prioridades da Semana - 31/Jan a 06/Fev**
-
-**🔴 URGENTE (fazer hoje):**
-1. Contatar Tech Solutions sobre risco de churn
-   - Valor em risco: R$ 54.000/ano
-   - Responsável: CS Team
-
-2. Resolver ticket da Comercial ABC
-   - Aberto há 20 dias
-   - Impacto: Satisfação do cliente
-
-**🟡 IMPORTANTE (esta semana):**
-3. Agendar demo Distribuidora Sul
-   - Oportunidade: R$ 15.000/mês
-   - Probabilidade alta: 82%
-
-4. Revisar política de cobrança
-   - Inadimplência em 12%
-   - Meta: reduzir para 7%
-
-**🟢 PLANEJADO (próximas 2 semanas):**
-5. Preparar campanha março (sazonalidade)
-6. Contatar leads de expansão
-7. Atualizar forecast Q1
-
-**Foco da semana: Retenção + Oportunidade prioritária**`,
-};
+const suggestedQuestions = [
+  "Qual a previsão de faturamento?",
+  "Faça uma análise profunda",
+  "Categorizar lançamentos",
+  "Como está a saúde financeira da empresa?",
+];
 
 export function AIChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>(sampleChatHistory);
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const getAIResponse = (question: string): string => {
-    const q = question.toLowerCase();
-    if (q.includes('churn') || q.includes('cancelamento') || q.includes('risco')) {
-      return mockResponses['churn'];
-    }
-    if (q.includes('faturamento') || q.includes('previsão') || q.includes('receita') || q.includes('projeção')) {
-      return mockResponses['faturamento'];
-    }
-    if (q.includes('oportunidade') || q.includes('vendas') || q.includes('upsell')) {
-      return mockResponses['oportunidades'];
-    }
-    if (q.includes('saúde') || q.includes('saude') || q.includes('situação') || q.includes('como está')) {
-      return mockResponses['saude'];
-    }
-    if (q.includes('priorizar') || q.includes('prioridade') || q.includes('semana') || q.includes('fazer')) {
-      return mockResponses['priorizar'];
-    }
-    return `Analisei sua pergunta sobre "${question}". 
+  // 1. List Chats to find active session
+  const { data: chats, isLoading: isLoadingChats } = useQuery({
+    queryKey: ['ai-chats'],
+    queryFn: aiApi.listChats,
+  });
 
-Com base nos dados disponíveis:
-- **Faturamento atual:** R$ 261.000
-- **MRR:** R$ 62.000
-- **Clientes ativos:** 47
-- **Crescimento:** +12% vs mês anterior
+  // 2. Create Chat Mutation
+  const createChatMutation = useMutation({
+    mutationFn: () => aiApi.createChat("Nova Conversa"),
+    onSuccess: (newChat) => {
+      setActiveChatId(newChat.id);
+      queryClient.invalidateQueries({ queryKey: ['ai-chats'] });
+    },
+  });
 
-Para uma análise mais específica, você pode perguntar sobre:
-- Previsão de faturamento
-- Riscos de churn
-- Oportunidades de vendas
-- Saúde financeira geral`;
-  };
+  // 3. Initialize Chat
+  useEffect(() => {
+    if (!isLoadingChats && chats) {
+      if (chats.length > 0) {
+        setActiveChatId(chats[0].id);
+      } else if (!activeChatId && !createChatMutation.isPending) {
+        createChatMutation.mutate();
+      }
+    }
+  }, [chats, isLoadingChats, activeChatId, createChatMutation]);
+
+  // 4. Fetch Messages for Active Chat
+  const { data: chatSession, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['ai-chat', activeChatId],
+    queryFn: () => aiApi.getChat(activeChatId!),
+    enabled: !!activeChatId,
+    refetchInterval: 5000, // Poll for updates occasionally
+  });
+
+  // 5. Send Message Mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: ({ chatId, content }: { chatId: string; content: string }) => 
+      aiApi.sendMessage(chatId, content),
+    onMutate: async ({ chatId, content }) => {
+      // Optimistic Update
+      await queryClient.cancelQueries({ queryKey: ['ai-chat', chatId] });
+      const previousChat = queryClient.getQueryData(['ai-chat', chatId]);
+
+      queryClient.setQueryData(['ai-chat', chatId], (old: any) => ({
+        ...old,
+        messages: [
+          ...(old?.messages || []),
+          {
+            id: 'temp-' + Date.now(),
+            role: 'user',
+            content,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      }));
+
+      return { previousChat };
+    },
+    onError: (err, newTodo, context) => {
+      queryClient.setQueryData(['ai-chat', activeChatId], context?.previousChat);
+      toast({
+        title: "Erro ao enviar mensagem",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-chat', activeChatId] });
+    },
+  });
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatSession?.messages, sendMessageMutation.isPending]);
 
   const handleSend = (text?: string) => {
     const messageText = text || input;
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || !activeChatId) return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: messageText,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setIsTyping(true);
+    sendMessageMutation.mutate({ chatId: activeChatId, content: messageText });
+  };
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: getAIResponse(messageText),
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
-      setIsTyping(false);
-    }, 1500);
+  const messages = chatSession?.messages || [];
+  const isTyping = sendMessageMutation.isPending;
+
+  // Função para renderizar conteúdo especial (como tasks)
+  const renderMessageContent = (content: string) => {
+    // Detectar padrão de tarefa criada no texto
+    if (content.includes("Iniciei uma tarefa de")) {
+      const parts = content.split("Iniciei uma tarefa de");
+      const prefix = parts[0];
+      const suffix = "Iniciei uma tarefa de" + parts[1];
+      
+      return (
+        <div className="space-y-2">
+          <p>{prefix}</p>
+          <div className="bg-background/50 p-3 rounded-lg border border-border flex items-center gap-3">
+            <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-full">
+              <Play className="w-4 h-4 text-blue-600 dark:text-blue-300" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">Tarefa em Execução</p>
+              <p className="text-xs text-muted-foreground">O processamento ocorrerá em segundo plano.</p>
+            </div>
+            <Badge variant="outline" className="ml-auto">
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              Processando
+            </Badge>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="text-sm whitespace-pre-wrap">
+        {content.split('\n').map((line, i) => (
+          <p key={i} className={line.startsWith('**') ? 'font-semibold' : ''}>
+            {line.replace(/\*\*/g, '')}
+          </p>
+        ))}
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col h-[600px] rounded-xl border border-border bg-card overflow-hidden">
+    <div className="flex flex-col h-[600px] rounded-xl border border-border bg-card overflow-hidden shadow-sm">
       {/* Header */}
       <div className="p-4 border-b border-border flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -201,14 +160,16 @@ Para uma análise mais específica, você pode perguntar sobre:
         </div>
         <div>
           <h3 className="font-semibold text-foreground">Assistente IA Financeiro</h3>
-          <p className="text-xs text-muted-foreground">Análises em tempo real do seu negócio</p>
+          <p className="text-xs text-muted-foreground">
+            {isLoadingChats ? "Carregando..." : activeChatId ? "Conectado" : "Iniciando..."}
+          </p>
         </div>
       </div>
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {messages.map((message) => (
+          {messages.map((message: ChatMessage) => (
             <div
               key={message.id}
               className={cn(
@@ -232,13 +193,18 @@ Para uma análise mais específica, você pode perguntar sobre:
                   ? "bg-muted text-foreground" 
                   : "bg-primary text-primary-foreground"
               )}>
-                <div className="text-sm whitespace-pre-wrap">
-                  {message.content.split('\n').map((line, i) => (
-                    <p key={i} className={line.startsWith('**') ? 'font-semibold' : ''}>
-                      {line.replace(/\*\*/g, '')}
-                    </p>
-                  ))}
-                </div>
+                {message.content.includes("Iniciei uma tarefa de") ? renderMessageContent(message.content) : (
+                  <div className="text-sm whitespace-pre-wrap">
+                    {message.content.split('\n').map((line, i) => (
+                      <p key={i} className={line.startsWith('**') ? 'font-semibold' : ''}>
+                        {line.replace(/\*\*/g, '')}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <span className="text-[10px] opacity-70 mt-1 block text-right">
+                  {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             </div>
           ))}
@@ -257,6 +223,7 @@ Para uma análise mais específica, você pode perguntar sobre:
               </div>
             </div>
           )}
+          <div ref={scrollRef} />
         </div>
       </ScrollArea>
 
@@ -268,7 +235,8 @@ Para uma análise mais específica, você pode perguntar sobre:
             <button
               key={i}
               onClick={() => handleSend(question)}
-              className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors"
+              disabled={isTyping || !activeChatId}
+              className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors disabled:opacity-50"
             >
               {question}
             </button>
@@ -287,9 +255,10 @@ Para uma análise mais específica, você pode perguntar sobre:
             onChange={(e) => setInput(e.target.value)}
             placeholder="Pergunte sobre seu negócio..."
             className="flex-1"
+            disabled={isTyping || !activeChatId}
           />
-          <Button type="submit" size="icon" disabled={!input.trim() || isTyping}>
-            <Send className="w-4 h-4" />
+          <Button type="submit" size="icon" disabled={!input.trim() || isTyping || !activeChatId}>
+            {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </form>
       </div>

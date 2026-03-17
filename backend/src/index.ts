@@ -15,7 +15,7 @@ import { pendenciesRoutes } from "./routes/pendencies";
 import { importsRoutes } from "./routes/imports";
 import { integrationsRoutes } from "./routes/integrations";
 import { integrationsSettingsRoutes } from "./routes/settings/integrations";
-import { aiRoutes } from "./routes/ai";
+import { aiModuleRoutes } from "./modules/ai/routes/ai.routes";
 import { accountsRoutes } from "./routes/accounts";
 import { costCentersRoutes } from "./routes/cost-centers";
 import { chartAccountsRoutes } from "./routes/chart-accounts";
@@ -31,8 +31,12 @@ import { arTitlesRoutes } from "./routes/canonical/ar-titles";
 import { salesRoutes } from "./routes/canonical/sales";
 import { saleItemsRoutes } from "./routes/canonical/sale-items";
 import { paymentMethodsRoutes } from "./routes/canonical/payment-methods";
+import { sellersRoutes } from "./routes/canonical/sellers";
+import { cashiersRoutes } from "./routes/canonical/cashiers";
 import { geoRoutes } from "./routes/geo";
 import { startSyncService } from "./services/sync";
+import { insightsService } from "./modules/ai/services/insights.service";
+import { queueService } from "./modules/ai/services/queue.service";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,7 +120,9 @@ export function buildApp() {
   app.register(salesRoutes, { prefix: "/sales" });
   app.register(saleItemsRoutes, { prefix: "/sale-items" });
   app.register(paymentMethodsRoutes, { prefix: "/payment-methods" });
-  app.register(aiRoutes, { prefix: "/ai" });
+  app.register(sellersRoutes, { prefix: "/sellers" });
+  app.register(cashiersRoutes, { prefix: "/cashiers" });
+  app.register(aiModuleRoutes, { prefix: "/ai" });
 
   app.register(accountsRoutes, { prefix: "/accounts" });
   app.register(costCentersRoutes, { prefix: "/cost-centers" });
@@ -128,6 +134,13 @@ export function buildApp() {
   app.register(integrationsSettingsRoutes, { prefix: "/settings/integrations" });
 
   startSyncService();
+
+  // Register Queue Handlers
+  queueService.registerHandler("INSIGHTS_GENERATION", async (job) => {
+    const payload = JSON.parse(job.payload);
+    console.log(`[Worker] Generating insights for company ${payload.companyId}`);
+    await insightsService.runInsightEngine(payload.companyId);
+  });
 
   return app;
 }

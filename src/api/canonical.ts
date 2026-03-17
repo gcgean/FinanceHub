@@ -3,6 +3,8 @@ import { apiFetch, toQueryString } from "@/utils/api"
 export type Customer = {
   id: string
   companyId: string
+  classificationId?: string | null
+  classification?: { id: string; name: string; externalId?: string | null } | null
   name: string
   knownName?: string | null
   externalId?: string | null
@@ -20,6 +22,25 @@ export type Customer = {
   isActive: boolean
   createdAt: string
   updatedAt: string
+}
+
+export type CustomerClassification = {
+  id: string
+  companyId: string
+  name: string
+  externalId?: string | null
+  description?: string | null
+  notes?: string | null
+  percentShare?: number | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type CustomerUpsertInput = Partial<Customer> & {
+  name?: string
+  classificationId?: string | null
+  classificationExternalId?: string | null
 }
 
 export type Supplier = {
@@ -105,11 +126,16 @@ export type ApTitle = {
   supplierId: string | null
   issueDate: string
   dueDate: string
+  paymentDate?: string | null
   amount: number
   openAmount: number
+  paidAmount?: number | null
+  discountReceived?: number | null
+  interestReceived?: number | null
   status: TitleStatus
   documentNumber: string | null
   notes: string | null
+  externalId?: string | null
   createdAt: string
 }
 
@@ -119,11 +145,16 @@ export type ArTitle = {
   customerId: string | null
   issueDate: string
   dueDate: string
+  paymentDate?: string | null
   amount: number
   openAmount: number
+  paidAmount?: number | null
+  discountReceived?: number | null
+  interestReceived?: number | null
   status: TitleStatus
   documentNumber: string | null
   notes: string | null
+  externalId?: string | null
   createdAt: string
 }
 
@@ -131,11 +162,11 @@ export async function listCustomers(params?: { q?: string; take?: number; skip?:
   return apiFetch<{ items: Customer[]; total: number; take: number; skip: number }>(`/customers${toQueryString(params ?? {})}`)
 }
 
-export async function createCustomer(body: Partial<Customer> & { name: string }) {
+export async function createCustomer(body: CustomerUpsertInput & { name: string }) {
   return apiFetch<Customer>("/customers", { method: "POST", body: JSON.stringify(body) })
 }
 
-export async function updateCustomer(id: string, body: Partial<Customer>) {
+export async function updateCustomer(id: string, body: CustomerUpsertInput) {
   return apiFetch<Customer>(`/customers/${id}`, { method: "PATCH", body: JSON.stringify(body) })
 }
 
@@ -182,6 +213,22 @@ export async function createCustomerDeactivationReason(body: { description: stri
 
 export async function updateCustomerDeactivationReason(id: string, body: Partial<CustomerDeactivationReason>) {
   return apiFetch<CustomerDeactivationReason>(`/customers/deactivation-reasons/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function listCustomerClassifications(params?: { q?: string }) {
+  return apiFetch<CustomerClassification[]>(`/customers/classifications${toQueryString(params ?? {})}`)
+}
+
+export async function createCustomerClassification(body: { name: string; externalId?: string | null; description?: string | null; notes?: string | null; percentShare?: number | null; active?: boolean }) {
+  return apiFetch<CustomerClassification>("/customers/classifications", { method: "POST", body: JSON.stringify(body) })
+}
+
+export async function updateCustomerClassification(id: string, body: Partial<CustomerClassification>) {
+  return apiFetch<CustomerClassification>(`/customers/classifications/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteCustomerClassification(id: string) {
+  return apiFetch<{ ok: true }>(`/customers/classifications/${id}`, { method: "DELETE" })
 }
 
 export async function listSuppliers(params?: { q?: string; take?: number; skip?: number; status?: "active" | "inactive" | "all" }) {
@@ -286,6 +333,8 @@ export type InventoryItem = {
   externalLocationId: string | null
   locationName: string | null
   qtyOnHand: number
+  ead?: string | null
+  deactivated?: boolean
   updatedAtSource: string | null
   productName?: string | null
 }
@@ -308,6 +357,8 @@ export type InventoryItemInput = {
   externalLocationId?: string | null
   locationName?: string | null
   qtyOnHand: number
+  ead?: string | null
+  deactivated?: boolean
   updatedAtSource?: string | null
 }
 
@@ -317,15 +368,67 @@ export async function upsertInventory(items: InventoryItemInput[] | InventoryIte
     body: JSON.stringify(Array.isArray(items) ? { items } : items),
   })
 }
+
+export type InventoryLocation = {
+  id: string
+  companyId: string
+  externalId?: string | null
+  name: string
+  hashTable?: string | null
+  updatedAtSource?: string | null
+  ignoreConsolidation: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type InventoryLocationInput = {
+  externalId?: string | null
+  name: string
+  hashTable?: string | null
+  updatedAtSource?: string | null
+  ignoreConsolidation?: boolean
+}
+
+export async function listInventoryLocations(params?: { q?: string; take?: number; skip?: number }) {
+  return apiFetch<{ items: InventoryLocation[]; total: number; take: number; skip: number }>(`/inventory/locations${toQueryString(params ?? {})}`)
+}
+
+export async function upsertInventoryLocations(items: InventoryLocationInput[] | InventoryLocationInput) {
+  return apiFetch<{ ok: true; created: number; updated: number }>(`/inventory/locations`, {
+    method: "POST",
+    body: JSON.stringify(Array.isArray(items) ? { items } : items),
+  })
+}
+
+export async function updateInventoryLocation(id: string, body: Partial<InventoryLocationInput>) {
+  return apiFetch<InventoryLocation>(`/inventory/locations/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
 export async function listApTitles(params?: { status?: TitleStatus; take?: number; skip?: number; from?: string; to?: string }) {
   return apiFetch<{ items: ApTitle[]; total: number; take: number; skip: number }>(`/ap-titles${toQueryString(params ?? {})}`)
 }
 
-export async function createApTitle(body: Omit<ApTitle, "id" | "createdAt" | "companyId">) {
+export type ApTitleInput = {
+  supplierId?: string | null
+  supplierExternalId?: string | null
+  issueDate: string
+  dueDate: string
+  paymentDate?: string | null
+  amount: number
+  openAmount: number
+  paidAmount?: number | null
+  discountReceived?: number | null
+  interestReceived?: number | null
+  status: TitleStatus
+  documentNumber?: string | null
+  notes?: string | null
+  externalId?: string | null
+}
+
+export async function createApTitle(body: ApTitleInput) {
   return apiFetch<ApTitle>("/ap-titles", { method: "POST", body: JSON.stringify(body) })
 }
 
-export async function updateApTitle(id: string, body: Partial<ApTitle>) {
+export async function updateApTitle(id: string, body: Partial<ApTitleInput>) {
   return apiFetch<ApTitle>(`/ap-titles/${id}`, { method: "PATCH", body: JSON.stringify(body) })
 }
 
@@ -337,11 +440,28 @@ export async function listArTitles(params?: { status?: TitleStatus; take?: numbe
   return apiFetch<{ items: ArTitle[]; total: number; take: number; skip: number }>(`/ar-titles${toQueryString(params ?? {})}`)
 }
 
-export async function createArTitle(body: Omit<ArTitle, "id" | "createdAt" | "companyId">) {
+export type ArTitleInput = {
+  customerId?: string | null
+  customerExternalId?: string | null
+  issueDate: string
+  dueDate: string
+  paymentDate?: string | null
+  amount: number
+  openAmount: number
+  paidAmount?: number | null
+  discountReceived?: number | null
+  interestReceived?: number | null
+  status: TitleStatus
+  documentNumber?: string | null
+  notes?: string | null
+  externalId?: string | null
+}
+
+export async function createArTitle(body: ArTitleInput) {
   return apiFetch<ArTitle>("/ar-titles", { method: "POST", body: JSON.stringify(body) })
 }
 
-export async function updateArTitle(id: string, body: Partial<ArTitle>) {
+export async function updateArTitle(id: string, body: Partial<ArTitleInput>) {
   return apiFetch<ArTitle>(`/ar-titles/${id}`, { method: "PATCH", body: JSON.stringify(body) })
 }
 
@@ -352,6 +472,7 @@ export async function deleteArTitle(id: string) {
 export type SaleItem = {
   id: string
   saleId: string
+  externalId?: string | null
   productId?: string | null
   description: string
   quantity: number
@@ -366,7 +487,38 @@ export type PaymentMethod = {
   id: string
   companyId: string
   name: string
+  externalId?: string | null
   enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type SalePayment = {
+  id: string
+  saleId: string
+  paymentMethodId?: string | null
+  paymentMethod?: PaymentMethod | null
+  externalPaymentMethodId?: string | null
+  amount: number
+  createdAt: string
+}
+
+export type Seller = {
+  id: string
+  companyId: string
+  name: string
+  externalId?: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type Cashier = {
+  id: string
+  companyId: string
+  name: string
+  externalId?: string | null
+  active: boolean
   createdAt: string
   updatedAt: string
 }
@@ -376,11 +528,17 @@ export type Sale = {
   companyId: string
   customerId?: string | null
   customer?: Customer | null
+  externalId?: string | null
+  sellerId?: string | null
+  seller?: Seller | null
+  cashierId?: string | null
+  cashier?: Cashier | null
   date: string
   total: number
   status?: string | null
   paymentMethodId?: string | null
   paymentMethod?: PaymentMethod | null
+  payments?: SalePayment[]
   items: SaleItem[]
   createdAt: string
   updatedAt: string
@@ -390,11 +548,45 @@ export async function listSales(params?: { q?: string; take?: number; skip?: num
   return apiFetch<{ items: Sale[]; total: number; take: number; skip: number }>(`/sales${toQueryString(params ?? {})}`)
 }
 
-export async function createSale(body: Partial<Sale> & { items?: Partial<SaleItem>[] }) {
+export type SaleItemInput = {
+  id?: string
+  productId?: string | null
+  productExternalId?: string | null
+  description?: string
+  quantity?: number
+  unitPrice?: number
+}
+
+export type SalePaymentInput = {
+  paymentMethodId?: string | null
+  paymentMethodExternalId?: string | null
+  paymentMethodName?: string | null
+  amount?: number
+}
+
+export type SaleInput = {
+  customerId?: string | null
+  customerExternalId?: string | null
+  externalId?: string | null
+  date?: string
+  status?: string | null
+  paymentMethodId?: string | null
+  paymentMethodExternalId?: string | null
+  sellerId?: string | null
+  sellerExternalId?: string | null
+  sellerName?: string | null
+  cashierId?: string | null
+  cashierExternalId?: string | null
+  cashierName?: string | null
+  items?: SaleItemInput[]
+  payments?: SalePaymentInput[]
+}
+
+export async function createSale(body: SaleInput) {
   return apiFetch<Sale>("/sales", { method: "POST", body: JSON.stringify(body) })
 }
 
-export async function updateSale(id: string, body: Partial<Sale> & { items?: Partial<SaleItem>[] }) {
+export async function updateSale(id: string, body: SaleInput) {
   return apiFetch<Sale>(`/sales/${id}`, { method: "PATCH", body: JSON.stringify(body) })
 }
 
@@ -410,7 +602,7 @@ export async function listPaymentMethods(params?: { q?: string; take?: number; s
   return apiFetch<{ items: PaymentMethod[]; total: number; take: number; skip: number }>(`/payment-methods${toQueryString(params ?? {})}`)
 }
 
-export async function createPaymentMethod(body: { name: string; enabled?: boolean }) {
+export async function createPaymentMethod(body: { name: string; enabled?: boolean; externalId?: string | null }) {
   return apiFetch<PaymentMethod>("/payment-methods", { method: "POST", body: JSON.stringify(body) })
 }
 
@@ -420,4 +612,67 @@ export async function updatePaymentMethod(id: string, body: Partial<PaymentMetho
 
 export async function deletePaymentMethod(id: string) {
   return apiFetch<{ ok: true }>(`/payment-methods/${id}`, { method: "DELETE" })
+}
+
+export type PaymentMethodInput = {
+  name: string
+  enabled?: boolean
+  externalId?: string | null
+}
+
+export async function upsertPaymentMethods(items: PaymentMethodInput[] | PaymentMethodInput) {
+  return apiFetch<{ ok: true; created: number; updated: number }>(`/payment-methods`, {
+    method: "POST",
+    body: JSON.stringify(Array.isArray(items) ? { items } : items),
+  })
+}
+
+export type SellerInput = {
+  name: string
+  externalId?: string | null
+  active?: boolean
+}
+
+export async function listSellers(params?: { q?: string; take?: number; skip?: number }) {
+  return apiFetch<{ items: Seller[]; total: number; take: number; skip: number }>(`/sellers${toQueryString(params ?? {})}`)
+}
+
+export async function upsertSellers(items: SellerInput[] | SellerInput) {
+  return apiFetch<{ ok: true; created: number; updated: number }>(`/sellers`, {
+    method: "POST",
+    body: JSON.stringify(Array.isArray(items) ? { items } : items),
+  })
+}
+
+export async function updateSeller(id: string, body: Partial<SellerInput>) {
+  return apiFetch<Seller>(`/sellers/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteSeller(id: string) {
+  return apiFetch<{ ok: true }>(`/sellers/${id}`, { method: "DELETE" })
+}
+
+export type CashierInput = {
+  name: string
+  externalId?: string | null
+  active?: boolean
+}
+
+export async function listCashiers(params?: { q?: string; take?: number; skip?: number }) {
+  return apiFetch<{ items: Cashier[]; total: number; take: number; skip: number }>(`/cashiers${toQueryString(params ?? {})}`)
+}
+
+export async function upsertCashiers(items: CashierInput[] | CashierInput) {
+  return apiFetch<{ ok: true; created: number; updated: number }>(`/cashiers`, {
+    method: "POST",
+    body: JSON.stringify(Array.isArray(items) ? { items } : items),
+  })
+}
+
+export async function updateCashier(id: string, body: Partial<CashierInput>) {
+  return apiFetch<Cashier>(`/cashiers/${id}`, { method: "PATCH", body: JSON.stringify(body) })
+}
+
+export async function deleteCashier(id: string) {
+  return apiFetch<{ ok: true }>(`/cashiers/${id}`, { method: "DELETE" })
 }

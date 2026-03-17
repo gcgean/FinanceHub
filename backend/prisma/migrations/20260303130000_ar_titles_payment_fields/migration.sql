@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "ArTitle" ADD COLUMN "paymentDate" TIMESTAMP(3);
+ALTER TABLE "ArTitle" ADD COLUMN "paidAmount" DOUBLE PRECISION;
+ALTER TABLE "ArTitle" ADD COLUMN "discountReceived" DOUBLE PRECISION;
+ALTER TABLE "ArTitle" ADD COLUMN "interestReceived" DOUBLE PRECISION;

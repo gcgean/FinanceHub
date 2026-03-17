@@ -13,6 +13,7 @@ const ListQuery = z.object({
 
 const Body = z.object({
   name: z.string().min(1),
+  externalId: z.string().optional().nullable(),
   enabled: z.boolean().optional(),
 });
 
@@ -48,15 +49,71 @@ export async function paymentMethodsRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request) => {
       const companyId = await resolveCompanyId(request);
-      const data = parseBody(Body, request.body);
+      const body = parseBody(z.object({ items: z.array(Body) }).or(Body), request.body);
 
-      return prisma.paymentMethod.create({
-        data: {
-          companyId,
-          name: data.name,
-          enabled: data.enabled ?? true,
-        },
-      });
+      const items = Array.isArray((body as { items?: z.infer<typeof Body>[] }).items)
+        ? (body as { items: z.infer<typeof Body>[] }).items
+        : [body as z.infer<typeof Body>];
+
+      if (items.length === 1 && !("items" in (body as object))) {
+        const data = items[0];
+        const externalId = data.externalId ?? null;
+        const existing = externalId
+          ? await prisma.paymentMethod.findFirst({ where: { companyId, externalId } })
+          : await prisma.paymentMethod.findFirst({ where: { companyId, name: data.name } });
+
+        if (existing) {
+          return prisma.paymentMethod.update({
+            where: { id: existing.id },
+            data: {
+              name: data.name,
+              externalId,
+              enabled: data.enabled ?? existing.enabled,
+            },
+          });
+        }
+
+        return prisma.paymentMethod.create({
+          data: {
+            companyId,
+            name: data.name,
+            externalId,
+            enabled: data.enabled ?? true,
+          },
+        });
+      }
+
+      const results: { created: number; updated: number } = { created: 0, updated: 0 };
+      for (const data of items) {
+        const externalId = data.externalId ?? null;
+        const existing = externalId
+          ? await prisma.paymentMethod.findFirst({ where: { companyId, externalId } })
+          : await prisma.paymentMethod.findFirst({ where: { companyId, name: data.name } });
+
+        if (existing) {
+          await prisma.paymentMethod.update({
+            where: { id: existing.id },
+            data: {
+              name: data.name,
+              externalId,
+              enabled: data.enabled ?? existing.enabled,
+            },
+          });
+          results.updated++;
+        } else {
+          await prisma.paymentMethod.create({
+            data: {
+              companyId,
+              name: data.name,
+              externalId,
+              enabled: data.enabled ?? true,
+            },
+          });
+          results.created++;
+        }
+      }
+
+      return { ok: true, ...results };
     }
   );
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { listCustomers, createCustomer, updateCustomer, deleteCustomer, createCustomerDeactivation, type Customer } from "@/api/canonical"
+import { listCustomers, createCustomer, updateCustomer, deleteCustomer, createCustomerDeactivation, listCustomerClassifications, createCustomerClassification, updateCustomerClassification, deleteCustomerClassification, type Customer, type CustomerClassification } from "@/api/canonical"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,9 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import * as XLSX from "xlsx"
 import { downloadXlsx } from "@/utils/xlsx"
 import { CustomerDeactivationsSection } from "@/components/canonical/CustomerDeactivationsSection"
+import { Switch } from "@/components/ui/switch"
 type ImportRow = {
   externalId?: string | null
   name?: string | null
+  classificationExternalId?: string | null
   document?: string | null
   email?: string | null
   phone?: string | null
@@ -84,6 +86,7 @@ export function CustomersSection() {
       <TabsList>
         <TabsTrigger value="customers">Clientes</TabsTrigger>
         <TabsTrigger value="deactivations">Histórico de desativações</TabsTrigger>
+        <TabsTrigger value="classifications">Classificações</TabsTrigger>
       </TabsList>
       <TabsContent value="customers">
         <Card>
@@ -116,10 +119,12 @@ export function CustomersSection() {
                 </SelectContent>
               </Select>
               <Button variant="outline" onClick={() => {
-                const headers = ["externalId", "name", "document", "email", "phone", "phone2", "birthDate", "city", "stateCode", "neighborhood", "value", "isActive"]
+                const headers = ["externalId", "name", "classificationExternalId", "classificationName", "document", "email", "phone", "phone2", "birthDate", "city", "stateCode", "neighborhood", "value", "isActive"]
                 const rows = (customers.data?.items ?? []).map((c) => [
                   c.externalId ?? null,
                   c.name,
+                  c.classification?.externalId ?? null,
+                  c.classification?.name ?? null,
                   c.document ?? null,
                   c.email ?? null,
                   c.phone ?? null,
@@ -137,10 +142,10 @@ export function CustomersSection() {
                 Exportar XLSX
               </Button>
               <Button variant="outline" onClick={() => {
-                const headers = ["externalId", "name", "document", "email", "phone", "phone2", "birthDate", "city", "stateCode", "neighborhood", "value", "isActive"]
+                const headers = ["externalId", "name", "classificationExternalId", "classificationName", "document", "email", "phone", "phone2", "birthDate", "city", "stateCode", "neighborhood", "value", "isActive"]
                 const rows: (string | number | null)[][] = [
-                  ["CLI-001", "Cliente A", "12345678900", "a@ex.com", "(11) 0000-0000", "", "1990-01-01", "São Paulo", "SP", "", 1000, 1],
-                  ["CLI-002", "Cliente B", "", "", "", "", "", "", "", "", null, 1],
+                  ["CLI-001", "Cliente A", "CL-01", "Classe Ouro", "12345678900", "a@ex.com", "(11) 0000-0000", "", "1990-01-01", "São Paulo", "SP", "", 1000, 1],
+                  ["CLI-002", "Cliente B", "", "", "", "", "", "", "", "", "", null, 1],
                 ]
                 downloadXlsx("modelo_clientes.xlsx", headers, rows, "Clientes")
               }}>
@@ -163,6 +168,7 @@ export function CustomersSection() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
+                    <TableHead>Classificação</TableHead>
                     <TableHead>Documento</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
@@ -171,11 +177,12 @@ export function CustomersSection() {
                 </TableHeader>
                 <TableBody>
                   {isBusy ? (
-                    <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : items.length ? (
                     items.map((a) => (
                       <TableRow key={a.id}>
                         <TableCell className="font-medium">{a.name}</TableCell>
+                        <TableCell>{a.classification?.name ?? "—"}</TableCell>
                         <TableCell>{a.document ?? "—"}</TableCell>
                         <TableCell>{a.email ?? "—"}</TableCell>
                         <TableCell>{a.phone ?? "—"}</TableCell>
@@ -207,7 +214,7 @@ export function CustomersSection() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Nenhum cliente encontrado.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">Nenhum cliente encontrado.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -244,7 +251,7 @@ export function CustomersSection() {
                 </AlertDialogHeader>
                 <div className="space-y-3">
                   <div className="text-sm text-muted-foreground">
-                    Colunas: externalId, name, document, email, phone, phone2, birthDate (YYYY-MM-DD), city, stateCode, neighborhood, value, isActive (1/0).
+                    Colunas: externalId, name, classificationExternalId, document, email, phone, phone2, birthDate (YYYY-MM-DD), city, stateCode, neighborhood, value, isActive (1/0).
                     Atualiza quando externalId existir; senão, cria novo.
                   </div>
                   <input
@@ -282,6 +289,7 @@ export function CustomersSection() {
                           const rowIndex = rows.indexOf(r) + 2
                           const externalId = String(r.externalId ?? "").trim() || null
                           const name = r.name === null ? "" : String(r.name ?? "").trim()
+                          const classificationExternalId = String(r.classificationExternalId ?? "").trim() || null
                           const document = String(r.document ?? "").trim() || null
                           const email = String(r.email ?? "").trim() || null
                           const phone = String(r.phone ?? "").trim() || null
@@ -299,6 +307,7 @@ export function CustomersSection() {
                               const id = byExt[externalId]
                               const body: Partial<Customer> = {}
                               if (name) body.name = name
+                              if (classificationExternalId !== null) (body as { classificationExternalId?: string | null }).classificationExternalId = classificationExternalId || null
                               if (document !== null) body.document = document || null
                               if (email !== null) body.email = email || null
                               if (phone !== null) body.phone = phone || null
@@ -326,6 +335,7 @@ export function CustomersSection() {
                               const createPayload: Parameters<typeof createCustomer>[0] = {
                                 name,
                                 externalId,
+                                classificationExternalId,
                                 document,
                                 email,
                                 phone,
@@ -380,6 +390,297 @@ export function CustomersSection() {
       <TabsContent value="deactivations">
         <CustomerDeactivationsSection />
       </TabsContent>
+      <TabsContent value="classifications">
+        <CustomerClassificationsSection />
+      </TabsContent>
     </Tabs>
+  )
+}
+
+function CustomerClassificationsSection() {
+  const qc = useQueryClient()
+  const [search, setSearch] = useState("")
+  const [editing, setEditing] = useState<CustomerClassification | null>(null)
+  const [name, setName] = useState("")
+  const [externalId, setExternalId] = useState("")
+  const [description, setDescription] = useState("")
+  const [notes, setNotes] = useState("")
+  const [percentShare, setPercentShare] = useState("")
+  const [active, setActive] = useState(true)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  const list = useQuery({
+    queryKey: ["canonical", "customerClassifications", { q: search }],
+    queryFn: async () => listCustomerClassifications({ q: search || undefined }),
+  })
+
+  const resetForm = () => {
+    setEditing(null)
+    setName("")
+    setExternalId("")
+    setDescription("")
+    setNotes("")
+    setPercentShare("")
+    setActive(true)
+  }
+
+  const applyEditing = (item: CustomerClassification) => {
+    setEditing(item)
+    setName(item.name)
+    setExternalId(item.externalId ?? "")
+    setDescription(item.description ?? "")
+    setNotes(item.notes ?? "")
+    setPercentShare(item.percentShare != null ? String(item.percentShare) : "")
+    setActive(item.active)
+  }
+
+  const createMut = useMutation({
+    mutationFn: async () => {
+      const trimmed = name.trim()
+      if (!trimmed) throw new Error("Informe o nome")
+      const share = percentShare.trim() ? Number(percentShare) : null
+      if (share !== null && !Number.isFinite(share)) throw new Error("Percentual inválido")
+      return createCustomerClassification({
+        name: trimmed,
+        externalId: externalId.trim() || null,
+        description: description.trim() || null,
+        notes: notes.trim() || null,
+        percentShare: share,
+        active,
+      })
+    },
+    onSuccess: async () => {
+      toast({ title: "Classificação criada" })
+      resetForm()
+      await qc.invalidateQueries({ queryKey: ["canonical", "customerClassifications"] })
+    },
+    onError: (e: unknown) => toast({ title: "Erro ao criar", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+  })
+
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      if (!editing) throw new Error("Selecione uma classificação")
+      const trimmed = name.trim()
+      if (!trimmed) throw new Error("Informe o nome")
+      const share = percentShare.trim() ? Number(percentShare) : null
+      if (share !== null && !Number.isFinite(share)) throw new Error("Percentual inválido")
+      return updateCustomerClassification(editing.id, {
+        name: trimmed,
+        externalId: externalId.trim() || null,
+        description: description.trim() || null,
+        notes: notes.trim() || null,
+        percentShare: share,
+        active,
+      })
+    },
+    onSuccess: async () => {
+      toast({ title: "Classificação atualizada" })
+      resetForm()
+      await qc.invalidateQueries({ queryKey: ["canonical", "customerClassifications"] })
+    },
+    onError: (e: unknown) => toast({ title: "Erro ao atualizar", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => deleteCustomerClassification(id),
+    onSuccess: async () => {
+      toast({ title: "Classificação excluída" })
+      await qc.invalidateQueries({ queryKey: ["canonical", "customerClassifications"] })
+    },
+    onError: (e: unknown) => toast({ title: "Erro ao excluir", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+  })
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Classificações de clientes</CardTitle>
+        <div className="flex items-center gap-2">
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="w-72" />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>Importar XLSX</Button>
+          <Button variant="outline" onClick={resetForm}>Novo</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <div className="text-sm">Nome</div>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Classificação" />
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm">ID Externo</div>
+            <Input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="Código no ERP" />
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm">Percentual</div>
+            <Input value={percentShare} onChange={(e) => setPercentShare(e.target.value)} placeholder="0,00" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <div className="text-sm">Descrição</div>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" />
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm">Observações</div>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between rounded-md border p-3">
+          <div>
+            <div className="text-sm font-medium">Ativa</div>
+            <div className="text-xs text-muted-foreground">Classificações inativas não aparecem no cadastro.</div>
+          </div>
+          <Switch checked={active} onCheckedChange={setActive} />
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          {editing ? (
+            <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+          ) : null}
+          <Button
+            onClick={async () => {
+              if (editing) {
+                await updateMut.mutateAsync()
+              } else {
+                await createMut.mutateAsync()
+              }
+            }}
+            disabled={createMut.isPending || updateMut.isPending}
+          >
+            {editing ? "Salvar" : "Cadastrar"}
+          </Button>
+        </div>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>ERP</TableHead>
+                <TableHead className="w-32 text-right">Percentual</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.isLoading || list.isFetching ? (
+                <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : (list.data ?? []).length ? (
+                (list.data ?? []).map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell>{c.externalId ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{c.percentShare == null ? "—" : `${c.percentShare.toFixed(2)}%`}</TableCell>
+                    <TableCell>{c.active ? "Ativa" : "Inativa"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => applyEditing(c)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir classificação?</AlertDialogTitle>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={async () => { await deleteMut.mutateAsync(c.id) }}>
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Nenhuma classificação encontrada.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      <AlertDialog open={importOpen} onOpenChange={setImportOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar classificações via Excel</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Colunas: name, externalId (opcional), description, notes, percentShare, active (1/0). Classificações duplicadas por externalId são atualizadas.
+            </div>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setImporting(true)
+                try {
+                  const buf = await file.arrayBuffer()
+                  const wb = XLSX.read(buf, { type: "array" })
+                  const ws = wb.Sheets[wb.SheetNames[0]]
+                  const rows: Array<{ name?: string; externalId?: string; description?: string; notes?: string; percentShare?: string | number; active?: string | number | boolean }> = XLSX.utils.sheet_to_json(ws, { defval: null })
+                  const byExt = new Map<string, string>()
+                  for (const c of list.data ?? []) {
+                    if (c.externalId) byExt.set(c.externalId, c.id)
+                  }
+                  const parseBool = (v: unknown): boolean | undefined => {
+                    if (v === null || v === undefined || v === "") return undefined
+                    if (typeof v === "boolean") return v
+                    const s = String(v).trim().toLowerCase()
+                    if (s === "1" || s === "true") return true
+                    if (s === "0" || s === "false") return false
+                    return undefined
+                  }
+                  const parseNumber = (v: unknown): number | null => {
+                    if (v === null || v === undefined || v === "") return null
+                    const n = Number(v)
+                    return Number.isFinite(n) ? n : null
+                  }
+                  let created = 0, updated = 0, failed = 0
+                  for (const r of rows) {
+                    const name = String(r.name ?? "").trim()
+                    const externalId = String(r.externalId ?? "").trim() || null
+                    const description = String(r.description ?? "").trim() || null
+                    const notes = String(r.notes ?? "").trim() || null
+                    const percentShare = parseNumber(r.percentShare)
+                    const active = parseBool(r.active)
+                    if (!name) { failed++; continue }
+                    try {
+                      if (externalId && byExt.has(externalId)) {
+                        await updateCustomerClassification(byExt.get(externalId)!, { name, description, notes, percentShare, active })
+                        updated++
+                      } else {
+                        await createCustomerClassification({ name, externalId, description, notes, percentShare, active: active ?? true })
+                        created++
+                      }
+                    } catch {
+                      failed++
+                    }
+                  }
+                  toast({ title: "Importação concluída", description: `Criados: ${created} · Atualizados: ${updated} · Erros: ${failed}` })
+                  setImportOpen(false)
+                  await qc.invalidateQueries({ queryKey: ["canonical", "customerClassifications"] })
+                } catch (err) {
+                  toast({ title: "Erro ao importar", description: err instanceof Error ? err.message : undefined, variant: "destructive" })
+                } finally {
+                  setImporting(false)
+                }
+              }}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importing}>Fechar</AlertDialogCancel>
+            <AlertDialogAction disabled>Processar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
   )
 }

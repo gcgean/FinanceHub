@@ -3,8 +3,8 @@ unit uSyncService;
 interface
 
 uses
-  System.SysUtils, System.JSON, FireDAC.Comp.Client, uFinanceHubAPI, uDM, FireDAC.DApt,
-  System.Generics.Collections;
+  System.SysUtils, System.JSON, System.Variants, FireDAC.Comp.Client, uFinanceHubAPI, uDM, FireDAC.DApt,
+  System.Generics.Collections, Data.DB;
 
 type
   TSyncService = class
@@ -27,6 +27,7 @@ type
     function SyncCostCenters(ACodEmp: Integer): Integer;
     function SyncChartAccounts(ACodEmp: Integer): Integer;
     function SyncCustomers(ACodEmp: Integer): Integer;
+    function SyncCustomerClassifications(ACodEmp: Integer): Integer;
     function SyncCustomerDeactivationReasons(ACodEmp: Integer): Integer;
     function SyncCustomerDeactivationHistory(ACodEmp: Integer): Integer;
     function SyncSuppliers(ACodEmp: Integer): Integer;
@@ -36,9 +37,12 @@ type
     function SyncProductManufacturers(ACodEmp: Integer): Integer;
     function SyncProducts(ACodEmp: Integer): Integer;
     function SyncPaymentTerms(ACodEmp: Integer): Integer;
-    function SyncSales(ACodEmp: Integer): Integer;
-    function SyncApTitles(ACodEmp: Integer): Integer;
-    function SyncArTitles(ACodEmp: Integer): Integer;
+    function SyncPaymentMethods(ACodEmp: Integer): Integer;
+    function SyncSellers(ACodEmp: Integer): Integer;
+    function SyncCashiers(ACodEmp: Integer): Integer;
+    function SyncSales(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime): Integer;
+    function SyncApTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
+    function SyncArTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
   end;
 
 implementation
@@ -385,6 +389,98 @@ begin
   end;
 end;
 
+function TSyncService.SyncCustomerClassifications(ACodEmp: Integer): Integer;
+var
+  Q: TFDQuery;
+  LObj: TJSONObject;
+  LCodeField: TField;
+  LNameField: TField;
+  LDescField: TField;
+  LCode: string;
+  LName: string;
+  LDesc: string;
+
+  function FindFieldByNames(AQuery: TFDQuery; const ANames: array of string): TField;
+  var
+    I: Integer;
+    F: TField;
+  begin
+    Result := nil;
+    for I := Low(ANames) to High(ANames) do
+    begin
+      F := AQuery.FindField(ANames[I]);
+      if Assigned(F) then
+      begin
+        Result := F;
+        Exit;
+      end;
+    end;
+  end;
+begin
+  Result := 0;
+  Q := TFDQuery.Create(nil);
+  try
+    Q.Connection := FDB;
+    try
+      Q.SQL.Text := 'SELECT * FROM CLASSIFICACAO_CLIENTE';
+      Q.Open;
+    except
+      on E: Exception do
+      begin
+        Log('Classificações de clientes não disponíveis: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    LCodeField := FindFieldByNames(Q, ['COD_CLASSIFICACAO', 'COD_CLASS', 'COD_CLA', 'COD_CLASSIF']);
+    LNameField := FindFieldByNames(Q, ['DESCRICAO', 'NOME', 'NOME_CLASSIFICACAO', 'CLASSIFICACAO']);
+    LDescField := FindFieldByNames(Q, ['OBSERVACAO', 'OBS', 'NOTAS', 'NOTES']);
+
+    if (not Assigned(LCodeField)) and (not Assigned(LNameField)) then
+    begin
+      Log('Classificações de clientes: campos não encontrados.');
+      Exit;
+    end;
+
+    while not Q.Eof do
+    begin
+      LCode := '';
+      LName := '';
+      LDesc := '';
+      if Assigned(LCodeField) then
+        LCode := Trim(LCodeField.AsString);
+      if Assigned(LNameField) then
+        LName := Trim(LNameField.AsString);
+      if (LName = '') and (LCode <> '') then
+        LName := LCode;
+      if Assigned(LDescField) then
+        LDesc := Trim(LDescField.AsString);
+
+      if (LName <> '') or (LCode <> '') then
+      begin
+        LObj := TJSONObject.Create;
+        try
+          if LCode <> '' then
+            LObj.AddPair('externalId', LCode);
+          if LName <> '' then
+            LObj.AddPair('name', LName);
+          if LDesc <> '' then
+            LObj.AddPair('description', LDesc);
+          if FAPI.SyncCustomerClassification(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar classificação ' + LCode + ': ' + FAPI.LastErrorMessage);
+        finally
+          LObj.Free;
+        end;
+      end;
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+  end;
+end;
+
 function TSyncService.SyncCustomers(ACodEmp: Integer): Integer;
 var
   Q: TFDQuery;
@@ -393,6 +489,29 @@ var
   LDoc: string;
   LTotal: Integer;
   LCurrent: Integer;
+  LClassCache: TDictionary<string, Boolean>;
+  LClassCodeField: TField;
+  LClassNameField: TField;
+  LClassCode: string;
+  LClassName: string;
+  LClassObj: TJSONObject;
+
+  function FindFieldByNames(AQuery: TFDQuery; const ANames: array of string): TField;
+  var
+    I: Integer;
+    F: TField;
+  begin
+    Result := nil;
+    for I := Low(ANames) to High(ANames) do
+    begin
+      F := AQuery.FindField(ANames[I]);
+      if Assigned(F) then
+      begin
+        Result := F;
+        Exit;
+      end;
+    end;
+  end;
   
   function NormalizeDoc(const S: string): string;
   var
@@ -407,6 +526,7 @@ begin
   Result := 0;
   QCount := TFDQuery.Create(nil);
   Q := TFDQuery.Create(nil);
+  LClassCache := TDictionary<string, Boolean>.Create;
   try
     QCount.Connection := FDB;
     QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM CLIENTE';
@@ -417,6 +537,9 @@ begin
     // Cadastro de cliente não é vinculado à empresa: sincroniza todos
     Q.SQL.Text := 'SELECT * FROM CLIENTE';
     Q.Open;
+
+    LClassCodeField := FindFieldByNames(Q, ['COD_CLASSIFICACAO', 'COD_CLASS', 'COD_CLA', 'COD_CLASSIF']);
+    LClassNameField := FindFieldByNames(Q, ['CLASSIFICACAO', 'NOME_CLASSIFICACAO', 'DESCRICAO_CLASSIFICACAO', 'DESCRICAO']);
     
     Log(Format('Clientes encontrados (global): %d', [LTotal]));
     
@@ -452,6 +575,36 @@ begin
         LObj.AddPair('city', Q.FieldByName('CIDRES_CLI').AsString);
         LObj.AddPair('stateCode', Q.FieldByName('ESTRES_CLI').AsString);
         LObj.AddPair('neighborhood', Q.FieldByName('BAIRES_CLI').AsString);
+
+        LClassCode := '';
+        LClassName := '';
+        if Assigned(LClassCodeField) then
+          LClassCode := Trim(LClassCodeField.AsString);
+        if Assigned(LClassNameField) then
+          LClassName := Trim(LClassNameField.AsString);
+        if (LClassCode <> '') then
+        begin
+          if not LClassCache.ContainsKey(LClassCode) then
+          begin
+            if LClassName = '' then
+              LClassName := LClassCode;
+            if LClassName <> '' then
+            begin
+              LClassObj := TJSONObject.Create;
+              try
+                LClassObj.AddPair('externalId', LClassCode);
+                LClassObj.AddPair('name', LClassName);
+                if FAPI.SyncCustomerClassification(LClassObj) then
+                  LClassCache.AddOrSetValue(LClassCode, True)
+                else
+                  Log('Erro ao sincronizar classificação ' + LClassCode + ': ' + FAPI.LastErrorMessage);
+              finally
+                LClassObj.Free;
+              end;
+            end;
+          end;
+          LObj.AddPair('classificationExternalId', LClassCode);
+        end;
         
         // Datas
         if not Q.FieldByName('NASCIMENTO_CLI').IsNull then
@@ -475,6 +628,7 @@ begin
   finally
     Q.Free;
     QCount.Free;
+    LClassCache.Free;
   end;
 end;
 
@@ -823,13 +977,12 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT DISTINCT COD_SEC, SECAO FROM PRODUTO WHERE COD_EMP = :CodEmp';
-    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.SQL.Text := 'SELECT COD_SEC, NOME_SEC FROM SECAO';
     Q.Open;
     while not Q.Eof do
     begin
       LCode := Trim(Q.FieldByName('COD_SEC').AsString);
-      LName := Trim(Q.FieldByName('SECAO').AsString);
+      LName := Trim(Q.FieldByName('NOME_SEC').AsString);
       if (LCode <> '') or (LName <> '') then
       begin
         LObj := TJSONObject.Create;
@@ -865,15 +1018,15 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT DISTINCT COD_GRUPO, GRUPO, COD_SEC, SECAO FROM PRODUTO WHERE COD_EMP = :CodEmp';
-    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.SQL.Text := 'SELECT sg.COD_GRUPO, sg.DESCRICAO, s.COD_SEC, s.NOME_SEC FROM SECAO_GRUPO sg ' +
+      'JOIN SECAO s ON s.COD_SEC = sg.COD_SEC';
     Q.Open;
     while not Q.Eof do
     begin
       LCode := Trim(Q.FieldByName('COD_GRUPO').AsString);
-      LName := Trim(Q.FieldByName('GRUPO').AsString);
+      LName := Trim(Q.FieldByName('DESCRICAO').AsString);
       LSectionCode := Trim(Q.FieldByName('COD_SEC').AsString);
-      LSectionName := Trim(Q.FieldByName('SECAO').AsString);
+      LSectionName := Trim(Q.FieldByName('NOME_SEC').AsString);
       if (LCode <> '') or (LName <> '') then
       begin
         LObj := TJSONObject.Create;
@@ -913,17 +1066,19 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT DISTINCT SUB_GRUPO, SUBGRUPO, COD_GRUPO, GRUPO, COD_SEC, SECAO FROM PRODUTO WHERE COD_EMP = :CodEmp';
-    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.SQL.Text := 'SELECT sgs.COD_SUBGRUPO, sgs.DESCRICAO, sg.COD_GRUPO, sg.DESCRICAO AS GRUPO, ' +
+      's.COD_SEC, s.NOME_SEC FROM SECAO_GRUPO_SUBGRUPO sgs ' +
+      'JOIN SECAO_GRUPO sg ON sg.COD_SEC = sgs.COD_SEC AND sg.COD_GRUPO = sgs.COD_GRUPO ' +
+      'JOIN SECAO s ON s.COD_SEC = sgs.COD_SEC';
     Q.Open;
     while not Q.Eof do
     begin
-      LCode := Trim(Q.FieldByName('SUB_GRUPO').AsString);
-      LName := Trim(Q.FieldByName('SUBGRUPO').AsString);
+      LCode := Trim(Q.FieldByName('COD_SUBGRUPO').AsString);
+      LName := Trim(Q.FieldByName('DESCRICAO').AsString);
       LGroupCode := Trim(Q.FieldByName('COD_GRUPO').AsString);
       LGroupName := Trim(Q.FieldByName('GRUPO').AsString);
       LSectionCode := Trim(Q.FieldByName('COD_SEC').AsString);
-      LSectionName := Trim(Q.FieldByName('SECAO').AsString);
+      LSectionName := Trim(Q.FieldByName('NOME_SEC').AsString);
       if (LCode <> '') or (LName <> '') then
       begin
         LObj := TJSONObject.Create;
@@ -967,13 +1122,12 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT DISTINCT COD_FABRICANTE, FABRICANTE FROM PRODUTO WHERE COD_EMP = :CodEmp';
-    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.SQL.Text := 'SELECT COD_LAB, NOME_LAB FROM LABORATORIO';
     Q.Open;
     while not Q.Eof do
     begin
-      LCode := Trim(Q.FieldByName('COD_FABRICANTE').AsString);
-      LName := Trim(Q.FieldByName('FABRICANTE').AsString);
+      LCode := Trim(Q.FieldByName('COD_LAB').AsString);
+      LName := Trim(Q.FieldByName('NOME_LAB').AsString);
       if (LCode <> '') or (LName <> '') then
       begin
         LObj := TJSONObject.Create;
@@ -1074,50 +1228,694 @@ begin
   end;
 end;
 
-function TSyncService.SyncSales(ACodEmp: Integer): Integer;
+function TSyncService.SyncPaymentMethods(ACodEmp: Integer): Integer;
 var
   Q: TFDQuery;
+  QCount: TFDQuery;
+  LObj: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LCode: string;
+  LName: string;
+  LEnabledStr: string;
+  LEnabled: Boolean;
+begin
+  Result := 0;
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  try
+    QCount.Connection := FDB;
+    QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM FORMAS_PAGAMENTO';
+    QCount.Open;
+    LTotal := QCount.FieldByName('CNT').AsInteger;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT CODIGO, DESCRICAO, USAR_VENDAS_RETAGUARDA, USAR_VENDAS_RETAGUARDA_PV FROM FORMAS_PAGAMENTO';
+    Q.Open;
+    Log(Format('Formas de pagamento encontradas: %d', [LTotal]));
+    LCurrent := 0;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando formas de pagamento...', LCurrent, LTotal);
+
+      LCode := Trim(Q.FieldByName('CODIGO').AsString);
+      LName := Trim(Q.FieldByName('DESCRICAO').AsString);
+      LEnabledStr := UpperCase(Trim(Q.FieldByName('USAR_VENDAS_RETAGUARDA').AsString));
+      if (LEnabledStr = '') and (Q.FindField('USAR_VENDAS_RETAGUARDA_PV') <> nil) then
+        LEnabledStr := UpperCase(Trim(Q.FieldByName('USAR_VENDAS_RETAGUARDA_PV').AsString));
+      LEnabled := (LEnabledStr = 'S') or (LEnabledStr = '1') or (LEnabledStr = 'T') or (LEnabledStr = 'Y');
+      if LEnabledStr = '' then
+        LEnabled := True;
+
+      if LName <> '' then
+      begin
+        LObj := TJSONObject.Create;
+        try
+          if LCode <> '' then
+            LObj.AddPair('externalId', LCode);
+          LObj.AddPair('name', LName);
+          LObj.AddPair('enabled', TJSONBool.Create(LEnabled));
+          if FAPI.SyncPaymentMethod(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar forma de pagamento ' + LCode + ': ' + FAPI.LastErrorMessage);
+        finally
+          LObj.Free;
+        end;
+      end;
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+    QCount.Free;
+  end;
+end;
+
+function TSyncService.SyncSellers(ACodEmp: Integer): Integer;
+var
+  Q: TFDQuery;
+  QCount: TFDQuery;
+  LObj: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LCode: string;
+  LName: string;
+  LActive: Boolean;
+  LCodeField: TField;
+  LNameField: TField;
+  LActiveField: TField;
+
+  function FindFieldByNames(AQuery: TFDQuery; const ANames: array of string): TField;
+  var
+    I: Integer;
+    F: TField;
+  begin
+    Result := nil;
+    for I := Low(ANames) to High(ANames) do
+    begin
+      F := AQuery.FindField(ANames[I]);
+      if Assigned(F) then
+      begin
+        Result := F;
+        Exit;
+      end;
+    end;
+  end;
+begin
+  Result := 0;
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  try
+    QCount.Connection := FDB;
+    try
+      QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM VENDEDOR';
+      QCount.Open;
+      LTotal := QCount.FieldByName('CNT').AsInteger;
+    except
+      on E: Exception do
+      begin
+        Log('Tabela VENDEDOR não encontrada: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT * FROM VENDEDOR';
+    Q.Open;
+    LCodeField := FindFieldByNames(Q, ['COD_VEND', 'COD_VEN', 'CODIGO', 'COD_USU', 'ID_VEND', 'ID']);
+    LNameField := FindFieldByNames(Q, ['NOME_VEND', 'NOME', 'DESCRICAO', 'APELIDO', 'VENDEDOR']);
+    LActiveField := FindFieldByNames(Q, ['ATIVO', 'ATIVO_VEND', 'STATUS', 'SITUACAO']);
+
+    Log(Format('Vendedores encontrados: %d', [LTotal]));
+    LCurrent := 0;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando vendedores...', LCurrent, LTotal);
+
+      LCode := '';
+      LName := '';
+      if Assigned(LCodeField) then
+        LCode := Trim(LCodeField.AsString);
+      if Assigned(LNameField) then
+        LName := Trim(LNameField.AsString);
+      if LName = '' then
+        LName := LCode;
+
+      LActive := True;
+      if Assigned(LActiveField) then
+        LActive := (UpperCase(Trim(LActiveField.AsString)) = 'S') or (UpperCase(Trim(LActiveField.AsString)) = '1') or (UpperCase(Trim(LActiveField.AsString)) = 'A');
+
+      if LName <> '' then
+      begin
+        LObj := TJSONObject.Create;
+        try
+          if LCode <> '' then
+            LObj.AddPair('externalId', LCode);
+          LObj.AddPair('name', LName);
+          LObj.AddPair('active', TJSONBool.Create(LActive));
+          if FAPI.SyncSeller(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar vendedor ' + LCode + ': ' + FAPI.LastErrorMessage);
+        finally
+          LObj.Free;
+        end;
+      end;
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+    QCount.Free;
+  end;
+end;
+
+function TSyncService.SyncCashiers(ACodEmp: Integer): Integer;
+var
+  Q: TFDQuery;
+  QCount: TFDQuery;
+  LObj: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LCode: string;
+  LName: string;
+  LActive: Boolean;
+  LCodeField: TField;
+  LNameField: TField;
+  LActiveField: TField;
+
+  function FindFieldByNames(AQuery: TFDQuery; const ANames: array of string): TField;
+  var
+    I: Integer;
+    F: TField;
+  begin
+    Result := nil;
+    for I := Low(ANames) to High(ANames) do
+    begin
+      F := AQuery.FindField(ANames[I]);
+      if Assigned(F) then
+      begin
+        Result := F;
+        Exit;
+      end;
+    end;
+  end;
+begin
+  Result := 0;
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  try
+    QCount.Connection := FDB;
+    try
+      QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM CAIXA';
+      QCount.Open;
+      LTotal := QCount.FieldByName('CNT').AsInteger;
+    except
+      on E: Exception do
+      begin
+        Log('Tabela CAIXA não encontrada: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT * FROM CAIXA';
+    Q.Open;
+    LCodeField := FindFieldByNames(Q, ['COD_CAI', 'COD_CAIXA', 'CODIGO', 'ID_CAIXA', 'ID']);
+    LNameField := FindFieldByNames(Q, ['DESC_CAI', 'NOME', 'DESCRICAO', 'CAIXA']);
+    LActiveField := FindFieldByNames(Q, ['ATIVO', 'STATUS', 'SITUACAO']);
+
+    Log(Format('Caixas encontrados: %d', [LTotal]));
+    LCurrent := 0;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando caixas...', LCurrent, LTotal);
+
+      LCode := '';
+      LName := '';
+      if Assigned(LCodeField) then
+        LCode := Trim(LCodeField.AsString);
+      if Assigned(LNameField) then
+        LName := Trim(LNameField.AsString);
+      if LName = '' then
+        LName := LCode;
+
+      LActive := True;
+      if Assigned(LActiveField) then
+        LActive := (UpperCase(Trim(LActiveField.AsString)) = 'S') or (UpperCase(Trim(LActiveField.AsString)) = '1') or (UpperCase(Trim(LActiveField.AsString)) = 'A');
+
+      if LName <> '' then
+      begin
+        LObj := TJSONObject.Create;
+        try
+          if LCode <> '' then
+            LObj.AddPair('externalId', LCode);
+          LObj.AddPair('name', LName);
+          LObj.AddPair('active', TJSONBool.Create(LActive));
+          if FAPI.SyncCashier(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar caixa ' + LCode + ': ' + FAPI.LastErrorMessage);
+        finally
+          LObj.Free;
+        end;
+      end;
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+    QCount.Free;
+  end;
+end;
+
+function TSyncService.SyncSales(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime): Integer;
+var
+  Q: TFDQuery;
+  QCount: TFDQuery;
+  QItems: TFDQuery;
+  QPayments: TFDQuery;
   LObj: TJSONObject;
   LItems: TJSONArray;
   LItem: TJSONObject;
+  LPayments: TJSONArray;
+  LPayment: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LExternalId: string;
+  LDate: TDateTime;
+  LStatus: string;
 begin
   Result := 0;
-  // Exemplo mais complexo (Mestre-Detalhe)
-  {
-    Q.SQL.Text := 'SELECT ID, DATA, TOTAL, ID_CLIENTE FROM VENDAS WHERE COD_EMP = :CodEmp ...';
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  QItems := TFDQuery.Create(nil);
+  QPayments := TFDQuery.Create(nil);
+  try
+    QCount.Connection := FDB;
+    QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM VENDAS WHERE COD_EMP = :CodEmp AND DATA_VEN BETWEEN :DataIni AND :DataFim';
+    QCount.ParamByName('CodEmp').AsInteger := ACodEmp;
+    QCount.ParamByName('DataIni').AsDate := ADateFrom;
+    QCount.ParamByName('DataFim').AsDate := ADateTo;
+    QCount.Open;
+    LTotal := QCount.FieldByName('CNT').AsInteger;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT * FROM VENDAS WHERE COD_EMP = :CodEmp AND DATA_VEN BETWEEN :DataIni AND :DataFim';
     Q.ParamByName('CodEmp').AsInteger := ACodEmp;
-    ...
-    LObj.AddPair('companyId', IntToStr(ACodEmp));
-    LObj.AddPair('externalId', ...);
-    LObj.AddPair('date', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Q.FieldByName('DATA').AsDateTime));
-    
-    // Itens
-    LItems := TJSONArray.Create;
-    QItems.SQL.Text := 'SELECT * FROM VENDA_ITENS WHERE ID_VENDA = :ID';
-    ...
-    while not QItems.Eof do
-      LItem := TJSONObject.Create;
-      LItem.AddPair('productId', ...); // Precisa ser o ID do produto no FinanceHub ou externalId se a API suportar (atualmente suporta productId interno)
-      // Nota: A API de Sales espera productId (interno). Se você só tem o código do produto do ERP,
-      // precisará primeiro buscar o produto no FinanceHub pelo código ou ajustar a API para aceitar externalProductId.
-      LItems.AddElement(LItem);
+    Q.ParamByName('DataIni').AsDate := ADateFrom;
+    Q.ParamByName('DataFim').AsDate := ADateTo;
+    Q.Open;
+
+    Log(Format('Vendas encontradas (%s a %s): %d', [DateToStr(ADateFrom), DateToStr(ADateTo), LTotal]));
+    LCurrent := 0;
+
+    QItems.Connection := FDB;
+    QPayments.Connection := FDB;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando vendas...', LCurrent, LTotal);
+
+      LExternalId := Trim(Q.FieldByName('COD_VEN').AsString);
+      if LExternalId = '' then
+      begin
+        Q.Next;
+        Continue;
+      end;
+
+      LObj := TJSONObject.Create;
+      try
+        LObj.AddPair('externalId', LExternalId);
+        if Q.FindField('COD_CLI') <> nil then
+          LObj.AddPair('customerExternalId', Q.FieldByName('COD_CLI').AsString);
+        if Q.FindField('COD_USU_VEND') <> nil then
+          LObj.AddPair('sellerExternalId', Q.FieldByName('COD_USU_VEND').AsString);
+        if Q.FindField('COD_CAI') <> nil then
+          LObj.AddPair('cashierExternalId', Q.FieldByName('COD_CAI').AsString);
+
+        if (Q.FindField('DATA_HORA_VEN') <> nil) and (not Q.FieldByName('DATA_HORA_VEN').IsNull) then
+          LDate := Q.FieldByName('DATA_HORA_VEN').AsDateTime
+        else
+          LDate := Q.FieldByName('DATA_VEN').AsDateTime;
+        LObj.AddPair('date', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', LDate));
+
+        if Q.FindField('CANCELADA_VEN') <> nil then
+        begin
+          if Q.FieldByName('CANCELADA_VEN').AsInteger = 1 then
+            LStatus := 'CANCELADA'
+          else
+            LStatus := 'OK';
+          LObj.AddPair('status', LStatus);
+        end;
+
+        LItems := TJSONArray.Create;
+        QItems.SQL.Text := 'SELECT * FROM ITENS_VENDA WHERE COD_EMP = :CodEmp AND COD_VEN = :CodVen';
+        QItems.ParamByName('CodEmp').AsInteger := ACodEmp;
+        QItems.ParamByName('CodVen').AsInteger := Q.FieldByName('COD_VEN').AsInteger;
+        QItems.Open;
+        while not QItems.Eof do
+        begin
+          LItem := TJSONObject.Create;
+          LItem.AddPair('id', QItems.FieldByName('ORDEM').AsString);
+          LItem.AddPair('productExternalId', QItems.FieldByName('COD_PRO').AsString);
+          LItem.AddPair('description', QItems.FieldByName('NOME_PRODUTO').AsString);
+          LItem.AddPair('quantity', TJSONNumber.Create(QItems.FieldByName('QUANT').AsFloat));
+          LItem.AddPair('unitPrice', TJSONNumber.Create(QItems.FieldByName('VALOR').AsFloat));
+          LItems.AddElement(LItem);
+          QItems.Next;
+        end;
+        QItems.Close;
+        LObj.AddPair('items', LItems);
+
+        LPayments := TJSONArray.Create;
+        QPayments.SQL.Text := 'SELECT * FROM VENDAS_FORMAS_PAGAMENTO WHERE COD_VENDA = :CodVen';
+        QPayments.ParamByName('CodVen').AsInteger := Q.FieldByName('COD_VEN').AsInteger;
+        QPayments.Open;
+        while not QPayments.Eof do
+        begin
+          LPayment := TJSONObject.Create;
+          LPayment.AddPair('paymentMethodExternalId', QPayments.FieldByName('COD_FORMA').AsString);
+          LPayment.AddPair('amount', TJSONNumber.Create(QPayments.FieldByName('VALOR').AsFloat));
+          LPayments.AddElement(LPayment);
+          QPayments.Next;
+        end;
+        QPayments.Close;
+        LObj.AddPair('payments', LPayments);
+
+        if FAPI.SyncSale(LObj) then
+          Inc(Result)
+        else
+          Log('Erro ao sincronizar venda ' + LExternalId + ': ' + FAPI.LastErrorMessage);
+      finally
+        LObj.Free;
+      end;
+
+      Q.Next;
     end;
-    LObj.AddPair('items', LItems);
-    
-    FAPI.SyncSale(LObj);
-  }
+  finally
+    Q.Free;
+    QCount.Free;
+    QItems.Free;
+    QPayments.Free;
+  end;
 end;
 
-function TSyncService.SyncApTitles(ACodEmp: Integer): Integer;
+function TSyncService.SyncApTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
+var
+  Q: TFDQuery;
+  QCount: TFDQuery;
+  LObj: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LExternalId: string;
+  LIssueDate: TDateTime;
+  LDueDate: TDateTime;
+  LPaymentDate: Variant;
+  LAmount: Double;
+  LPaidAmount: Double;
+  LDiscountReceived: Double;
+  LInterestReceived: Double;
+  LOpenAmount: Double;
+  LStatus: string;
+  LDoc: string;
+  LSeq: string;
+  LDateField: string;
+
+  function FieldFloat(const AFieldName: string): Double;
+  begin
+    if (Q.FindField(AFieldName) <> nil) and (not Q.FieldByName(AFieldName).IsNull) then
+      Result := Q.FieldByName(AFieldName).AsFloat
+    else
+      Result := 0;
+  end;
+
+  function FieldStr(const AFieldName: string): string;
+  begin
+    if (Q.FindField(AFieldName) <> nil) and (not Q.FieldByName(AFieldName).IsNull) then
+      Result := Trim(Q.FieldByName(AFieldName).AsString)
+    else
+      Result := '';
+  end;
 begin
   Result := 0;
-  // Implementar Contas a Pagar
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  try
+    case ADateKind of
+      1: LDateField := 'DTVENCTO_CTP';
+      2: LDateField := 'DTPAGTO_CTP';
+    else
+      LDateField := 'DATA_CTP';
+    end;
+
+    QCount.Connection := FDB;
+    QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM CONTAS_PAGAR WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
+    QCount.ParamByName('CodEmp').AsInteger := ACodEmp;
+    QCount.ParamByName('DataIni').AsDate := ADateFrom;
+    QCount.ParamByName('DataFim').AsDate := ADateTo;
+    QCount.Open;
+    LTotal := QCount.FieldByName('CNT').AsInteger;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT * FROM CONTAS_PAGAR WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
+    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.ParamByName('DataIni').AsDate := ADateFrom;
+    Q.ParamByName('DataFim').AsDate := ADateTo;
+    Q.Open;
+
+    Log(Format('Contas a Pagar encontradas (%s a %s): %d', [DateToStr(ADateFrom), DateToStr(ADateTo), LTotal]));
+    LCurrent := 0;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando contas a pagar...', LCurrent, LTotal);
+
+      LExternalId := FieldStr('COD_CPT');
+      LSeq := FieldStr('SEQUENCIA_CTP');
+      if LSeq <> '' then
+        LExternalId := LExternalId + '-' + LSeq;
+      if LExternalId = '' then
+      begin
+        Q.Next;
+        Continue;
+      end;
+
+      LIssueDate := Q.FieldByName('DATA_CTP').AsDateTime;
+      LDueDate := Q.FieldByName('DTVENCTO_CTP').AsDateTime;
+
+      LPaymentDate := Null;
+      if (Q.FindField('DTPAGTO_CTP') <> nil) and (not Q.FieldByName('DTPAGTO_CTP').IsNull) then
+        LPaymentDate := Q.FieldByName('DTPAGTO_CTP').AsDateTime;
+
+      LAmount := FieldFloat('VALOR_CTP');
+      LPaidAmount := FieldFloat('VALOR_PAGO_CTP');
+      LDiscountReceived := FieldFloat('DESCONTO_CTP');
+      LInterestReceived := FieldFloat('ACRESCIMO_CTP');
+      LOpenAmount := LAmount - LPaidAmount - LDiscountReceived + LInterestReceived;
+      if LOpenAmount < 0 then
+        LOpenAmount := 0;
+
+      if (LAmount > 0) and (LPaidAmount >= LAmount) then
+        LStatus := 'PAID'
+      else if (LDueDate < Date) and (LOpenAmount > 0) then
+        LStatus := 'OVERDUE'
+      else
+        LStatus := 'OPEN';
+
+      LDoc := FieldStr('NUM_DOC_CTP');
+      if LDoc = '' then
+        LDoc := FieldStr('CHEQUE');
+
+      LObj := TJSONObject.Create;
+      try
+        LObj.AddPair('externalId', LExternalId);
+        LObj.AddPair('supplierExternalId', FieldStr('COD_FOR'));
+        LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
+        LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
+        if VarIsNull(LPaymentDate) then
+          LObj.AddPair('paymentDate', TJSONNull.Create)
+        else
+          LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
+        LObj.AddPair('amount', TJSONNumber.Create(LAmount));
+        LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
+        LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
+        LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
+        LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
+        LObj.AddPair('status', LStatus);
+        if LDoc <> '' then
+          LObj.AddPair('documentNumber', LDoc)
+        else
+          LObj.AddPair('documentNumber', TJSONNull.Create);
+        LObj.AddPair('notes', FieldStr('OBS_CTP'));
+
+        if FAPI.SyncApTitle(LObj) then
+          Inc(Result)
+        else
+          Log('Erro ao sincronizar conta a pagar ' + LExternalId + ': ' + FAPI.LastErrorMessage);
+      finally
+        LObj.Free;
+      end;
+
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+    QCount.Free;
+  end;
 end;
 
-function TSyncService.SyncArTitles(ACodEmp: Integer): Integer;
+function TSyncService.SyncArTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
+var
+  Q: TFDQuery;
+  QCount: TFDQuery;
+  LObj: TJSONObject;
+  LTotal: Integer;
+  LCurrent: Integer;
+  LExternalId: string;
+  LIssueDate: TDateTime;
+  LDueDate: TDateTime;
+  LPaymentDate: Variant;
+  LAmount: Double;
+  LPaidAmount: Double;
+  LDiscountReceived: Double;
+  LInterestReceived: Double;
+  LOpenAmount: Double;
+  LStatus: string;
+  LDoc: string;
+  LSeq: string;
+  LDateField: string;
+
+  function FieldFloat(const AFieldName: string): Double;
+  begin
+    if (Q.FindField(AFieldName) <> nil) and (not Q.FieldByName(AFieldName).IsNull) then
+      Result := Q.FieldByName(AFieldName).AsFloat
+    else
+      Result := 0;
+  end;
+
+  function FieldStr(const AFieldName: string): string;
+  begin
+    if (Q.FindField(AFieldName) <> nil) and (not Q.FieldByName(AFieldName).IsNull) then
+      Result := Trim(Q.FieldByName(AFieldName).AsString)
+    else
+      Result := '';
+  end;
 begin
   Result := 0;
-  // Implementar Contas a Receber
+  QCount := TFDQuery.Create(nil);
+  Q := TFDQuery.Create(nil);
+  try
+    case ADateKind of
+      1: LDateField := 'VENCTO_CTR';
+      2: LDateField := 'COALESCE(DTPAGTO_REAL_CTR, DTPAGTO_CTR)';
+    else
+      LDateField := 'DATA_CTR';
+    end;
+
+    QCount.Connection := FDB;
+    QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM CONTAS_RECEBER WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
+    QCount.ParamByName('CodEmp').AsInteger := ACodEmp;
+    QCount.ParamByName('DataIni').AsDate := ADateFrom;
+    QCount.ParamByName('DataFim').AsDate := ADateTo;
+    QCount.Open;
+    LTotal := QCount.FieldByName('CNT').AsInteger;
+
+    Q.Connection := FDB;
+    Q.SQL.Text := 'SELECT * FROM CONTAS_RECEBER WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
+    Q.ParamByName('CodEmp').AsInteger := ACodEmp;
+    Q.ParamByName('DataIni').AsDate := ADateFrom;
+    Q.ParamByName('DataFim').AsDate := ADateTo;
+    Q.Open;
+
+    Log(Format('Contas a Receber encontradas (%s a %s): %d', [DateToStr(ADateFrom), DateToStr(ADateTo), LTotal]));
+    LCurrent := 0;
+
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando contas a receber...', LCurrent, LTotal);
+
+      LExternalId := FieldStr('COD_CTR');
+      LSeq := FieldStr('SEQUENCIA_CTR');
+      if LSeq <> '' then
+        LExternalId := LExternalId + '-' + LSeq;
+      if LExternalId = '' then
+      begin
+        Q.Next;
+        Continue;
+      end;
+
+      LIssueDate := Q.FieldByName('DATA_CTR').AsDateTime;
+      LDueDate := Q.FieldByName('VENCTO_CTR').AsDateTime;
+
+      LPaymentDate := Null;
+      if (Q.FindField('DTPAGTO_REAL_CTR') <> nil) and (not Q.FieldByName('DTPAGTO_REAL_CTR').IsNull) then
+        LPaymentDate := Q.FieldByName('DTPAGTO_REAL_CTR').AsDateTime
+      else if (Q.FindField('DTPAGTO_CTR') <> nil) and (not Q.FieldByName('DTPAGTO_CTR').IsNull) then
+        LPaymentDate := Q.FieldByName('DTPAGTO_CTR').AsDateTime;
+
+      LAmount := FieldFloat('VALOR_CTR');
+      LPaidAmount := FieldFloat('VLRPAGO_CTR');
+      LDiscountReceived := FieldFloat('DESCONTO_CONCEDIDO_CTR');
+      LInterestReceived := FieldFloat('ACRESCIMO_RECEBIDO_CTR');
+      LOpenAmount := LAmount - LPaidAmount - LDiscountReceived + LInterestReceived;
+      if LOpenAmount < 0 then
+        LOpenAmount := 0;
+
+      if (LAmount > 0) and (LPaidAmount >= LAmount) then
+        LStatus := 'PAID'
+      else if (LDueDate < Date) and (LOpenAmount > 0) then
+        LStatus := 'OVERDUE'
+      else
+        LStatus := 'OPEN';
+
+      LDoc := FieldStr('NUMDOCUMENTO_CTR');
+      if LDoc = '' then
+        LDoc := FieldStr('NUM_TITULO');
+
+      LObj := TJSONObject.Create;
+      try
+        LObj.AddPair('externalId', LExternalId);
+        LObj.AddPair('customerExternalId', FieldStr('COD_CLI'));
+        LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
+        LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
+        if VarIsNull(LPaymentDate) then
+          LObj.AddPair('paymentDate', TJSONNull.Create)
+        else
+          LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
+        LObj.AddPair('amount', TJSONNumber.Create(LAmount));
+        LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
+        LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
+        LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
+        LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
+        LObj.AddPair('status', LStatus);
+        if LDoc <> '' then
+          LObj.AddPair('documentNumber', LDoc)
+        else
+          LObj.AddPair('documentNumber', TJSONNull.Create);
+        LObj.AddPair('notes', FieldStr('OBS_CTR'));
+
+        if FAPI.SyncArTitle(LObj) then
+          Inc(Result)
+        else
+          Log('Erro ao sincronizar conta a receber ' + LExternalId + ': ' + FAPI.LastErrorMessage);
+      finally
+        LObj.Free;
+      end;
+
+      Q.Next;
+    end;
+  finally
+    Q.Free;
+    QCount.Free;
+  end;
 end;
 
 end.

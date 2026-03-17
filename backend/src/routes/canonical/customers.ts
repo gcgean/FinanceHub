@@ -17,6 +17,8 @@ const Body = z.object({
   name: z.string().min(1),
   knownName: z.string().optional().nullable(),
   externalId: z.string().optional().nullable(),
+  classificationId: z.string().optional().nullable(),
+  classificationExternalId: z.string().optional().nullable(),
   document: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
@@ -32,6 +34,27 @@ const Body = z.object({
 });
 
 export async function customersRoutes(app: FastifyInstance) {
+  const resolveClassificationId = async (
+    companyId: string,
+    classificationId?: string | null,
+    classificationExternalId?: string | null
+  ) => {
+    if (classificationId === null || classificationExternalId === null) return null;
+    if (classificationId) {
+      const cls = await prisma.customerClassification.findUnique({ where: { id: classificationId } });
+      if (!cls || cls.companyId !== companyId) throw Object.assign(new Error("INVALID_CLASSIFICATION"), { statusCode: 400 });
+      return cls.id;
+    }
+    if (classificationExternalId) {
+      const cls = await prisma.customerClassification.findFirst({
+        where: { companyId, externalId: classificationExternalId },
+      });
+      if (!cls) throw Object.assign(new Error("INVALID_CLASSIFICATION"), { statusCode: 400 });
+      return cls.id;
+    }
+    return undefined;
+  };
+
   app.get(
     "/",
     { preHandler: [requireAuth(app), requireCompanyScope()] },
@@ -54,7 +77,15 @@ export async function customersRoutes(app: FastifyInstance) {
           : {}),
       };
       const [items, total] = await Promise.all([
-        prisma.customer.findMany({ where, take, skip, orderBy: { createdAt: "desc" } }),
+        prisma.customer.findMany({
+          where,
+          take,
+          skip,
+          orderBy: { createdAt: "desc" },
+          include: {
+            classification: { select: { id: true, name: true, externalId: true } },
+          },
+        }),
         prisma.customer.count({ where }),
       ]);
       return { items, total, take, skip };
@@ -67,6 +98,7 @@ export async function customersRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const b = parseBody(Body, request.body);
+      const classificationId = await resolveClassificationId(companyId, b.classificationId, b.classificationExternalId);
       const normalizeDoc = (s: string) => s.replace(/[^\d]/g, "");
       const docDigits = b.document ? normalizeDoc(b.document) : null;
       const docKey = docDigits ? (docDigits.length === 14 ? docDigits.slice(0, 8) : docDigits) : null;
@@ -82,6 +114,7 @@ export async function customersRoutes(app: FastifyInstance) {
       }
       const data = {
         companyId,
+        classificationId: classificationId === undefined ? undefined : classificationId,
         name: b.name,
         knownName: b.knownName ?? null,
         externalId: b.externalId ?? null,
@@ -143,6 +176,7 @@ export async function customersRoutes(app: FastifyInstance) {
       if (request.user.role !== UserRole.ADMIN && existing.companyId !== request.user.companyId) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
       }
+      const classificationId = await resolveClassificationId(existing.companyId, b.classificationId, b.classificationExternalId);
       let cityName = b.city;
       let stateCode = b.stateCode ?? b.state;
       const cityId = b.cityId;
@@ -171,6 +205,7 @@ export async function customersRoutes(app: FastifyInstance) {
           neighborhood: b.neighborhood === undefined ? undefined : b.neighborhood,
           value: b.value === undefined ? undefined : b.value,
           isActive: b.isActive === undefined ? undefined : b.isActive,
+          classificationId: classificationId === undefined ? undefined : classificationId,
         },
       });
     }
@@ -201,6 +236,116 @@ export async function customersRoutes(app: FastifyInstance) {
         orderBy: { description: "asc" },
       });
       return list;
+    }
+  );
+
+  app.get(
+    "/classifications",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const q = parseQuery(z.object({ q: z.string().optional() }), request.query);
+      const list = await prisma.customerClassification.findMany({
+        where: {
+          companyId,
+          ...(q.q ? { name: { contains: q.q, mode: "insensitive" } } : {}),
+        },
+        orderBy: { name: "asc" },
+      });
+      return list;
+    }
+  );
+
+  app.post(
+    "/classifications",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const b = z.object({
+        name: z.string().min(1),
+        externalId: z.string().optional().nullable(),
+        description: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        percentShare: z.coerce.number().optional().nullable(),
+        active: z.boolean().optional(),
+      }).parse(request.body);
+      if (b.externalId) {
+        return prisma.customerClassification.upsert({
+          where: { companyId_externalId: { companyId, externalId: b.externalId } },
+          create: {
+            companyId,
+            externalId: b.externalId,
+            name: b.name,
+            description: b.description ?? null,
+            notes: b.notes ?? null,
+            percentShare: b.percentShare ?? null,
+            active: b.active ?? true,
+          },
+          update: {
+            name: b.name,
+            description: b.description ?? null,
+            notes: b.notes ?? null,
+            percentShare: b.percentShare ?? null,
+            active: b.active ?? true,
+          },
+        });
+      }
+      return prisma.customerClassification.create({
+        data: {
+          companyId,
+          externalId: null,
+          name: b.name,
+          description: b.description ?? null,
+          notes: b.notes ?? null,
+          percentShare: b.percentShare ?? null,
+          active: b.active ?? true,
+        },
+      });
+    }
+  );
+
+  app.patch(
+    "/classifications/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const b = z.object({
+        name: z.string().optional(),
+        externalId: z.string().optional().nullable(),
+        description: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        percentShare: z.coerce.number().optional().nullable(),
+        active: z.boolean().optional(),
+      }).parse(request.body);
+      const existing = await prisma.customerClassification.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      return prisma.customerClassification.update({
+        where: { id: params.id },
+        data: {
+          name: b.name === undefined ? undefined : b.name,
+          externalId: b.externalId === undefined ? undefined : b.externalId,
+          description: b.description === undefined ? undefined : b.description,
+          notes: b.notes === undefined ? undefined : b.notes,
+          percentShare: b.percentShare === undefined ? undefined : b.percentShare,
+          active: b.active === undefined ? undefined : b.active,
+        },
+      });
+    }
+  );
+
+  app.delete(
+    "/classifications/:id",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const existing = await prisma.customerClassification.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      await prisma.customerClassification.delete({ where: { id: params.id } });
+      return { ok: true };
     }
   );
 
