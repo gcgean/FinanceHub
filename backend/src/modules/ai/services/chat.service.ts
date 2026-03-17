@@ -8,6 +8,16 @@ import { insightsService } from "./insights.service";
 import { taskService } from "./task.service";
 import { env } from "../../../lib/env";
 
+class FallbackProvider implements LLMProvider {
+  async generateResponse(messages: LLMMessage[]) {
+    const last = messages[messages.length - 1];
+    return {
+      content: `Estou em modo de fallback porque nenhuma chave de API foi configurada. Sua mensagem foi: ${last?.content ?? ""}`,
+      tokensUsed: 0
+    };
+  }
+}
+
 export class ChatService {
   private llmProvider: LLMProvider;
   
@@ -19,9 +29,7 @@ export class ChatService {
     } else if (env.GEMINI_API_KEY) {
       this.llmProvider = new GeminiProvider(env.GEMINI_API_KEY);
     } else {
-      console.warn("⚠️ Nenhuma chave de API de IA configurada. Usando MockProvider (OpenAI).");
-      // Fallback para evitar crash, mas idealmente deveria ser um MockProvider explícito
-      this.llmProvider = new OpenAIProvider("mock-key"); 
+      this.llmProvider = new FallbackProvider();
     }
   }
 

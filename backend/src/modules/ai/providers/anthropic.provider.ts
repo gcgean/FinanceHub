@@ -1,15 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface";
-import { env } from "../../../../lib/env";
+import { env } from "../../../lib/env";
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
 
-  constructor() {
-    if (!env.ANTHROPIC_API_KEY) {
+  constructor(apiKey?: string) {
+    const key = apiKey || env.ANTHROPIC_API_KEY;
+    if (!key) {
       throw new Error("ANTHROPIC_API_KEY not configured");
     }
-    this.client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    this.client = new Anthropic({ apiKey: key });
   }
 
   async generateResponse(messages: LLMMessage[], model = "claude-3-5-sonnet-20241022"): Promise<LLMResponse> {

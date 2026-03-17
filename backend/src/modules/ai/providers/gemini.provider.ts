@@ -1,15 +1,16 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface";
-import { env } from "../../../../lib/env";
+import { env } from "../../../lib/env";
 
 export class GeminiProvider implements LLMProvider {
   private client: GoogleGenerativeAI;
 
-  constructor() {
-    if (!env.GEMINI_API_KEY) {
+  constructor(apiKey?: string) {
+    const key = apiKey || env.GEMINI_API_KEY;
+    if (!key) {
       throw new Error("GEMINI_API_KEY not configured");
     }
-    this.client = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+    this.client = new GoogleGenerativeAI(key);
   }
 
   async generateResponse(messages: LLMMessage[], model = "gemini-1.5-pro"): Promise<LLMResponse> {
