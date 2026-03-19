@@ -1,5 +1,6 @@
 import { prisma } from "../../../lib/prisma";
 import { CreateMemoryDTO, SearchMemoryParams, UpdateMemoryDTO } from "../types";
+import { Prisma } from "@prisma/client";
 
 export class MemoryService {
   /**
@@ -48,7 +49,7 @@ export class MemoryService {
   async searchMemories(companyId: string, params: SearchMemoryParams) {
     const { query, sectorId, tags, limit = 5 } = params;
 
-    const whereClause: any = {
+    const whereClause: Prisma.AIMemoryWhereInput = {
       companyId,
     };
 
@@ -65,14 +66,14 @@ export class MemoryService {
     // 1. Broad Search (Filter by keywords)
     if (query) {
       // Split query into keywords for broader matching
-      const keywords = query.split(" ").filter((k) => k.length > 3);
+      const keywords = query.split(" ").filter((k: string) => k.length > 3);
       if (keywords.length > 0) {
         whereClause.OR = [
-          { content: { contains: query, mode: "insensitive" } }, // Exact phrase
-          ...keywords.map((k) => ({ content: { contains: k, mode: "insensitive" } })), // Keywords
+          { content: { contains: query, mode: "insensitive" as const } }, // Exact phrase
+          ...keywords.map((k: string) => ({ content: { contains: k, mode: "insensitive" as const } })), // Keywords
         ];
       } else {
-        whereClause.content = { contains: query, mode: "insensitive" };
+        whereClause.content = { contains: query, mode: "insensitive" as const };
       }
     }
 
@@ -94,7 +95,7 @@ export class MemoryService {
 
       // Keyword match bonus
       const keywords = queryLower.split(" ");
-      keywords.forEach((k) => {
+      keywords.forEach((k: string) => {
         if (contentLower.includes(k)) score += 1;
       });
 

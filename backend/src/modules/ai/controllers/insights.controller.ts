@@ -27,8 +27,7 @@ const FeedbackSchema = z.object({
 export class InsightsController {
   async generateSnapshot(request: FastifyRequest, reply: FastifyReply) {
     const { companyId } = request.user as { companyId: string };
-    // @ts-ignore
-    const body = GenerateSnapshotSchema.parse(request.body || {});
+    const body = GenerateSnapshotSchema.parse((request.body ?? {}) as unknown);
 
     const date = body.date ? new Date(body.date) : new Date();
     const result = await insightsService.generateDailySnapshot(companyId, date);
@@ -38,8 +37,7 @@ export class InsightsController {
 
   async getHistory(request: FastifyRequest, reply: FastifyReply) {
     const { companyId } = request.user as { companyId: string };
-    // @ts-ignore
-    const query = GetHistorySchema.parse(request.query);
+    const query = GetHistorySchema.parse(request.query as unknown);
 
     const history = await insightsService.getMetricHistory(companyId, query.metricKey, query.days);
     return reply.send(history);
@@ -67,8 +65,7 @@ export class InsightsController {
 
   async listEvents(request: FastifyRequest, reply: FastifyReply) {
     const { companyId } = request.user as { companyId: string };
-    // @ts-ignore
-    const query = ListEventsSchema.parse(request.query);
+    const query = ListEventsSchema.parse(request.query as unknown);
 
     const events = await prisma.aIInsightEvent.findMany({
       where: {
@@ -87,10 +84,9 @@ export class InsightsController {
 
   async saveFeedback(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };
-    const { id: userId, companyId } = request.user as { id: string, companyId: string };
+    const { sub: userId, companyId } = request.user as { sub: string, companyId: string };
     
-    // @ts-ignore
-    const body = FeedbackSchema.parse(request.body);
+    const body = FeedbackSchema.parse(request.body as unknown);
 
     const event = await prisma.aIInsightEvent.findFirst({
       where: { id, companyId }
@@ -114,5 +110,4 @@ export class InsightsController {
 }
 
 export const insightsController = new InsightsController();
-
 

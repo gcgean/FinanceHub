@@ -27,9 +27,8 @@ export class AIProfileController {
 
   async updateProfile(request: FastifyRequest, reply: FastifyReply) {
     const { companyId } = request.user as { companyId: string };
-    
-    // @ts-ignore
-    const body = UpdateProfileSchema.parse(request.body);
+
+    const body = UpdateProfileSchema.parse(request.body as unknown);
 
     const profile = await prisma.aIProfile.upsert({
       where: { companyId },

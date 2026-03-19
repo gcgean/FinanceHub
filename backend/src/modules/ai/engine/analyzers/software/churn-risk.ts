@@ -12,13 +12,9 @@ export const churnRiskAnalyzer: InsightAnalyzer = {
   segment: "SOFTWARE",
 
   async analyze(companyId: string, rule: AIInsightRule) {
-    let minOverdueCount = 2;
-    let lookbackDays = 60;
-    try {
-      const config = JSON.parse(rule.conditionsJson);
-      if (config.minOverdueCount) minOverdueCount = config.minOverdueCount;
-      if (config.lookbackDays) lookbackDays = config.lookbackDays;
-    } catch (e) {}
+    const config = parseConditions(rule.conditionsJson);
+    const minOverdueCount = typeof config?.minOverdueCount === "number" ? config.minOverdueCount : 2;
+    const lookbackDays = typeof config?.lookbackDays === "number" ? config.lookbackDays : 60;
 
     // Buscar clientes com títulos vencidos nos últimos X dias
     const today = startOfDay(new Date());
@@ -86,3 +82,11 @@ export const churnRiskAnalyzer: InsightAnalyzer = {
     };
   }
 };
+
+function parseConditions(value: string): { minOverdueCount?: number; lookbackDays?: number } | null {
+  try {
+    return JSON.parse(value) as { minOverdueCount?: number; lookbackDays?: number };
+  } catch {
+    return null;
+  }
+}

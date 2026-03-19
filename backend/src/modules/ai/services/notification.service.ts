@@ -1,5 +1,10 @@
 import { prisma } from "../../../lib/prisma";
-import { AIChannelType, AIInsightDeliveryStatus } from "@prisma/client";
+import { AIChannelType, AIInsightDeliveryStatus, Prisma } from "@prisma/client";
+
+type EventWithRecipients = Prisma.AIInsightEventGetPayload<{
+  include: { recipients: true; company: true };
+}>;
+type Recipient = EventWithRecipients["recipients"][number];
 
 export class NotificationService {
   /**
@@ -31,7 +36,7 @@ export class NotificationService {
     }
   }
 
-  private async processRecipient(event: any, recipient: any) {
+  private async processRecipient(event: EventWithRecipients, recipient: Recipient) {
     // 1. Determinar o canal e o target
     let channelsToUse: Array<{ type: AIChannelType; target: string }> = [];
 
@@ -49,7 +54,7 @@ export class NotificationService {
       } else {
         // Fallback: se o usuário não tem canais configurados, assume IN_APP e talvez tente buscar o email
         const user = await prisma.user.findUnique({ where: { id: recipient.userId } });
-        if (user) {
+        if (user?.email) {
           channelsToUse.push({ type: 'EMAIL', target: user.email });
         }
         channelsToUse.push({ type: 'IN_APP', target: recipient.userId });
@@ -80,7 +85,7 @@ export class NotificationService {
     });
   }
 
-  private async sendNotification(event: any, recipient: any, type: AIChannelType, target: string) {
+  private async sendNotification(event: EventWithRecipients, recipient: Recipient, type: AIChannelType, target: string) {
     console.log(`[NotificationService] Enviando [${type}] para ${target}: ${event.title}`);
 
     let status = 'SENT';
@@ -109,9 +114,9 @@ export class NotificationService {
           providerResponse = '{"status": "unknown_channel"}';
           break;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       status = 'FAILED';
-      providerResponse = JSON.stringify({ error: error.message });
+      providerResponse = JSON.stringify({ error: getErrorMessage(error) });
       console.error(`[NotificationService] Falha ao enviar [${type}] para ${target}:`, error);
     }
 
@@ -131,3 +136,7 @@ export class NotificationService {
 }
 
 export const notificationService = new NotificationService();
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}

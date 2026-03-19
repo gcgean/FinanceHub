@@ -34,14 +34,21 @@ const QueryBoolean = z.preprocess((v) => {
   return v;
 }, z.boolean());
 
+const validDate = z.string().refine(
+  (v) => !isNaN(new Date(v).getTime()),
+  { message: "Invalid date format" }
+).optional();
+
 const ListQuery = z.object({
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: validDate,
+  dateTo: validDate,
   accountId: z.string().optional(),
   operation: z.nativeEnum(LedgerOperation).optional(),
   confirmed: QueryBoolean.optional(),
   deleted: QueryBoolean.optional().default(false),
   withSplits: QueryBoolean.optional().default(false),
+  take: z.coerce.number().int().min(1).max(500).optional().default(200),
+  skip: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export async function ledgerRoutes(app: FastifyInstance) {
@@ -68,20 +75,22 @@ export async function ledgerRoutes(app: FastifyInstance) {
         ...(q.deleted ? { deletedAt: { not: null } } : { deletedAt: null }),
       };
 
-      console.log("[GET /ledger] User:", request.user);
-      console.log("[GET /ledger] Query:", q);
-      console.log("[GET /ledger] Where:", JSON.stringify(where, null, 2));
-
-      return prisma.bankLedgerEntry.findMany({
-        where,
-        orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
-        include: {
-          account: true,
-          splits: q.withSplits
-            ? { include: { chartAccount: true, costCenter: true } }
-            : false,
-        },
-      });
+      const [items, total] = await Promise.all([
+        prisma.bankLedgerEntry.findMany({
+          where,
+          orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
+          take: q.take,
+          skip: q.skip,
+          include: {
+            account: true,
+            splits: q.withSplits
+              ? { include: { chartAccount: true, costCenter: true } }
+              : false,
+          },
+        }),
+        prisma.bankLedgerEntry.count({ where }),
+      ]);
+      return { items, total, take: q.take, skip: q.skip };
     }
   );
 

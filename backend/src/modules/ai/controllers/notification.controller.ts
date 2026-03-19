@@ -1,6 +1,15 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import { z } from "zod";
 import { prisma } from "../../../lib/prisma";
 import { AIChannelType } from "@prisma/client";
+
+type AuthUser = { sub: string; companyId: string };
+
+const SaveChannelSchema = z.object({
+  type: z.nativeEnum(AIChannelType),
+  target: z.string().min(1).max(255),
+  enabled: z.boolean(),
+});
 
 export class NotificationController {
   // ---------------------------------------------------------
@@ -11,7 +20,7 @@ export class NotificationController {
    * Lista notificações In-App do usuário logado
    */
   async getMyNotifications(request: FastifyRequest, reply: FastifyReply) {
-    const { id: userId } = request.user as any as { id: string };
+    const { sub: userId } = request.user as AuthUser;
 
     const notifications = await prisma.aIInsightRecipient.findMany({
       where: {
@@ -37,7 +46,7 @@ export class NotificationController {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    const { id: userId } = request.user as any as { id: string };
+    const { sub: userId } = request.user as AuthUser;
     const { id } = request.params;
 
     // Verificar se pertence ao usuário
@@ -63,7 +72,7 @@ export class NotificationController {
    * Marca todas as notificações In-App do usuário como lidas
    */
   async markAllAsRead(request: FastifyRequest, reply: FastifyReply) {
-    const { id: userId } = request.user as any as { id: string };
+    const { sub: userId } = request.user as AuthUser;
 
     await prisma.aIInsightRecipient.updateMany({
       where: {
@@ -87,7 +96,7 @@ export class NotificationController {
    * Lista canais de notificação configurados do usuário logado
    */
   async getMyChannels(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, id: userId } = request.user as any as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as AuthUser;
 
     const channels = await prisma.aINotificationChannel.findMany({
       where: {
@@ -103,11 +112,15 @@ export class NotificationController {
    * Cria ou atualiza um canal de notificação para o usuário
    */
   async saveChannel(
-    request: FastifyRequest<{ Body: { type: AIChannelType; target: string; enabled: boolean } }>,
+    request: FastifyRequest,
     reply: FastifyReply
   ) {
-    const { companyId, id: userId } = request.user as any as { companyId: string; id: string };
-    const { type, target, enabled } = request.body;
+    const { companyId, sub: userId } = request.user as AuthUser;
+    const parsed = SaveChannelSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "INVALID_PAYLOAD" });
+    }
+    const { type, target, enabled } = parsed.data;
 
     // Verificar se já existe um canal do mesmo tipo para o usuário
     const existing = await prisma.aINotificationChannel.findFirst({
@@ -146,7 +159,7 @@ export class NotificationController {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    const { companyId, id: userId } = request.user as any as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as AuthUser;
     const { id } = request.params;
 
     const channel = await prisma.aINotificationChannel.findUnique({

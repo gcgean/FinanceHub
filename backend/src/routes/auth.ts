@@ -6,23 +6,41 @@ import { parseBody } from "../lib/validation";
 import { requireAuth, requireRole } from "../lib/auth";
 import { UserRole } from "@prisma/client";
 
+// Simple in-memory rate limiter for login attempts
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const LOGIN_MAX_ATTEMPTS = 15;
+
 const LoginBody = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email().max(255),
+  password: z.string().min(1).max(128),
 });
 
 const RegisterBody = z.object({
-  email: z.string().email(),
-  name: z.string().min(1),
-  password: z.string().min(8),
+  email: z.string().email().max(255),
+  name: z.string().min(1).max(255),
+  password: z.string().min(8).max(128),
   role: z.nativeEnum(UserRole).optional().default(UserRole.OPERATOR),
-  companyId: z.string().optional().nullable(),
+  companyId: z.string().max(100).optional().nullable(),
 });
 
 type LoginRequest = FastifyRequest<{ Body: z.infer<typeof LoginBody> }>;
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/login", async (request: LoginRequest) => {
+    // Rate limiting by IP
+    const ip = request.ip ?? "unknown";
+    const now = Date.now();
+    const attempt = loginAttempts.get(ip);
+    if (attempt && attempt.resetAt > now) {
+      if (attempt.count >= LOGIN_MAX_ATTEMPTS) {
+        throw Object.assign(new Error("TOO_MANY_REQUESTS"), { statusCode: 429 });
+      }
+      attempt.count++;
+    } else {
+      loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    }
+
     const parsed = LoginBody.safeParse(request.body);
     if (!parsed.success) {
       throw Object.assign(new Error("INVALID_PAYLOAD"), { statusCode: 400 });
@@ -33,11 +51,14 @@ export async function authRoutes(app: FastifyInstance) {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw Object.assign(new Error("INVALID_CREDENTIALS"), { statusCode: 401 });
 
+    // Clear rate limit on successful login
+    loginAttempts.delete(ip);
+
     const token = await app.jwt.sign({
       sub: user.id,
       role: user.role,
       companyId: user.companyId,
-    });
+    }, { expiresIn: "8h" });
 
     return {
       token,

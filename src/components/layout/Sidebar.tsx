@@ -203,22 +203,26 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           </button>
         ))}
 
-        <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
-          Administração
-        </p>
-        {adminNavigation.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onPageChange(item.id)}
-            className={cn(
-              "sidebar-item w-full",
-              currentPage === item.id && "sidebar-item-active"
-            )}
-          >
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {isAdmin && (
+          <>
+            <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
+              Administração
+            </p>
+            {adminNavigation.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => onPageChange(item.id)}
+                className={cn(
+                  "sidebar-item w-full",
+                  currentPage === item.id && "sidebar-item-active"
+                )}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* User */}

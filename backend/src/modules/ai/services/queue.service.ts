@@ -25,7 +25,7 @@ export class QueueService {
   /**
    * Adiciona um job na fila.
    */
-  async addJob(queue: string, payload: any) {
+  async addJob(queue: string, payload: Record<string, unknown>) {
     const job = await prisma.backgroundJob.create({
       data: {
         queue,
@@ -118,7 +118,7 @@ export class QueueService {
       
       console.log(`[QueueService] Job ${job.id} concluído com sucesso.`);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[QueueService] Erro ao processar job:`, error);
       
       if (currentJob) {
@@ -130,8 +130,8 @@ export class QueueService {
   }
 
   // Tratamento de falha com Retry e Backoff Exponencial
-  async handleJobFailure(job: BackgroundJob, error: any) {
-     const errorMessage = error.message || String(error);
+  async handleJobFailure(job: BackgroundJob, error: unknown) {
+     const errorMessage = error instanceof Error ? error.message : String(error);
      const nextAttempt = job.attempts; // Já foi incrementado no início do processamento
      
      if (nextAttempt < job.maxAttempts) {

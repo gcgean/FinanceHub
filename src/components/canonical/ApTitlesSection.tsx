@@ -206,12 +206,12 @@ export function ApTitlesSection() {
             const buf = await file.arrayBuffer()
             const wb = XLSX.read(buf, { type: "array" })
             const ws = wb.Sheets[wb.SheetNames[0]]
-            const rows: Array<Record<string, any>> = XLSX.utils.sheet_to_json(ws, { defval: null })
+            const rows: Array<Record<string, unknown>> = XLSX.utils.sheet_to_json(ws, { defval: null })
 
             const errors: string[] = []
             let created = 0
 
-            const toIso = (value: any) => {
+            const toIso = (value: unknown) => {
               if (!value) return null
               if (value instanceof Date) return value.toISOString().slice(0, 10)
               if (typeof value === "number" && XLSX.SSF?.parse_date_code) {
@@ -229,9 +229,9 @@ export function ApTitlesSection() {
             for (let idx = 0; idx < rows.length; idx++) {
               const row = rows[idx]
               const rowIndex = idx + 2
-              const externalId = String(row.externalId ?? "").trim()
-              const issueDate = toIso(row.issueDate)
-              const dueDate = toIso(row.dueDate)
+              const externalId = String(row["externalId"] ?? "").trim()
+              const issueDate = toIso(row["issueDate"])
+              const dueDate = toIso(row["dueDate"])
               if (!externalId) {
                 errors.push(`Linha ${rowIndex}: externalId obrigatório`)
                 continue
@@ -240,8 +240,8 @@ export function ApTitlesSection() {
                 errors.push(`Linha ${rowIndex}: issueDate e dueDate obrigatórios`)
                 continue
               }
-              const amount = Number(row.amount ?? 0)
-              const openAmount = Number(row.openAmount ?? 0)
+              const amount = Number(row["amount"] ?? 0)
+              const openAmount = Number(row["openAmount"] ?? 0)
               if (!amount && amount !== 0) {
                 errors.push(`Linha ${rowIndex}: amount inválido`)
                 continue
@@ -250,23 +250,23 @@ export function ApTitlesSection() {
                 errors.push(`Linha ${rowIndex}: openAmount inválido`)
                 continue
               }
-              const status = String(row.status ?? "OPEN").trim().toUpperCase()
+              const status = String(row["status"] ?? "OPEN").trim().toUpperCase()
               const statusValue = ["OPEN", "PAID", "OVERDUE", "CANCELED"].includes(status) ? status : "OPEN"
 
               await createApTitle({
                 externalId,
-                supplierExternalId: row.supplierExternalId ? String(row.supplierExternalId).trim() : undefined,
+                supplierExternalId: row["supplierExternalId"] ? String(row["supplierExternalId"]).trim() : undefined,
                 issueDate,
                 dueDate,
-                paymentDate: toIso(row.paymentDate),
+                paymentDate: toIso(row["paymentDate"]),
                 amount,
                 openAmount,
-                paidAmount: row.paidAmount !== null && row.paidAmount !== undefined ? Number(row.paidAmount) : undefined,
-                discountReceived: row.discountReceived !== null && row.discountReceived !== undefined ? Number(row.discountReceived) : undefined,
-                interestReceived: row.interestReceived !== null && row.interestReceived !== undefined ? Number(row.interestReceived) : undefined,
+                paidAmount: row["paidAmount"] !== null && row["paidAmount"] !== undefined ? Number(row["paidAmount"]) : undefined,
+                discountReceived: row["discountReceived"] !== null && row["discountReceived"] !== undefined ? Number(row["discountReceived"]) : undefined,
+                interestReceived: row["interestReceived"] !== null && row["interestReceived"] !== undefined ? Number(row["interestReceived"]) : undefined,
                 status: statusValue as TitleStatus,
-                documentNumber: row.documentNumber ? String(row.documentNumber).trim() : undefined,
-                notes: row.notes ? String(row.notes).trim() : undefined,
+                documentNumber: row["documentNumber"] ? String(row["documentNumber"]).trim() : undefined,
+                notes: row["notes"] ? String(row["notes"]).trim() : undefined,
               })
               created++
             }

@@ -3,17 +3,17 @@ import { z } from "zod";
 import { chatService } from "../services/chat.service";
 
 const CreateChatSchema = z.object({
-  title: z.string().optional(),
-  sectorId: z.string().optional(),
+  title: z.string().max(200).optional(),
+  sectorId: z.string().max(100).optional(),
 });
 
 const SendMessageSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).max(4000),
 });
 
 export class ChatController {
   async create(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, id: userId } = request.user as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as { companyId: string; sub: string };
     const body = CreateChatSchema.parse(request.body);
 
     const chat = await chatService.createChat(companyId, userId, body.title, body.sectorId);
@@ -21,14 +21,14 @@ export class ChatController {
   }
 
   async list(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, id: userId } = request.user as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as { companyId: string; sub: string };
 
     const chats = await chatService.listChats(companyId, userId);
     return reply.send(chats);
   }
 
   async get(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, id: userId } = request.user as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as { companyId: string; sub: string };
     const { id: chatId } = request.params as { id: string };
 
     const chat = await chatService.getChat(chatId, companyId, userId);
@@ -39,7 +39,7 @@ export class ChatController {
   }
 
   async sendMessage(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, id: userId } = request.user as { companyId: string; id: string };
+    const { companyId, sub: userId } = request.user as { companyId: string; sub: string };
     const { id: chatId } = request.params as { id: string };
     const { content } = SendMessageSchema.parse(request.body);
 

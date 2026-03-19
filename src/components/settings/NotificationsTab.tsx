@@ -59,13 +59,27 @@ export function NotificationsTab() {
   });
 
   const handleAdd = () => {
-    if (newChannelType !== "IN_APP" && !newTarget) {
+    if (newChannelType !== "IN_APP" && !newTarget.trim()) {
       toast({ title: "Preencha o destino.", variant: "destructive" });
       return;
     }
+    if (newChannelType === "EMAIL") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newTarget.trim())) {
+        toast({ title: "E-mail inválido.", description: "Informe um endereço de e-mail válido.", variant: "destructive" });
+        return;
+      }
+    }
+    if (newChannelType === "WHATSAPP" || newChannelType === "TELEGRAM") {
+      const phoneRegex = /^\+?[\d\s\-()]{7,20}$/;
+      if (!phoneRegex.test(newTarget.trim())) {
+        toast({ title: "Número inválido.", description: "Informe um número de telefone válido (ex: +5511999999999).", variant: "destructive" });
+        return;
+      }
+    }
     saveMutation.mutate({
       type: newChannelType,
-      target: newChannelType === "IN_APP" ? "Sistema" : newTarget,
+      target: newChannelType === "IN_APP" ? "Sistema" : newTarget.trim(),
       enabled: true,
     });
   };
@@ -148,7 +162,7 @@ export function NotificationsTab() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo</Label>
-                <Select value={newChannelType} onValueChange={(v: any) => setNewChannelType(v)}>
+                <Select value={newChannelType} onValueChange={(v: "EMAIL" | "WHATSAPP" | "TELEGRAM" | "IN_APP") => setNewChannelType(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

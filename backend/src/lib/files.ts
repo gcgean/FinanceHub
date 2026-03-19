@@ -6,6 +6,11 @@ export async function ensureDir(dir: string) {
 }
 
 export function safeJoin(base: string, ...parts: string[]) {
-  return path.join(base, ...parts);
+  const normalizedBase = path.resolve(base);
+  const result = path.resolve(base, path.join(...parts));
+  if (!result.startsWith(normalizedBase + path.sep) && result !== normalizedBase) {
+    throw Object.assign(new Error("INVALID_PATH"), { statusCode: 400 });
+  }
+  return result;
 }
 

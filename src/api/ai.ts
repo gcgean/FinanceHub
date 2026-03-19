@@ -82,6 +82,36 @@ export interface AIProfile {
   segment?: string;
 }
 
+export interface BackgroundJob {
+  id: string;
+  queue: string;
+  payload: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  runAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalibrationRuleStats {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  conditionsJson: string;
+  stats: {
+    totalEvents: number;
+    totalFeedback: number;
+    positive: number;
+    negative: number;
+    approvalRate: number;
+  };
+}
+
 export const aiApi = {
   // Profile
   getProfile: async () => {
@@ -150,7 +180,7 @@ export const aiApi = {
         'Accept': 'application/pdf',
       },
       responseType: 'blob'
-    } as any); // Type assertion needed because apiFetch wrapper might not support blob natively yet or types are strict
+    });
     return response;
   },
 
@@ -187,12 +217,12 @@ export const aiApi = {
     }>('/ai/admin/stats');
   },
   listBackgroundJobs: async () => {
-    return apiFetch<any[]>('/ai/admin/jobs');
+    return apiFetch<BackgroundJob[]>('/ai/admin/jobs');
   },
   retryJob: async (id: string) => {
     return apiFetch(`/ai/admin/jobs/${id}/retry`, { method: 'POST' });
   },
   getCalibrationStats: async () => {
-    return apiFetch<any[]>('/ai/admin/calibration');
+    return apiFetch<CalibrationRuleStats[]>('/ai/admin/calibration');
   }
 };

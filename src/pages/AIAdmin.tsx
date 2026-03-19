@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { aiApi } from "@/api/ai";
+import { aiApi, BackgroundJob, CalibrationRuleStats } from "@/api/ai";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -97,7 +97,7 @@ export default function AIAdmin() {
                 <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
               ) : (
                 <div className="space-y-4">
-                  {jobs?.map((job: any) => (
+                  {jobs?.map((job: BackgroundJob) => (
                     <div key={job.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export default function AIAdmin() {
                 <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
               ) : (
                 <div className="space-y-6">
-                  {calibration?.map((rule: any) => (
+                  {calibration?.map((rule: CalibrationRuleStats) => (
                     <div key={rule.id} className="p-4 border rounded-lg space-y-4">
                       <div className="flex items-start justify-between">
                         <div>

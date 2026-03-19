@@ -47,11 +47,8 @@ export const revenueDropWeeklyAnalyzer: InsightAnalyzer = {
     if (dayOfWeek < 3) return null; // Só avalia de quarta em diante
 
     // threshold vem do JSON da regra ou default 0.7
-    let threshold = 0.7;
-    try {
-      const config = JSON.parse(rule.conditionsJson);
-      if (config.threshold) threshold = config.threshold;
-    } catch (e) {}
+    const config = parseConditions(rule.conditionsJson);
+    const threshold = typeof config?.threshold === "number" ? config.threshold : 0.7;
     
     if (currentWeekRevenue < pastWeeklyAvg * threshold) {
       return {
@@ -68,3 +65,11 @@ export const revenueDropWeeklyAnalyzer: InsightAnalyzer = {
     return null;
   }
 };
+
+function parseConditions(value: string): { threshold?: number } | null {
+  try {
+    return JSON.parse(value) as { threshold?: number };
+  } catch {
+    return null;
+  }
+}

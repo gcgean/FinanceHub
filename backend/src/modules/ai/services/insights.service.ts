@@ -79,7 +79,7 @@ export class InsightsService {
     severity: AIInsightSeverity;
     insightType: string;
     metricReference?: string;
-    payload?: any;
+    payload?: Record<string, unknown>;
   }) {
     // Evitar duplicidade: verificar se já existe insight igual (mesma regra, mesma data/semana)
     // Para simplificar, verificamos se existe um insight NEW/SENT criado hoje com mesma regra

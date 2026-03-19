@@ -1,5 +1,6 @@
 import { prisma } from "../../../lib/prisma";
 import { subDays } from "date-fns";
+import { AIInsightRule } from "@prisma/client";
 
 export class CalibrationService {
   
@@ -56,13 +57,9 @@ export class CalibrationService {
     }
   }
 
-  private async adjustRuleParameters(rule: any, direction: "LOOSEN" | "TIGHTEN") {
-    let config: any = {};
-    try {
-      config = JSON.parse(rule.conditionsJson);
-    } catch (e) {
-      return;
-    }
+  private async adjustRuleParameters(rule: AIInsightRule, direction: "LOOSEN" | "TIGHTEN") {
+    const config = parseConfig(rule.conditionsJson);
+    if (!config) return;
 
     let updated = false;
 
@@ -72,7 +69,7 @@ export class CalibrationService {
       // Se hoje dispara com < 70%, ajustamos para < 60% (0.6).
       // Ou seja, diminuir o threshold.
       
-      const current = config.threshold || 0.7;
+      const current = typeof config.threshold === "number" ? config.threshold : 0.7;
       const step = 0.05;
       
       if (direction === "LOOSEN") {
@@ -86,7 +83,7 @@ export class CalibrationService {
       // LOOSEN: Queremos que dispare menos. A despesa tem que ser MAIOR.
       // Aumentar o multiplier (2.0 -> 2.5).
       
-      const current = config.multiplier || 2.0; // O código usa hardcoded 2 se não existir, mas assumimos que o JSON tem
+      const current = typeof config.multiplier === "number" ? config.multiplier : 2.0;
       const step = 0.5;
 
       if (direction === "LOOSEN") {
@@ -108,3 +105,11 @@ export class CalibrationService {
 }
 
 export const calibrationService = new CalibrationService();
+
+function parseConfig(value: string): { threshold?: number; multiplier?: number } | null {
+  try {
+    return JSON.parse(value) as { threshold?: number; multiplier?: number };
+  } catch {
+    return null;
+  }
+}

@@ -54,6 +54,7 @@ export function SalesTab() {
       toast({ title: "Venda excluída" })
       qc.invalidateQueries({ queryKey: ["canonical", "sales"] })
     },
+    onError: (e: unknown) => toast({ title: "Erro ao excluir", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
   })
 
   const items = sales.data?.items ?? []
@@ -202,14 +203,14 @@ export function SalesTab() {
                 return
               }
 
-              const salesRows: Array<Record<string, any>> = XLSX.utils.sheet_to_json(salesSheet, { defval: null })
-              const itemsRows: Array<Record<string, any>> = itemsSheet ? XLSX.utils.sheet_to_json(itemsSheet, { defval: null }) : []
-              const paymentsRows: Array<Record<string, any>> = paymentsSheet ? XLSX.utils.sheet_to_json(paymentsSheet, { defval: null }) : []
+              const salesRows: Array<Record<string, unknown>> = XLSX.utils.sheet_to_json(salesSheet, { defval: null })
+              const itemsRows: Array<Record<string, unknown>> = itemsSheet ? XLSX.utils.sheet_to_json(itemsSheet, { defval: null }) : []
+              const paymentsRows: Array<Record<string, unknown>> = paymentsSheet ? XLSX.utils.sheet_to_json(paymentsSheet, { defval: null }) : []
 
               const errors: string[] = []
-              const saleMap = new Map<string, { data: any; items: any[]; payments: any[] }>()
+              const saleMap = new Map<string, { data: Record<string, unknown>; items: Record<string, unknown>[]; payments: Record<string, unknown>[] }>()
 
-              const toIso = (value: any) => {
+              const toIso = (value: unknown) => {
                 if (!value) return null
                 if (value instanceof Date) return value.toISOString()
                 if (typeof value === "number" && XLSX.SSF?.parse_date_code) {
@@ -228,12 +229,12 @@ export function SalesTab() {
 
               salesRows.forEach((row, idx) => {
                 const rowIndex = idx + 2
-                const externalId = String(row.externalId ?? "").trim()
+                const externalId = String(row["externalId"] ?? "").trim()
                 if (!externalId) {
                   errors.push(`Vendas linha ${rowIndex}: externalId obrigatório`)
                   return
                 }
-                const dateValue = toIso(row.date)
+                const dateValue = toIso(row["date"])
                 if (!dateValue) {
                   errors.push(`Vendas linha ${rowIndex}: date obrigatório`)
                   return
@@ -242,11 +243,11 @@ export function SalesTab() {
                   data: {
                     externalId,
                     date: dateValue,
-                    customerExternalId: row.customerExternalId ? String(row.customerExternalId).trim() : undefined,
-                    sellerExternalId: row.sellerExternalId ? String(row.sellerExternalId).trim() : undefined,
-                    cashierExternalId: row.cashierExternalId ? String(row.cashierExternalId).trim() : undefined,
-                    paymentMethodExternalId: row.paymentMethodExternalId ? String(row.paymentMethodExternalId).trim() : undefined,
-                    status: row.status ? String(row.status).trim() : undefined,
+                    customerExternalId: row["customerExternalId"] ? String(row["customerExternalId"]).trim() : undefined,
+                    sellerExternalId: row["sellerExternalId"] ? String(row["sellerExternalId"]).trim() : undefined,
+                    cashierExternalId: row["cashierExternalId"] ? String(row["cashierExternalId"]).trim() : undefined,
+                    paymentMethodExternalId: row["paymentMethodExternalId"] ? String(row["paymentMethodExternalId"]).trim() : undefined,
+                    status: row["status"] ? String(row["status"]).trim() : undefined,
                   },
                   items: [],
                   payments: [],
@@ -255,7 +256,7 @@ export function SalesTab() {
 
               itemsRows.forEach((row, idx) => {
                 const rowIndex = idx + 2
-                const saleExternalId = String(row.saleExternalId ?? "").trim()
+                const saleExternalId = String(row["saleExternalId"] ?? "").trim()
                 if (!saleExternalId) {
                   errors.push(`Itens linha ${rowIndex}: saleExternalId obrigatório`)
                   return
@@ -265,9 +266,9 @@ export function SalesTab() {
                   errors.push(`Itens linha ${rowIndex}: venda ${saleExternalId} não encontrada na aba Vendas`)
                   return
                 }
-                const description = String(row.description ?? "").trim()
-                const quantity = Number(row.quantity ?? 0)
-                const unitPrice = Number(row.unitPrice ?? 0)
+                const description = String(row["description"] ?? "").trim()
+                const quantity = Number(row["quantity"] ?? 0)
+                const unitPrice = Number(row["unitPrice"] ?? 0)
                 if (!description) {
                   errors.push(`Itens linha ${rowIndex}: description obrigatório`)
                   return
@@ -277,8 +278,8 @@ export function SalesTab() {
                   return
                 }
                 sale.items.push({
-                  id: row.itemExternalId ? String(row.itemExternalId).trim() : undefined,
-                  productExternalId: row.productExternalId ? String(row.productExternalId).trim() : undefined,
+                  id: row["itemExternalId"] ? String(row["itemExternalId"]).trim() : undefined,
+                  productExternalId: row["productExternalId"] ? String(row["productExternalId"]).trim() : undefined,
                   description,
                   quantity,
                   unitPrice,
@@ -287,7 +288,7 @@ export function SalesTab() {
 
               paymentsRows.forEach((row, idx) => {
                 const rowIndex = idx + 2
-                const saleExternalId = String(row.saleExternalId ?? "").trim()
+                const saleExternalId = String(row["saleExternalId"] ?? "").trim()
                 if (!saleExternalId) {
                   errors.push(`Pagamentos linha ${rowIndex}: saleExternalId obrigatório`)
                   return
@@ -297,14 +298,14 @@ export function SalesTab() {
                   errors.push(`Pagamentos linha ${rowIndex}: venda ${saleExternalId} não encontrada na aba Vendas`)
                   return
                 }
-                const amount = Number(row.amount ?? 0)
+                const amount = Number(row["amount"] ?? 0)
                 if (!amount) {
                   errors.push(`Pagamentos linha ${rowIndex}: amount obrigatório`)
                   return
                 }
                 sale.payments.push({
-                  paymentMethodExternalId: row.paymentMethodExternalId ? String(row.paymentMethodExternalId).trim() : undefined,
-                  paymentMethodName: row.paymentMethodName ? String(row.paymentMethodName).trim() : undefined,
+                  paymentMethodExternalId: row["paymentMethodExternalId"] ? String(row["paymentMethodExternalId"]).trim() : undefined,
+                  paymentMethodName: row["paymentMethodName"] ? String(row["paymentMethodName"]).trim() : undefined,
                   amount,
                 })
               })

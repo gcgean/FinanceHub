@@ -33,11 +33,8 @@ export const expenseSpikeAnalyzer: InsightAnalyzer = {
     const totalPast = pastSnapshots.reduce((sum, s) => sum + s.value, 0);
     const avgExpense = totalPast / pastSnapshots.length;
 
-    let multiplier = 2.0;
-    try {
-      const config = JSON.parse(rule.conditionsJson);
-      if (config.multiplier) multiplier = config.multiplier;
-    } catch (e) {}
+    const config = parseConditions(rule.conditionsJson);
+    const multiplier = typeof config?.multiplier === "number" ? config.multiplier : 2.0;
 
     if (todaySnapshot.value > avgExpense * multiplier && todaySnapshot.value > 100) {
       return {
@@ -53,3 +50,11 @@ export const expenseSpikeAnalyzer: InsightAnalyzer = {
     return null;
   }
 };
+
+function parseConditions(value: string): { multiplier?: number } | null {
+  try {
+    return JSON.parse(value) as { multiplier?: number };
+  } catch {
+    return null;
+  }
+}

@@ -74,7 +74,7 @@ export class TaskService {
     await this.updateTaskStatus(taskId, "IN_PROGRESS");
 
     try {
-      let result: any; // TaskResult
+      let result: TaskResult;
 
       switch (task.type) {
         case "FINANCIAL_ANALYSIS":
@@ -89,7 +89,7 @@ export class TaskService {
 
       await this.updateTaskStatus(taskId, "COMPLETED", result);
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       await this.updateTaskStatus(taskId, "FAILED", undefined, errorMessage);
       // throw error; // Don't throw to avoid crashing worker loop

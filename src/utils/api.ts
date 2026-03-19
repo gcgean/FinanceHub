@@ -21,7 +21,9 @@ function getBaseUrl() {
   return url?.trim() ? url.trim().replace(/\/$/, "") : "http://127.0.0.1:4000"
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export type ApiFetchInit = RequestInit & { responseType?: "blob" }
+
+export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T> {
   const base = getBaseUrl()
   const url = path.startsWith("http") ? path : `${base}${path.startsWith("/") ? "" : "/"}${path}`
 
@@ -47,7 +49,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const contentType = res.headers.get("content-type") || ""
   
   // Special handling for Blob/PDF
-  if (contentType.includes("application/pdf") || (init as any)?.responseType === 'blob') {
+  if (contentType.includes("application/pdf") || init?.responseType === "blob") {
     return await res.blob() as unknown as T;
   }
 

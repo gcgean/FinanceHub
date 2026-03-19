@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { aiApi, ChatMessage } from "@/api/ai";
+import { aiApi, ChatMessage, ChatSession } from "@/api/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -54,7 +54,7 @@ export function AIChat() {
     queryKey: ['ai-chat', activeChatId],
     queryFn: () => aiApi.getChat(activeChatId!),
     enabled: !!activeChatId,
-    refetchInterval: 5000, // Poll for updates occasionally
+    refetchInterval: 30000, // Poll for updates every 30s (messages handled optimistically)
   });
 
   // 5. Send Message Mutation
@@ -64,10 +64,10 @@ export function AIChat() {
     onMutate: async ({ chatId, content }) => {
       // Optimistic Update
       await queryClient.cancelQueries({ queryKey: ['ai-chat', chatId] });
-      const previousChat = queryClient.getQueryData(['ai-chat', chatId]);
+      const previousChat = queryClient.getQueryData<ChatSession>(['ai-chat', chatId]);
 
-      queryClient.setQueryData(['ai-chat', chatId], (old: any) => ({
-        ...old,
+      queryClient.setQueryData<ChatSession | undefined>(['ai-chat', chatId], (old) => ({
+        ...(old || { id: chatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
         messages: [
           ...(old?.messages || []),
           {
@@ -246,17 +246,25 @@ export function AIChat() {
 
       {/* Input */}
       <div className="p-4 border-t border-border">
-        <form 
+        <form
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
           className="flex gap-2"
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte sobre seu negócio..."
-            className="flex-1"
-            disabled={isTyping || !activeChatId}
-          />
+          <div className="flex-1 relative">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value.slice(0, 4000))}
+              placeholder="Pergunte sobre seu negócio..."
+              className="flex-1 w-full"
+              disabled={isTyping || !activeChatId}
+              maxLength={4000}
+            />
+            {input.length > 3800 && (
+              <span className="absolute right-2 bottom-[-18px] text-[10px] text-muted-foreground">
+                {input.length}/4000
+              </span>
+            )}
+          </div>
           <Button type="submit" size="icon" disabled={!input.trim() || isTyping || !activeChatId}>
             {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>

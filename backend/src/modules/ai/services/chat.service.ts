@@ -33,7 +33,35 @@ export class ChatService {
     }
   }
 
-  // ... createChat, listChats, getChat ...
+  async createChat(companyId: string, userId: string, title?: string, sectorId?: string) {
+    return prisma.aIChat.create({
+      data: {
+        companyId,
+        userId,
+        title: title ?? "Nova conversa",
+        sectorId: sectorId ?? null,
+      },
+    });
+  }
+
+  async listChats(companyId: string, userId: string) {
+    return prisma.aIChat.findMany({
+      where: { companyId, userId },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        _count: { select: { messages: true } },
+      },
+    });
+  }
+
+  async getChat(chatId: string, companyId: string, userId: string) {
+    return prisma.aIChat.findFirst({
+      where: { id: chatId, companyId, userId },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    });
+  }
 
   async sendMessage(chatId: string, companyId: string, userId: string, content: string) {
     // 1. Verify chat ownership

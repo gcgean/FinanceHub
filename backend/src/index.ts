@@ -46,6 +46,15 @@ export function buildApp() {
     logger: true,
   });
 
+  // Security headers on every response
+  app.addHook("onSend", async (_request, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("X-XSS-Protection", "1; mode=block");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  });
+
   app.setErrorHandler((error, request, reply) => {
     const maybeStatus = (error as { statusCode?: unknown }).statusCode;
     const isZod = typeof (error as { name?: unknown }).name === "string" && (error as { name: string }).name === "ZodError";
