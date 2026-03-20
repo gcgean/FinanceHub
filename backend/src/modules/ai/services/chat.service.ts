@@ -118,7 +118,7 @@ NOME DA EMPRESA ATUAL: ${empresaNome}
 DADOS FINANCEIROS REAIS DE ${empresaNome}:
 ${JSON.stringify(detailedData, null, 2)}
 
-Contexto recuperado da base de conhecimento:
+Contexto recuperado da base de conhecimento (IGNORE se não for sobre ${empresaNome}):
 ${contextString}
 
 REGRAS ESTRITAS:

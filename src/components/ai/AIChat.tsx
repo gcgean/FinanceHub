@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { aiApi, ChatMessage, ChatSession } from "@/api/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useAuthStore } from "@/stores/authStore";
 
 const suggestedQuestions = [
   "Qual a previsão de faturamento?",
@@ -19,13 +20,15 @@ const suggestedQuestions = [
 export function AIChat() {
   const [input, setInput] = useState('');
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const companyId = useAuthStore((s) => s.companyId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // 1. List Chats to find active session
   const { data: chats, isLoading: isLoadingChats } = useQuery({
-    queryKey: ['ai-chats'],
+    queryKey: ['ai-chats', companyId],
     queryFn: aiApi.listChats,
   });
 
@@ -33,25 +36,50 @@ export function AIChat() {
   const createChatMutation = useMutation({
     mutationFn: () => aiApi.createChat("Nova Conversa"),
     onSuccess: (newChat) => {
+      queryClient.setQueryData<ChatSession[] | undefined>(['ai-chats', companyId], (old) => {
+        const list = old || [];
+        return [newChat, ...list.filter((c) => c.id !== newChat.id)];
+      });
       setActiveChatId(newChat.id);
-      queryClient.invalidateQueries({ queryKey: ['ai-chats'] });
+      setIsClearingChat(false);
+      queryClient.invalidateQueries({ queryKey: ['ai-chats', companyId] });
+    },
+    onError: () => {
+      setIsClearingChat(false);
     },
   });
 
   // 3. Initialize Chat
   useEffect(() => {
-    if (!isLoadingChats && chats) {
-      if (chats.length > 0) {
-        setActiveChatId(chats[0].id);
-      } else if (!activeChatId && !createChatMutation.isPending) {
+    setActiveChatId(null);
+    queryClient.removeQueries({ queryKey: ['ai-chat'] });
+  }, [companyId, queryClient]);
+
+  useEffect(() => {
+    if (isLoadingChats || !chats) return;
+
+    if (chats.length === 0) {
+      if (!createChatMutation.isPending && !activeChatId) {
         createChatMutation.mutate();
       }
+      return;
     }
-  }, [chats, isLoadingChats, activeChatId, createChatMutation]);
+
+    if (!activeChatId) {
+      if (isClearingChat) return;
+      setActiveChatId(chats[0].id);
+      return;
+    }
+
+    if (chats.some((chat) => chat.id === activeChatId)) return;
+    if (isClearingChat) return;
+    if (createChatMutation.isPending) return;
+    setActiveChatId(chats[0].id);
+  }, [chats, isLoadingChats, activeChatId, createChatMutation.isPending, isClearingChat]);
 
   // 4. Fetch Messages for Active Chat
   const { data: chatSession, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ['ai-chat', activeChatId],
+    queryKey: ['ai-chat', companyId, activeChatId],
     queryFn: () => aiApi.getChat(activeChatId!),
     enabled: !!activeChatId,
     refetchInterval: 30000, // Poll for updates every 30s (messages handled optimistically)
@@ -63,10 +91,10 @@ export function AIChat() {
       aiApi.sendMessage(chatId, content),
     onMutate: async ({ chatId, content }) => {
       // Optimistic Update
-      await queryClient.cancelQueries({ queryKey: ['ai-chat', chatId] });
-      const previousChat = queryClient.getQueryData<ChatSession>(['ai-chat', chatId]);
+      await queryClient.cancelQueries({ queryKey: ['ai-chat', companyId, chatId] });
+      const previousChat = queryClient.getQueryData<ChatSession>(['ai-chat', companyId, chatId]);
 
-      queryClient.setQueryData<ChatSession | undefined>(['ai-chat', chatId], (old) => ({
+      queryClient.setQueryData<ChatSession | undefined>(['ai-chat', companyId, chatId], (old) => ({
         ...(old || { id: chatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
         messages: [
           ...(old?.messages || []),
@@ -82,7 +110,7 @@ export function AIChat() {
       return { previousChat };
     },
     onError: (err, newTodo, context) => {
-      queryClient.setQueryData(['ai-chat', activeChatId], context?.previousChat);
+      queryClient.setQueryData(['ai-chat', companyId, activeChatId], context?.previousChat);
       toast({
         title: "Erro ao enviar mensagem",
         description: "Tente novamente mais tarde.",
@@ -90,7 +118,7 @@ export function AIChat() {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-chat', activeChatId] });
+      queryClient.invalidateQueries({ queryKey: ['ai-chat', companyId, activeChatId] });
     },
   });
 
@@ -105,7 +133,7 @@ export function AIChat() {
     mutationFn: () => aiApi.generateExecutiveReport(),
     onSuccess: (data) => {
       if (activeChatId) {
-        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', activeChatId], (old) => ({
+        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', companyId, activeChatId], (old) => ({
           ...(old || { id: activeChatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
           messages: [
             ...(old?.messages || []),
@@ -131,7 +159,7 @@ export function AIChat() {
     mutationFn: () => aiApi.generateAlerts(),
     onSuccess: (data) => {
       if (activeChatId) {
-        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', activeChatId], (old) => ({
+        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', companyId, activeChatId], (old) => ({
           ...(old || { id: activeChatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
           messages: [
             ...(old?.messages || []),
@@ -161,7 +189,7 @@ export function AIChat() {
     sendMessageMutation.mutate({ chatId: activeChatId, content: messageText });
   };
 
-  const messages = chatSession?.messages || [];
+  const messages = isClearingChat ? [] : (chatSession?.messages || []);
   const isTyping = sendMessageMutation.isPending;
 
   // Função para renderizar conteúdo especial (como tasks)
@@ -247,11 +275,11 @@ export function AIChat() {
             variant="ghost" 
             size="sm"
             onClick={() => {
-              if (activeChatId) {
-                // Cria um chat totalmente novo em vez de apenas limpar a tela
-                createChatMutation.mutate();
-              }
+              setIsClearingChat(true);
+              setActiveChatId(null);
+              createChatMutation.mutate();
             }}
+            disabled={createChatMutation.isPending}
             className="text-muted-foreground hover:text-foreground"
           >
             Limpar

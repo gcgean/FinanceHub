@@ -4,6 +4,7 @@ import { insightsService } from "../services/insights.service";
 import { prisma } from "../../../lib/prisma";
 import { AIInsightStatus } from "@prisma/client";
 import { queueService } from "../services/queue.service";
+import { resolveCompanyId } from "../../../lib/company";
 
 const GenerateSnapshotSchema = z.object({
   date: z.string().datetime().optional(), // ISO String
@@ -26,7 +27,8 @@ const FeedbackSchema = z.object({
 
 export class InsightsController {
   async generateSnapshot(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const body = GenerateSnapshotSchema.parse((request.body ?? {}) as unknown);
 
     const date = body.date ? new Date(body.date) : new Date();
@@ -36,7 +38,8 @@ export class InsightsController {
   }
 
   async getHistory(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const query = GetHistorySchema.parse(request.query as unknown);
 
     const history = await insightsService.getMetricHistory(companyId, query.metricKey, query.days);
@@ -44,14 +47,16 @@ export class InsightsController {
   }
 
   async getContext(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     const context = await insightsService.getFinancialContext(companyId);
     return reply.send({ context });
   }
 
   async triggerAnalysis(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     
     // Enfileirar job ao invés de rodar direto
     const job = await queueService.addJob("INSIGHTS_GENERATION", { companyId });
@@ -64,7 +69,8 @@ export class InsightsController {
   }
 
   async listEvents(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const query = ListEventsSchema.parse(request.query as unknown);
 
     const events = await prisma.aIInsightEvent.findMany({
@@ -84,7 +90,9 @@ export class InsightsController {
 
   async saveFeedback(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };
-    const { sub: userId, companyId } = request.user as { sub: string, companyId: string };
+    const user = request.user as { sub: string; companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
     
     const body = FeedbackSchema.parse(request.body as unknown);
 
@@ -110,4 +118,3 @@ export class InsightsController {
 }
 
 export const insightsController = new InsightsController();
-

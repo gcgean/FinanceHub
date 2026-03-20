@@ -2,12 +2,14 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { reportService } from "../services/report.service";
 import { insightsService } from "../services/insights.service";
 import { ChatService } from "../services/chat.service";
+import { resolveCompanyId } from "../../../lib/company";
 
 const chatService = new ChatService();
 
 export class ReportController {
   async download(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     try {
       const buffer = await reportService.generateFinancialReport(companyId);
@@ -22,7 +24,8 @@ export class ReportController {
   }
 
   async generateExecutiveReport(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     try {
       const dadosCliente = await insightsService.getDetailedCompanyData(companyId);
@@ -56,7 +59,8 @@ Dados: ${JSON.stringify(dadosCliente, null, 2)}`;
   }
 
   async generateAlerts(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     try {
       const dadosCliente = await insightsService.getDetailedCompanyData(companyId);

@@ -2,8 +2,9 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../../lib/prisma";
 import { AIChannelType } from "@prisma/client";
+import { resolveCompanyId } from "../../../lib/company";
 
-type AuthUser = { sub: string; companyId: string };
+type AuthUser = { sub: string; companyId?: string; role?: string };
 
 const SaveChannelSchema = z.object({
   type: z.nativeEnum(AIChannelType),
@@ -20,12 +21,15 @@ export class NotificationController {
    * Lista notificações In-App do usuário logado
    */
   async getMyNotifications(request: FastifyRequest, reply: FastifyReply) {
-    const { sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
 
     const notifications = await prisma.aIInsightRecipient.findMany({
       where: {
         userId,
         channelType: "IN_APP",
+        insightEvent: { companyId },
       },
       include: {
         insightEvent: true,
@@ -46,7 +50,9 @@ export class NotificationController {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    const { sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
     const { id } = request.params;
 
     // Verificar se pertence ao usuário
@@ -54,7 +60,7 @@ export class NotificationController {
       where: { id },
     });
 
-    if (!recipient || recipient.userId !== userId) {
+    if (!recipient || recipient.userId !== userId || recipient.companyId !== companyId) {
       return reply.status(404).send({ error: "Notificação não encontrada" });
     }
 
@@ -72,10 +78,13 @@ export class NotificationController {
    * Marca todas as notificações In-App do usuário como lidas
    */
   async markAllAsRead(request: FastifyRequest, reply: FastifyReply) {
-    const { sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
 
     await prisma.aIInsightRecipient.updateMany({
       where: {
+        companyId,
         userId,
         channelType: "IN_APP",
         readAt: null,
@@ -96,7 +105,9 @@ export class NotificationController {
    * Lista canais de notificação configurados do usuário logado
    */
   async getMyChannels(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId, sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
 
     const channels = await prisma.aINotificationChannel.findMany({
       where: {
@@ -115,7 +126,9 @@ export class NotificationController {
     request: FastifyRequest,
     reply: FastifyReply
   ) {
-    const { companyId, sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
     const parsed = SaveChannelSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: "INVALID_PAYLOAD" });
@@ -159,7 +172,9 @@ export class NotificationController {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    const { companyId, sub: userId } = request.user as AuthUser;
+    const user = request.user as AuthUser;
+    const companyId = await resolveCompanyId(request);
+    const { sub: userId } = user;
     const { id } = request.params;
 
     const channel = await prisma.aINotificationChannel.findUnique({

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { OpenAIProvider } from "../providers/openai.provider";
 import { AnthropicProvider } from "../providers/anthropic.provider";
 import { GeminiProvider } from "../providers/gemini.provider";
+import { resolveCompanyId } from "../../../lib/company";
 
 const UpdateProfileSchema = z.object({
   tone: z.enum(["formal", "casual", "technical"]).optional(),
@@ -17,7 +18,8 @@ const UpdateProfileSchema = z.object({
 
 export class AIProfileController {
   async getProfile(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     let profile = await prisma.aIProfile.findUnique({
       where: { companyId }
@@ -44,7 +46,8 @@ export class AIProfileController {
   }
 
   async updateProfile(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
 
     const { aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, ...body } = UpdateProfileSchema.parse(request.body as unknown);
 

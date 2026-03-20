@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { memoryService } from "../services/memory.service";
 import { CreateMemoryDTO } from "../types";
+import { resolveCompanyId } from "../../../lib/company";
 
 // Schema validation
 const createMemorySchema = z.object({
@@ -28,7 +29,8 @@ const searchMemorySchema = z.object({
 
 export class MemoryController {
   async create(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const body = createMemorySchema.parse(request.body);
 
     const memory = await memoryService.createMemory(companyId, {
@@ -40,7 +42,8 @@ export class MemoryController {
   }
 
   async update(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const { id } = request.params as { id: string };
     const body = updateMemorySchema.parse(request.body);
 
@@ -53,7 +56,8 @@ export class MemoryController {
   }
 
   async delete(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const { id } = request.params as { id: string };
 
     await memoryService.deleteMemory(id, companyId);
@@ -61,7 +65,8 @@ export class MemoryController {
   }
 
   async list(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const { page, limit } = request.query as { page?: number; limit?: number };
 
     const result = await memoryService.listMemories(companyId, Number(page) || 1, Number(limit) || 20);
@@ -69,7 +74,8 @@ export class MemoryController {
   }
 
   async search(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const query = searchMemorySchema.parse(request.query);
 
     const result = await memoryService.searchMemories(companyId, {

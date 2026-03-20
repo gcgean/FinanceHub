@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { taskService } from "../services/task.service";
+import { resolveCompanyId } from "../../../lib/company";
 
 const CreateTaskSchema = z.object({
   type: z.string().min(1),
@@ -9,7 +10,8 @@ const CreateTaskSchema = z.object({
 
 export class TaskController {
   async create(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const body = CreateTaskSchema.parse(request.body);
 
     const task = await taskService.createTask(companyId, body);
@@ -38,7 +40,8 @@ export class TaskController {
   }
 
   async list(request: FastifyRequest, reply: FastifyReply) {
-    const { companyId } = request.user as { companyId: string };
+    const user = request.user as { companyId?: string; role?: string };
+    const companyId = await resolveCompanyId(request);
     const tasks = await taskService.listTasks(companyId);
     return reply.send(tasks);
   }
