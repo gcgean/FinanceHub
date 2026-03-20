@@ -1330,22 +1330,22 @@ begin
   try
     QCount.Connection := FDB;
     try
-      QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM VENDEDOR';
+      QCount.SQL.Text := 'SELECT COUNT(*) AS CNT FROM USUARIO';
       QCount.Open;
       LTotal := QCount.FieldByName('CNT').AsInteger;
     except
       on E: Exception do
       begin
-        Log('Tabela VENDEDOR não encontrada: ' + E.Message);
+        Log('Tabela USUARIO não encontrada: ' + E.Message);
         Exit;
       end;
     end;
 
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT * FROM VENDEDOR';
+    Q.SQL.Text := 'SELECT * FROM USUARIO';
     Q.Open;
-    LCodeField := FindFieldByNames(Q, ['COD_VEND', 'COD_VEN', 'CODIGO', 'COD_USU', 'ID_VEND', 'ID']);
-    LNameField := FindFieldByNames(Q, ['NOME_VEND', 'NOME', 'DESCRICAO', 'APELIDO', 'VENDEDOR']);
+    LCodeField := FindFieldByNames(Q, ['COD_USU', 'COD_VEND', 'COD_VEN', 'CODIGO', 'ID_VEND', 'ID']);
+    LNameField := FindFieldByNames(Q, ['NOME_USU', 'NOME_VEND', 'NOME', 'DESCRICAO', 'APELIDO', 'VENDEDOR']);
     LActiveField := FindFieldByNames(Q, ['ATIVO', 'ATIVO_VEND', 'STATUS', 'SITUACAO']);
 
     Log(Format('Vendedores encontrados: %d', [LTotal]));

@@ -20,7 +20,206 @@ const DreBody = z.object({
   dateTo: z.string().min(1),
 });
 
+const SalesReportQuery = z.object({
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  sellerId: z.string().optional(),
+  customerId: z.string().optional(),
+  status: z.string().optional(),
+});
+
 export async function reportsRoutes(app: FastifyInstance) {
+  app.get(
+    "/sales",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const q = parseQuery(SalesReportQuery, request.query);
+
+      const where: Prisma.SaleWhereInput = {
+        companyId,
+        ...(q.dateFrom || q.dateTo
+          ? {
+              date: {
+                ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
+                ...(q.dateTo ? { lte: new Date(q.dateTo) } : {}),
+              },
+            }
+          : {}),
+        ...(q.sellerId ? { sellerId: q.sellerId } : {}),
+        ...(q.customerId ? { customerId: q.customerId } : {}),
+        ...(q.status 
+            ? (q.status === 'FINALIZADA' 
+                ? {
+                    OR: [
+                      { status: null },
+                      { status: '' },
+                      { status: 'FINALIZADA' },
+                      { status: 'OK' }
+                    ]
+                  }
+                : { status: q.status }) 
+            : {}),
+      };
+
+      const sales = await prisma.sale.findMany({
+        where,
+        orderBy: { date: "asc" },
+        include: {
+          customer: { select: { name: true, externalId: true, city: true } },
+          seller: { select: { name: true } },
+          cashier: { select: { name: true } },
+          paymentMethod: { select: { name: true } },
+        },
+      });
+
+      let totalBruto = 0;
+      let totalDevolvido = 0;
+      let qty = 0;
+
+      const items = sales.map((sale) => {
+        // Here we simulate the logic from Delphi
+        // We'll consider CANCELADA_VEN = status 'CANCELADA'
+        const isCanceled = sale.status === 'CANCELADA';
+        const isDevolvido = sale.status === 'DEVOLVIDA'; // If we have this status
+        
+        const valorLiquido = sale.total;
+        
+        if (!isCanceled && !isDevolvido) {
+          totalBruto += valorLiquido;
+          qty += 1;
+        } else if (isDevolvido) {
+          totalDevolvido += valorLiquido;
+        }
+
+        return {
+          id: sale.id,
+          externalId: sale.externalId,
+          date: sale.date,
+          customerName: sale.customer?.name ?? "Consumidor Final",
+          customerCity: sale.customer?.city ?? "",
+          sellerName: sale.seller?.name ?? "Sem Vendedor",
+          cashierName: sale.cashier?.name ?? "",
+          paymentMethod: sale.paymentMethod?.name ?? "",
+          status: sale.status ?? "FINALIZADA",
+          totalBruto: valorLiquido, // Assuming sale.total is the gross before devolution, but for simplicity
+          totalDevolvido: isDevolvido ? valorLiquido : 0,
+          totalLiquido: isDevolvido || isCanceled ? 0 : valorLiquido,
+        };
+      });
+
+      const totalLiquido = totalBruto - totalDevolvido;
+      const ticketMedio = qty > 0 ? totalLiquido / qty : 0;
+
+      return {
+        items,
+        totals: {
+          qty,
+          bruto: totalBruto,
+          devolvido: totalDevolvido,
+          liquido: totalLiquido,
+          ticket_medio: ticketMedio,
+        },
+      };
+    }
+  );
+
+  app.get(
+    "/sales-by-payment-method",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const q = parseQuery(SalesReportQuery, request.query);
+
+      const where: Prisma.SaleWhereInput = {
+        companyId,
+        ...(q.dateFrom || q.dateTo
+          ? {
+              date: {
+                ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
+                ...(q.dateTo ? { lte: new Date(q.dateTo) } : {}),
+              },
+            }
+          : {}),
+        ...(q.sellerId ? { sellerId: q.sellerId } : {}),
+        ...(q.customerId ? { customerId: q.customerId } : {}),
+        ...(q.status 
+            ? (q.status === 'FINALIZADA' 
+                ? {
+                    OR: [
+                      { status: null },
+                      { status: '' },
+                      { status: 'FINALIZADA' },
+                      { status: 'OK' }
+                    ]
+                  }
+                : { status: q.status }) 
+            : {}),
+      };
+
+      const sales = await prisma.sale.findMany({
+        where,
+        select: {
+          total: true,
+          status: true,
+          paymentMethod: { select: { id: true, name: true, externalId: true } },
+          payments: {
+            include: {
+              paymentMethod: { select: { id: true, name: true, externalId: true } }
+            }
+          }
+        }
+      });
+
+      const grouped: Record<string, { id: string; name: string; qty: number; total: number }> = {};
+      let grandTotal = 0;
+
+      for (const sale of sales) {
+        if (q.status !== 'CANCELADA' && sale.status === 'CANCELADA') continue;
+
+        if (sale.payments && sale.payments.length > 0) {
+          for (const payment of sale.payments) {
+            const pmName = payment.paymentMethod?.name || "NÃO INFORMADO";
+            if (pmName.toUpperCase() === 'TROCO') continue; // Ignora o Troco
+
+            const pmId = payment.paymentMethod?.id || payment.externalPaymentMethodId || "none";
+            
+            if (!grouped[pmId]) {
+              grouped[pmId] = { id: payment.paymentMethod?.externalId || pmId, name: pmName, qty: 0, total: 0 };
+            }
+            grouped[pmId].qty += 1;
+            grouped[pmId].total += payment.amount;
+            grandTotal += payment.amount;
+          }
+        } else {
+          // Fallback para vendas antigas que só tem o paymentMethodId na raiz
+          const pmName = sale.paymentMethod?.name || "NÃO INFORMADO";
+          if (pmName.toUpperCase() === 'TROCO') continue; // Ignora o Troco
+
+          const pmId = sale.paymentMethod?.id || "none";
+
+          if (!grouped[pmId]) {
+            grouped[pmId] = { id: sale.paymentMethod?.externalId || pmId, name: pmName, qty: 0, total: 0 };
+          }
+
+          grouped[pmId].qty += 1;
+          grouped[pmId].total += sale.total;
+          grandTotal += sale.total;
+        }
+      }
+
+      const items = Object.values(grouped).map(item => ({
+        ...item,
+        percentage: grandTotal > 0 ? (item.total / grandTotal) * 100 : 0
+      })).sort((a, b) => b.total - a.total); // Sort by total descending
+
+      return {
+        items,
+        grandTotal
+      };
+    }
+  );
+
   app.get(
     "/statement",
     { preHandler: [requireAuth(app), requireCompanyScope()] },

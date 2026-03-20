@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Brain } from "lucide-react";
 
@@ -16,6 +17,12 @@ export function AIProfileTab() {
   const [tone, setTone] = useState("formal");
   const [level, setLevel] = useState("summary");
   const [segment, setSegment] = useState("GENERIC");
+  const [aiProvider, setAiProvider] = useState("openai");
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+
+  const [isTesting, setIsTesting] = useState(false);
 
   // Fetch current profile
   const { data: profile, isLoading } = useQuery({
@@ -29,6 +36,10 @@ export function AIProfileTab() {
       setTone(profile.tone);
       setLevel(profile.level);
       setSegment(profile.segment || "GENERIC");
+      setAiProvider(profile.aiProvider || "openai");
+      setOpenaiApiKey(profile.openaiApiKey || "");
+      setAnthropicApiKey(profile.anthropicApiKey || "");
+      setGeminiApiKey(profile.geminiApiKey || "");
     }
   }, [profile]);
 
@@ -44,7 +55,33 @@ export function AIProfileTab() {
   });
 
   const handleSave = () => {
-    updateMutation.mutate({ tone, level, segment });
+    updateMutation.mutate({ tone, level, segment, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey });
+  };
+
+  const handleTestConnection = async () => {
+    let keyToTest = "";
+    if (aiProvider === "openai") keyToTest = openaiApiKey;
+    if (aiProvider === "anthropic") keyToTest = anthropicApiKey;
+    if (aiProvider === "gemini") keyToTest = geminiApiKey;
+
+    if (!keyToTest) {
+      toast({ title: "Por favor, insira uma chave para testar.", variant: "destructive" });
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const result = await aiApi.testConnection(aiProvider, keyToTest);
+      if (result.success) {
+        toast({ title: "Conexão bem sucedida!", description: result.message });
+      } else {
+        toast({ title: "Falha na conexão", description: result.message, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Erro ao testar conexão", description: error.message || "Erro desconhecido", variant: "destructive" });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   if (isLoading) {
@@ -116,7 +153,73 @@ export function AIProfileTab() {
           </p>
         </div>
 
-        <div className="pt-4 flex justify-end">
+        <div className="space-y-2 pt-4 border-t">
+          <Label>Provedor de IA Principal</Label>
+          <Select value={aiProvider} onValueChange={setAiProvider}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o provedor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>
+              <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+              <SelectItem value="gemini">Google (Gemini)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Selecione qual inteligência artificial o sistema deve usar como principal.
+          </p>
+        </div>
+
+        {aiProvider === 'openai' && (
+          <div className="space-y-2">
+            <Label>Chave de API (OpenAI)</Label>
+            <Input 
+              type="password" 
+              placeholder="sk-..." 
+              value={openaiApiKey}
+              onChange={(e) => setOpenaiApiKey(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Insira sua chave de API da OpenAI. Deixe em branco para usar a chave padrão do servidor.
+            </p>
+          </div>
+        )}
+
+        {aiProvider === 'anthropic' && (
+          <div className="space-y-2">
+            <Label>Chave de API (Anthropic Claude)</Label>
+            <Input 
+              type="password" 
+              placeholder="sk-ant-..." 
+              value={anthropicApiKey}
+              onChange={(e) => setAnthropicApiKey(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Insira sua chave de API da Anthropic. Deixe em branco para usar a chave padrão do servidor.
+            </p>
+          </div>
+        )}
+
+        {aiProvider === 'gemini' && (
+          <div className="space-y-2">
+            <Label>Chave de API (Google Gemini)</Label>
+            <Input 
+              type="password" 
+              placeholder="AIza..." 
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Insira sua chave de API do Google Gemini. Deixe em branco para usar a chave padrão do servidor.
+            </p>
+          </div>
+        )}
+
+        <div className="pt-4 flex justify-between items-center border-t mt-4">
+          <Button type="button" variant="outline" onClick={handleTestConnection} disabled={isTesting}>
+            {isTesting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Testar Conexão
+          </Button>
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
             {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Salvar Preferências

@@ -32,6 +32,7 @@ export async function aiModuleRoutes(app: FastifyInstance) {
   // Rotas de Perfil
   app.get("/profile", aiProfileController.getProfile);
   app.put("/profile", aiProfileController.updateProfile);
+  app.post("/profile/test-connection", aiProfileController.testConnection);
 
   // Rotas de Memória
   app.post("/memories", memoryController.create);
@@ -54,8 +55,10 @@ export async function aiModuleRoutes(app: FastifyInstance) {
   app.get("/insights/events", insightsController.listEvents);
   app.post("/insights/:id/feedback", insightsController.saveFeedback);
 
-  // Rotas de Relatórios (Fase 11)
+  // Rotas de Relatórios (Fase 11 e Integração Executiva)
   app.get("/reports/financial", reportController.download);
+  app.post("/reports/executive", reportController.generateExecutiveReport);
+  app.post("/alerts", reportController.generateAlerts);
 
   // Rotas de Tarefas Autônomas (Fase 7)
   app.post("/tasks", taskController.create);

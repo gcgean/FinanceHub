@@ -249,48 +249,8 @@ export async function salesRoutes(app: FastifyInstance) {
                 paymentMethodId,
                 sellerId,
                 cashierId,
-                items: {
-                  create: await Promise.all(
-                    items.map(async (item) => ({
-                      productId: await resolveProductId(item),
-                      description: item.description,
-                      quantity: item.quantity,
-                      unitPrice: item.unitPrice,
-                      totalPrice: item.quantity * item.unitPrice,
-                      externalId: item.id ?? null,
-                    }))
-                  ),
-                },
-                payments: {
-                  create: await Promise.all(
-                    payments.map(async (payment) => {
-                      let paymentMethodIdResolved = payment.paymentMethodId ?? null;
-                      if (!paymentMethodIdResolved && payment.paymentMethodExternalId) {
-                        const existingPm = await tx.paymentMethod.findFirst({
-                          where: { companyId, externalId: payment.paymentMethodExternalId },
-                        });
-                        if (existingPm) {
-                          paymentMethodIdResolved = existingPm.id;
-                        } else {
-                          const created = await tx.paymentMethod.create({
-                            data: {
-                              companyId,
-                              externalId: payment.paymentMethodExternalId,
-                              name: payment.paymentMethodName ?? payment.paymentMethodExternalId,
-                              enabled: true,
-                            },
-                          });
-                          paymentMethodIdResolved = created.id;
-                        }
-                      }
-                      return {
-                        paymentMethodId: paymentMethodIdResolved,
-                        externalPaymentMethodId: payment.paymentMethodExternalId ?? null,
-                        amount: payment.amount,
-                      };
-                    })
-                  ),
-                },
+                items: saleData.items,
+                payments: saleData.payments,
               },
               include: { items: true, payments: { include: { paymentMethod: true } } },
             });

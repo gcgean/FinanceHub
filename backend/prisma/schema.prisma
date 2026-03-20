@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
@@ -121,6 +121,17 @@ model Company {
   plan      CompanyPlan   @default(PROFESSIONAL)
   status    CompanyStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
+
+  aiPersona       String?
+  aiDetailLevel   String?
+  aiBusinessFocus String?
+  
+  // Chaves de IA configuradas pelo cliente
+  aiProvider      String? @default("openai") // openai, anthropic, gemini
+  openaiApiKey    String? 
+  anthropicApiKey String?
+  geminiApiKey    String?
+
   users     User[]
   txs       Transaction[]
   pendings  Pendency[]
@@ -212,9 +223,9 @@ model User {
   requestedImportJobs ImportJob[]  @relation("UserRequestedJobs")
   importFilesUploaded ImportFile[]
 
-  aiChats             AIChat[]
-  aiInsightRecipients AIInsightRecipient[]
-  aiInsightFeedback   AIInsightFeedback[]
+  aiChats              AIChat[]
+  aiInsightRecipients  AIInsightRecipient[]
+  aiInsightFeedback    AIInsightFeedback[]
   notificationChannels AINotificationChannel[]
 }
 
@@ -1044,7 +1055,7 @@ model Sale {
   cashierId       String?
   cashier         Cashier?       @relation(fields: [cashierId], references: [id])
   date            DateTime
-  total           Float
+  total           Float          @default(0)
   status          String?
   paymentMethodId String?
   paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
@@ -1107,31 +1118,31 @@ model AISector {
 }
 
 model AIMemory {
-  id         String    @id @default(cuid())
+  id         String                       @id @default(cuid())
   companyId  String
-  company    Company   @relation(fields: [companyId], references: [id])
+  company    Company                      @relation(fields: [companyId], references: [id])
   sectorId   String?
-  sector     AISector? @relation(fields: [sectorId], references: [id])
+  sector     AISector?                    @relation(fields: [sectorId], references: [id])
   content    String
   tags       String[]
-  embedding  Unsupported("vector(1536)")? 
+  embedding  Unsupported("vector(1536)")?
   validUntil DateTime?
-  confidence Float     @default(1.0)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  confidence Float                        @default(1.0)
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
 
   @@index([companyId])
 }
 
 model AIDocument {
-  id        String   @id @default(cuid())
+  id        String                       @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company                      @relation(fields: [companyId], references: [id])
   filename  String
   content   String
   summary   String?
   embedding Unsupported("vector(1536)")?
-  createdAt DateTime @default(now())
+  createdAt DateTime                     @default(now())
 
   @@index([companyId])
 }
@@ -1251,7 +1262,7 @@ model SalePayment {
   paymentMethodId         String?
   paymentMethod           PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
   externalPaymentMethodId String?
-  amount                  Float
+  amount                  Float          @default(0)
   createdAt               DateTime       @default(now())
 
   @@index([saleId])
@@ -1350,8 +1361,8 @@ model AIInsightEvent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  recipients AIInsightRecipient[]
-  feedback   AIInsightFeedback[]
+  recipients       AIInsightRecipient[]
+  feedback         AIInsightFeedback[]
   notificationLogs AINotificationLog[]
 
   @@index([companyId, status])
@@ -1403,19 +1414,19 @@ enum JobStatus {
 
 model BackgroundJob {
   id          String    @id @default(cuid())
-  queue       String    // e.g. "INSIGHTS_GENERATION", "REPORT_GENERATION"
-  payload     String    // JSON
+  queue       String // e.g. "INSIGHTS_GENERATION", "REPORT_GENERATION"
+  payload     String // JSON
   status      JobStatus @default(PENDING)
   attempts    Int       @default(0)
   maxAttempts Int       @default(3)
   lastError   String?
   runAt       DateTime  @default(now())
-  
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([queue, status, runAt])
 }
@@ -1423,36 +1434,36 @@ model BackgroundJob {
 // --- Notification Module ---
 
 model AINotificationChannel {
-  id          String        @id @default(cuid())
-  companyId   String
-  company     Company       @relation(fields: [companyId], references: [id])
-  userId      String?
-  user        User?         @relation(fields: [userId], references: [id])
-  
-  type        AIChannelType
-  target      String        // email address, phone number, chat_id
-  enabled     Boolean       @default(true)
-  
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id])
+
+  type    AIChannelType
+  target  String // email address, phone number, chat_id
+  enabled Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId, userId])
 }
 
 model AINotificationLog {
-  id              String         @id @default(cuid())
-  companyId       String
-  company         Company        @relation(fields: [companyId], references: [id])
-  insightEventId  String
-  insightEvent    AIInsightEvent @relation(fields: [insightEventId], references: [id])
-  
-  channelType     AIChannelType
-  target          String
-  status          String         // SENT, FAILED, PENDING
-  providerResponse String?       // JSON response from provider
-  
-  attemptedAt     DateTime       @default(now())
-  deliveredAt     DateTime?
+  id             String         @id @default(cuid())
+  companyId      String
+  company        Company        @relation(fields: [companyId], references: [id])
+  insightEventId String
+  insightEvent   AIInsightEvent @relation(fields: [insightEventId], references: [id])
+
+  channelType      AIChannelType
+  target           String
+  status           String // SENT, FAILED, PENDING
+  providerResponse String? // JSON response from provider
+
+  attemptedAt DateTime  @default(now())
+  deliveredAt DateTime?
 
   @@index([companyId, insightEventId])
 }

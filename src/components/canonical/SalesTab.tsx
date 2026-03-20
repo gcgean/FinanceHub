@@ -143,7 +143,11 @@ export function SalesTab() {
                                 <TableRow key={sale.id}>
                                     <TableCell>{new Date(sale.date).toLocaleDateString('pt-BR')}</TableCell>
                                     <TableCell>{sale.customer?.name ?? "—"}</TableCell>
-                                    <TableCell>{sale.paymentMethod?.name ?? "—"}</TableCell>
+                                    <TableCell>
+                                      {sale.payments?.length > 0 
+                                        ? sale.payments.map(p => `${p.paymentMethod?.name ?? 'Não informado'} (${p.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`).join(', ')
+                                        : sale.paymentMethod?.name ?? "—"}
+                                    </TableCell>
                                     <TableCell>{sale.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                                     <TableCell>{sale.status}</TableCell>
                                     <TableCell>

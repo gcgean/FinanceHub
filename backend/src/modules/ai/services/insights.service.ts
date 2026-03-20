@@ -302,6 +302,69 @@ export class InsightsService {
    * Gera insights textuais baseados nos snapshots recentes.
    * Útil para injetar no contexto do Chat.
    */
+  async getDetailedCompanyData(companyId: string) {
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) return null;
+
+    const threeMonthsAgo = subDays(new Date(), 90);
+
+    // Vendas dos últimos 3 meses
+    const sales = await prisma.sale.findMany({
+      where: {
+        companyId,
+        date: { gte: threeMonthsAgo },
+        status: { notIn: ["CANCELADA", "DEVOLVIDA"] }
+      }
+    });
+
+    let totalRevenue3m = 0;
+    let currentMonthRevenue = 0;
+    let lastMonthRevenue = 0;
+    let twoMonthsAgoRevenue = 0;
+    
+    const now = new Date();
+    const currentMonth = now.getMonth();
+
+    const uniqueCustomers = new Set<string>();
+
+    for (const sale of sales) {
+      totalRevenue3m += sale.total;
+      if (sale.customerId) uniqueCustomers.add(sale.customerId);
+
+      const saleMonth = sale.date.getMonth();
+      if (saleMonth === currentMonth) {
+        currentMonthRevenue += sale.total;
+      } else if (saleMonth === (currentMonth === 0 ? 11 : currentMonth - 1)) {
+        lastMonthRevenue += sale.total;
+      } else {
+        twoMonthsAgoRevenue += sale.total;
+      }
+    }
+
+    const ticketMedio = sales.length > 0 ? totalRevenue3m / sales.length : 0;
+    const metaTrimestral = 150000; // Mockado (pode vir de tabela Meta no futuro)
+    const nps = 85; // Mockado
+    const inadimplenciaPct = 2.5; // Mockado (pode ser calculado via titulos em aberto vs pagos)
+
+    return {
+      nome: company.name,
+      setor: company.aiBusinessFocus || "Geral",
+      faturamento: {
+        mes_atual: currentMonthRevenue,
+        mes_anterior: lastMonthRevenue,
+        dois_meses_atras: twoMonthsAgoRevenue,
+        total_trimestre: totalRevenue3m,
+        meta_trimestral: metaTrimestral
+      },
+      indicadores: {
+        ticket_medio: ticketMedio,
+        clientes_ativos: uniqueCustomers.size,
+        inadimplencia_pct: inadimplenciaPct,
+        nps: nps
+      }
+    };
+  }
+
   async getFinancialContext(companyId: string): Promise<string> {
     const revenueHistory = await this.getMetricHistory(companyId, "revenue", 7);
     const expenseHistory = await this.getMetricHistory(companyId, "expense", 7);

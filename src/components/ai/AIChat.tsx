@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Sparkles, Loader2, Play, CheckCircle2 } from "lucide-react";
+import { Send, Bot, User, Sparkles, Loader2, Play, FileText, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,9 +11,9 @@ import { Badge } from "@/components/ui/badge";
 
 const suggestedQuestions = [
   "Qual a previsão de faturamento?",
-  "Faça uma análise profunda",
-  "Categorizar lançamentos",
-  "Como está a saúde financeira da empresa?",
+  "Quais são os riscos?",
+  "Compare com a meta",
+  "Recomendações estratégicas"
 ];
 
 export function AIChat() {
@@ -101,6 +101,58 @@ export function AIChat() {
     }
   }, [chatSession?.messages, sendMessageMutation.isPending]);
 
+  const generateReportMutation = useMutation({
+    mutationFn: () => aiApi.generateExecutiveReport(),
+    onSuccess: (data) => {
+      if (activeChatId) {
+        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', activeChatId], (old) => ({
+          ...(old || { id: activeChatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
+          messages: [
+            ...(old?.messages || []),
+            {
+              id: 'temp-' + Date.now(),
+              role: 'user',
+              content: "Gerar relatório executivo",
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'temp-res-' + Date.now(),
+              role: 'assistant',
+              content: data.relatorio,
+              createdAt: new Date().toISOString(),
+            }
+          ],
+        }));
+      }
+    }
+  });
+
+  const generateAlertsMutation = useMutation({
+    mutationFn: () => aiApi.generateAlerts(),
+    onSuccess: (data) => {
+      if (activeChatId) {
+        queryClient.setQueryData<ChatSession | undefined>(['ai-chat', activeChatId], (old) => ({
+          ...(old || { id: activeChatId, title: "Nova Conversa", updatedAt: new Date().toISOString(), messages: [] }),
+          messages: [
+            ...(old?.messages || []),
+            {
+              id: 'temp-' + Date.now(),
+              role: 'user',
+              content: "Ver alertas críticos",
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'temp-res-' + Date.now(),
+              role: 'assistant',
+              content: data.alertas,
+              createdAt: new Date().toISOString(),
+            }
+          ],
+        }));
+      }
+    }
+  });
+
   const handleSend = (text?: string) => {
     const messageText = text || input;
     if (!messageText.trim() || !activeChatId) return;
@@ -154,15 +206,56 @@ export function AIChat() {
   return (
     <div className="flex flex-col h-[600px] rounded-xl border border-border bg-card overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-          <Sparkles className="w-5 h-5 text-primary" />
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Assistente IA Financeiro</h3>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <p className="text-xs text-muted-foreground">
+                {isLoadingChats ? "Carregando..." : activeChatId ? "Online" : "Iniciando..."}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-foreground">Assistente IA Financeiro</h3>
-          <p className="text-xs text-muted-foreground">
-            {isLoadingChats ? "Carregando..." : activeChatId ? "Conectado" : "Iniciando..."}
-          </p>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => generateReportMutation.mutate()}
+            disabled={generateReportMutation.isPending || isTyping}
+          >
+            {generateReportMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+            Gerar Relatório
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => generateAlertsMutation.mutate()}
+            disabled={generateAlertsMutation.isPending || isTyping}
+          >
+            {generateAlertsMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+            Ver Alertas
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => {
+              if (activeChatId) {
+                // Cria um chat totalmente novo em vez de apenas limpar a tela
+                createChatMutation.mutate();
+              }
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Limpar
+          </Button>
         </div>
       </div>
 
@@ -211,15 +304,13 @@ export function AIChat() {
           
           {isTyping && (
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <Bot className="w-4 h-4 text-primary" />
               </div>
-              <div className="bg-muted rounded-2xl px-4 py-3">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
+              <div className="bg-muted text-foreground max-w-[80%] rounded-2xl px-4 py-3 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></span>
               </div>
             </div>
           )}

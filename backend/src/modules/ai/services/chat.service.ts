@@ -19,18 +19,28 @@ class FallbackProvider implements LLMProvider {
 }
 
 export class ChatService {
-  private llmProvider: LLMProvider;
-  
-  constructor() {
-    if (env.OPENAI_API_KEY) {
-      this.llmProvider = new OpenAIProvider(env.OPENAI_API_KEY);
-    } else if (env.ANTHROPIC_API_KEY) {
-      this.llmProvider = new AnthropicProvider(env.ANTHROPIC_API_KEY);
-    } else if (env.GEMINI_API_KEY) {
-      this.llmProvider = new GeminiProvider(env.GEMINI_API_KEY);
-    } else {
-      this.llmProvider = new FallbackProvider();
+  public async getProvider(companyId: string): Promise<LLMProvider> {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { aiProvider: true, openaiApiKey: true, anthropicApiKey: true, geminiApiKey: true }
+    });
+
+    const providerName = company?.aiProvider || "openai";
+    
+    // Tenta usar a chave da empresa para o provedor escolhido. Se não tiver, cai pro .env
+    if (providerName === "anthropic") {
+      const key = company?.anthropicApiKey || env.ANTHROPIC_API_KEY;
+      if (key) return new AnthropicProvider(key);
+    } else if (providerName === "gemini") {
+      const key = company?.geminiApiKey || env.GEMINI_API_KEY;
+      if (key) return new GeminiProvider(key);
     }
+    
+    // Default: OpenAI
+    const key = company?.openaiApiKey || env.OPENAI_API_KEY;
+    if (key) return new OpenAIProvider(key);
+
+    return new FallbackProvider();
   }
 
   async createChat(companyId: string, userId: string, title?: string, sectorId?: string) {
@@ -81,34 +91,42 @@ export class ChatService {
     });
 
     // 3. Retrieve Context (RAG + Financial Insights)
-    const [memories, financialContext] = await Promise.all([
+    const [memories, detailedData] = await Promise.all([
       memoryService.searchMemories(companyId, {
         query: content,
         limit: 3,
       }),
-      insightsService.getFinancialContext(companyId),
+      insightsService.getDetailedCompanyData(companyId),
     ]);
 
     const contextString = memories.map((m) => `- ${m.content}`).join("\n");
 
-    // 4. Build Prompt with Agentic Capabilities
-    const systemPrompt = `Você é um assistente financeiro inteligente do FinanceHub.
-    Seu objetivo é ajudar com dúvidas financeiras, análise de dados e operação do sistema.
-    
-    CAPACIDADES AUTÔNOMAS:
-    Se o usuário solicitar uma "análise profunda", "relatório completo" ou "verificação de saúde financeira", você DEVE responder APENAS com o seguinte JSON (sem markdown):
-    { "action": "CREATE_TASK", "type": "FINANCIAL_ANALYSIS", "reason": "Solicitação do usuário" }
-    
-    Se o usuário solicitar "categorizar lançamentos", "arrumar categorias" ou similar, você DEVE responder APENAS com:
-    { "action": "CREATE_TASK", "type": "CATEGORIZATION", "reason": "Solicitação do usuário" }
+    const empresaNome = detailedData?.nome || "Empresa Desconhecida";
 
-    Contexto Financeiro Atual:
-    ${financialContext}
-    
-    Contexto recuperado da base de conhecimento:
-    ${contextString}
-    
-    Para perguntas normais, responda de forma concisa e profissional.`;
+    console.log("=== INJETANDO DADOS NO PROMPT ===");
+    console.log("Empresa:", empresaNome);
+    console.log(JSON.stringify(detailedData, null, 2));
+    console.log("=================================");
+
+    // 4. Build System Prompt
+    const systemPrompt = `Você é o Assistente IA do FinanceHub. 
+Sua tarefa é analisar os dados financeiros e responder as perguntas APENAS baseadas nos dados fornecidos abaixo.
+NUNCA invente dados e NUNCA assuma que está falando de outra empresa. 
+
+NOME DA EMPRESA ATUAL: ${empresaNome}
+
+DADOS FINANCEIROS REAIS DE ${empresaNome}:
+${JSON.stringify(detailedData, null, 2)}
+
+Contexto recuperado da base de conhecimento:
+${contextString}
+
+REGRAS ESTRITAS:
+1. Sempre se refira à empresa pelo nome exato: "${empresaNome}".
+2. Se o faturamento for 0, diga que não há faturamento registrado neste mês.
+3. Formate valores em R$.
+4. Se perguntarem algo fora dos dados acima, diga que não tem essa informação.
+`;
 
     // 5. Get Chat History
     const history = await prisma.aIMessage.findMany({
@@ -123,7 +141,8 @@ export class ChatService {
     ];
 
     // 6. Call LLM
-    const response = await this.llmProvider.generateResponse(messages);
+    const provider = await this.getProvider(companyId);
+    const response = await provider.generateResponse(messages);
     let finalContent = response.content;
     let isTask = false;
 

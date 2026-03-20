@@ -13,7 +13,7 @@ export class AnthropicProvider implements LLMProvider {
     this.client = new Anthropic({ apiKey: key });
   }
 
-  async generateResponse(messages: LLMMessage[], model = "claude-3-5-sonnet-20241022"): Promise<LLMResponse> {
+  async generateResponse(messages: LLMMessage[], model = "claude-sonnet-4-6"): Promise<LLMResponse> {
     const systemMessage = messages.find((m) => m.role === "system")?.content;
     const chatMessages = messages
       .filter((m) => m.role !== "system")

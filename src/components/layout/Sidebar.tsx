@@ -37,7 +37,17 @@ const navigation = [
   { id: "ledger", label: "Livro-caixa", icon: BookOpen },
   { id: "transactions", label: "Transações", icon: ArrowUpDown },
   { id: "pendencies", label: "Pendências", icon: AlertCircle },
-  { id: "reports", label: "Relatórios", icon: FileText },
+  { 
+    id: "reports", 
+    label: "Relatórios", 
+    icon: FileText,
+    subItems: [
+      { id: "salesReports", label: "Vendas" },
+      { id: "accountsReceivableReports", label: "Contas a Receber" },
+      { id: "inventoryReports", label: "Estoque" },
+      { id: "accountsPayableReports", label: "Contas a Pagar" },
+    ]
+  },
   { id: "imports", label: "Importações", icon: Upload },
   { id: "mapping", label: "Mapeamento", icon: FileText },
 ];
@@ -185,45 +195,82 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mb-3">
-          Principal
-        </p>
-        {navigation.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onPageChange(item.id)}
-            className={cn(
-              "sidebar-item w-full",
-              currentPage === item.id && "sidebar-item-active"
-            )}
-          >
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </button>
-        ))}
+      <ScrollArea className="flex-1">
+        <nav className="p-4 space-y-1">
+          <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mb-3">
+            Principal
+          </p>
+          {navigation.map((item) => (
+            <div key={item.id}>
+              {item.subItems ? (
+                <>
+                  <button
+                    onClick={() => onPageChange(item.id)}
+                    className={cn(
+                      "sidebar-item w-full justify-between",
+                      currentPage === item.id && "sidebar-item-active"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <item.icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronDown className={cn("w-4 h-4 transition-transform", currentPage.startsWith(item.id) || item.subItems.some(sub => currentPage === sub.id) ? "rotate-180" : "")} />
+                  </button>
+                  {(currentPage === item.id || item.subItems.some(sub => currentPage === sub.id) || currentPage.startsWith(item.id)) && (
+                    <div className="ml-9 mt-1 space-y-1">
+                      {item.subItems.map((sub) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => onPageChange(sub.id)}
+                          className={cn(
+                            "sidebar-item w-full py-1.5 px-3 text-sm",
+                            currentPage === sub.id ? "sidebar-item-active" : "text-sidebar-muted hover:text-sidebar-foreground"
+                          )}
+                        >
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={() => onPageChange(item.id)}
+                  className={cn(
+                    "sidebar-item w-full",
+                    currentPage === item.id && "sidebar-item-active"
+                  )}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              )}
+            </div>
+          ))}
 
-        {isAdmin && (
-          <>
-            <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
-              Administração
-            </p>
-            {adminNavigation.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => onPageChange(item.id)}
-                className={cn(
-                  "sidebar-item w-full",
-                  currentPage === item.id && "sidebar-item-active"
-                )}
-              >
-                <item.icon className="w-5 h-5" />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </>
-        )}
-      </nav>
+          {isAdmin && (
+            <>
+              <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
+                Administração
+              </p>
+              {adminNavigation.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => onPageChange(item.id)}
+                  className={cn(
+                    "sidebar-item w-full",
+                    currentPage === item.id && "sidebar-item-active"
+                  )}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </nav>
+      </ScrollArea>
 
       {/* User */}
       <div className="p-4 border-t border-sidebar-border">

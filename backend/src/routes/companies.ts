@@ -12,6 +12,7 @@ const CompanyBody = z.object({
   phone: z.string().optional().nullable(),
   plan: z.enum(["BASIC", "PROFESSIONAL", "ENTERPRISE"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "PENDING"]).optional(),
+  openaiApiKey: z.string().optional().nullable(),
 });
 
 const ListQuery = z.object({
@@ -97,8 +98,36 @@ export async function companiesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN])] },
     async (request) => {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
-      const { name, cnpj, email, phone, plan, status } = parseBody(CompanyBody, request.body);
-      return prisma.company.update({ where: { id: params.id }, data: { name, cnpj: cnpj ?? null, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined } });
+      const { name, cnpj, email, phone, plan, status, openaiApiKey } = parseBody(CompanyBody, request.body);
+      return prisma.company.update({
+        where: { id: params.id },
+        data: { name, cnpj: cnpj ?? null, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined, openaiApiKey: openaiApiKey ?? null },
+      });
+    }
+  );
+
+  const AiProfileBody = z.object({
+    aiPersona: z.string().optional().nullable(),
+    aiDetailLevel: z.string().optional().nullable(),
+    aiBusinessFocus: z.string().optional().nullable(),
+    aiProvider: z.string().optional().nullable(),
+    openaiApiKey: z.string().optional().nullable(),
+    anthropicApiKey: z.string().optional().nullable(),
+    geminiApiKey: z.string().optional().nullable(),
+  });
+
+  app.patch(
+    "/me/ai-profile",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = request.user.companyId;
+      if (!companyId) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      
+      const { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey } = parseBody(AiProfileBody, request.body);
+      return prisma.company.update({
+        where: { id: companyId },
+        data: { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey },
+      });
     }
   );
 

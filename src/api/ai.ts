@@ -80,6 +80,10 @@ export interface AIProfile {
   tone: string;
   level: string;
   segment?: string;
+  aiProvider?: string;
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  geminiApiKey?: string;
 }
 
 export interface BackgroundJob {
@@ -124,6 +128,13 @@ export const aiApi = {
     });
   },
 
+  testConnection: async (provider: string, apiKey: string) => {
+    return apiFetch<{ success: boolean; message: string }>('/ai/profile/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ provider, apiKey })
+    });
+  },
+
   // Chat
   createChat: async (title?: string) => {
     return apiFetch<ChatSession>('/ai/chat', {
@@ -144,6 +155,19 @@ export const aiApi = {
     return apiFetch<ChatMessage>(`/ai/chat/${chatId}/message`, {
       method: 'POST',
       body: JSON.stringify({ content })
+    });
+  },
+
+  // Executive Reports & Alerts
+  generateExecutiveReport: async () => {
+    return apiFetch<{ relatorio: string }>('/ai/reports/executive', {
+      method: 'POST'
+    });
+  },
+
+  generateAlerts: async () => {
+    return apiFetch<{ alertas: string }>('/ai/alerts', {
+      method: 'POST'
     });
   },
 

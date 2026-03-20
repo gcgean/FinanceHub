@@ -18,12 +18,18 @@ const ItemSchema = z.object({
   unitPrice: z.coerce.number().min(0, "Preço inválido"),
 })
 
+const PaymentSchema = z.object({
+  paymentMethodId: z.string().min(1, "Forma de pagamento obrigatória"),
+  amount: z.coerce.number().min(0.01, "Valor inválido"),
+})
+
 const Schema = z.object({
   customerId: z.string().optional().nullable(),
   date: z.string().min(1, "Data obrigatória"),
   status: z.string().optional().nullable(),
   paymentMethodId: z.string().optional().nullable(),
   items: z.array(ItemSchema).default([]),
+  payments: z.array(PaymentSchema).default([]),
 })
 
 type FormValues = z.infer<typeof Schema>
@@ -53,6 +59,11 @@ export function SalesDialog({ open, onOpenChange, value, onSubmit, loading }: Pr
     name: "items",
   })
 
+  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+    control: form.control,
+    name: "payments",
+  })
+
   const customers = useQuery({
     queryKey: ["canonical", "customers", "list"],
     queryFn: async () => listCustomers({ take: 1000 }),
@@ -77,6 +88,10 @@ export function SalesDialog({ open, onOpenChange, value, onSubmit, loading }: Pr
           description: i.description,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
+        })) ?? [],
+        payments: value?.payments?.map(p => ({
+          paymentMethodId: p.paymentMethodId ?? "",
+          amount: p.amount,
         })) ?? [],
       })
     }
@@ -232,6 +247,57 @@ export function SalesDialog({ open, onOpenChange, value, onSubmit, loading }: Pr
               <div className="text-right font-medium">
                 Total: {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Formas de Pagamento</h4>
+                <Button type="button" variant="outline" size="sm" onClick={() => appendPayment({ paymentMethodId: "", amount: 0 })}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Pagamento
+                </Button>
+              </div>
+
+              {paymentFields.map((field, index) => (
+                <div key={field.id} className="flex gap-4 items-start">
+                  <FormField
+                    control={form.control}
+                    name={`payments.${index}.paymentMethodId`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Forma de pagamento" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentMethods.data?.items.map((pm) => (
+                              <SelectItem key={pm.id} value={pm.id}>{pm.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`payments.${index}.amount`}
+                    render={({ field }) => (
+                      <FormItem className="w-32">
+                        <FormControl>
+                          <Input type="number" step="0.01" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
 
             <DialogFooter>

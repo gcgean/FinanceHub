@@ -9,6 +9,7 @@ import Mapping from "@/pages/Mapping";
 import Transactions from "@/pages/Transactions";
 import Pendencies from "@/pages/Pendencies";
 import Reports from "@/pages/Reports";
+import SalesReports from "@/pages/SalesReports";
 import Companies from "@/pages/Companies";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
@@ -27,6 +28,10 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   transactions: { title: "Transações", subtitle: "Gerenciar movimentações" },
   pendencies: { title: "Pendências", subtitle: "Itens aguardando resolução" },
   reports: { title: "Relatórios", subtitle: "DRE, Fluxo de Caixa e mais" },
+  salesReports: { title: "Relatórios de Vendas", subtitle: "Acompanhamento de vendas" },
+  accountsReceivableReports: { title: "Relatórios de Contas a Receber", subtitle: "Títulos a receber e inadimplência" },
+  inventoryReports: { title: "Relatórios de Estoque", subtitle: "Controle e movimentação de estoque" },
+  accountsPayableReports: { title: "Contas a Pagar", subtitle: "Títulos a pagar e obrigações" },
   imports: { title: "Importações", subtitle: "Upload de extratos" },
   companies: { title: "Empresas", subtitle: "Gerenciar clientes" },
   users: { title: "Usuários", subtitle: "Gerenciar acessos" },
@@ -62,6 +67,8 @@ const Index = () => {
         return <Pendencies />;
       case "reports":
         return <Reports />;
+      case "salesReports":
+        return <SalesReports />;
       case "companies":
         return <Companies />;
       case "users":
