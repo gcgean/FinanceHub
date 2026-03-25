@@ -77,8 +77,9 @@ export function AIProfileTab() {
       } else {
         toast({ title: "Falha na conexão", description: result.message, variant: "destructive" });
       }
-    } catch (error: any) {
-      toast({ title: "Erro ao testar conexão", description: error.message || "Erro desconhecido", variant: "destructive" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      toast({ title: "Erro ao testar conexão", description: message, variant: "destructive" });
     } finally {
       setIsTesting(false);
     }

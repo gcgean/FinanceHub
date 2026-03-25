@@ -75,7 +75,7 @@ export function AIChat() {
     if (isClearingChat) return;
     if (createChatMutation.isPending) return;
     setActiveChatId(chats[0].id);
-  }, [chats, isLoadingChats, activeChatId, createChatMutation.isPending, isClearingChat]);
+  }, [chats, isLoadingChats, activeChatId, createChatMutation, createChatMutation.isPending, isClearingChat]);
 
   // 4. Fetch Messages for Active Chat
   const { data: chatSession, isLoading: isLoadingMessages } = useQuery({

@@ -61,3 +61,80 @@ export async function runDre(body: { dateFrom: string; dateTo: string }) {
     body: JSON.stringify(body),
   })
 }
+
+export type ArSummaryItem = {
+  customerId: string | null
+  customerName: string
+  knownName: string | null
+  document: string | null
+  daysAvg: number
+  total: number
+  percent: number
+  percentAccum: number
+  class: "A" | "B" | "C"
+}
+
+export type ArSummaryResponse = {
+  items: ArSummaryItem[]
+  totals: {
+    totalGeral: number
+    totalClientes: number
+  }
+}
+
+export type ArDetailItem = {
+  id: string
+  customerId: string | null
+  customerName: string
+  knownName: string | null
+  document: string | null
+  email: string | null
+  phone: string | null
+  city: string | null
+  state: string | null
+  issueDate: string
+  dueDate: string
+  paymentDate: string | null
+  amount: number
+  openAmount: number
+  paidAmount: number
+  status: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
+  documentNumber: string | null
+  daysOverdue: number
+}
+
+export type ArDetailResponse = {
+  items: ArDetailItem[]
+  totals: {
+    totalOpen: number
+    totalTitulos: number
+  }
+}
+
+export async function getAccountsReceivableSummary(params: {
+  dateFrom?: string
+  dateTo?: string
+  dateField?: "issue" | "due"
+  status?: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
+  customerId?: string
+  sellerId?: string
+  route?: string
+  indicator?: string
+  q?: string
+}) {
+  return apiFetch<ArSummaryResponse>(`/reports/accounts-receivable/summary${toQueryString(params ?? {})}`)
+}
+
+export async function getAccountsReceivableDetail(params: {
+  dateFrom?: string
+  dateTo?: string
+  dateField?: "issue" | "due"
+  status?: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
+  customerId?: string
+  sellerId?: string
+  route?: string
+  indicator?: string
+  q?: string
+}) {
+  return apiFetch<ArDetailResponse>(`/reports/accounts-receivable/detail${toQueryString(params ?? {})}`)
+}

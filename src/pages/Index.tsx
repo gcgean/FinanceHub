@@ -10,6 +10,7 @@ import Transactions from "@/pages/Transactions";
 import Pendencies from "@/pages/Pendencies";
 import Reports from "@/pages/Reports";
 import SalesReports from "@/pages/SalesReports";
+import AccountsReceivableReports from "@/pages/AccountsReceivableReports";
 import Companies from "@/pages/Companies";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
@@ -69,6 +70,8 @@ const Index = () => {
         return <Reports />;
       case "salesReports":
         return <SalesReports />;
+      case "accountsReceivableReports":
+        return <AccountsReceivableReports />;
       case "companies":
         return <Companies />;
       case "users":

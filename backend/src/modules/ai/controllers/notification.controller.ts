@@ -58,9 +58,10 @@ export class NotificationController {
     // Verificar se pertence ao usuário
     const recipient = await prisma.aIInsightRecipient.findUnique({
       where: { id },
+      include: { insightEvent: true },
     });
 
-    if (!recipient || recipient.userId !== userId || recipient.companyId !== companyId) {
+    if (!recipient || recipient.userId !== userId || recipient.insightEvent.companyId !== companyId) {
       return reply.status(404).send({ error: "Notificação não encontrada" });
     }
 
@@ -84,10 +85,10 @@ export class NotificationController {
 
     await prisma.aIInsightRecipient.updateMany({
       where: {
-        companyId,
         userId,
         channelType: "IN_APP",
         readAt: null,
+        insightEvent: { companyId },
       },
       data: {
         readAt: new Date(),

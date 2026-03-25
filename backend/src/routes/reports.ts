@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { parseBody, parseQuery } from "../lib/validation";
 import { requireAuth, requireCompanyScope } from "../lib/auth";
 import { resolveCompanyId } from "../lib/company";
-import { LedgerOperation, RevenueExpense } from "@prisma/client";
+import { LedgerOperation, RevenueExpense, TitleStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
 const StatementQuery = z.object({
@@ -26,6 +26,18 @@ const SalesReportQuery = z.object({
   sellerId: z.string().optional(),
   customerId: z.string().optional(),
   status: z.string().optional(),
+});
+
+const AccountsReceivableQuery = z.object({
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  dateField: z.enum(["issue", "due"]).optional().default("due"),
+  status: z.nativeEnum(TitleStatus).optional(),
+  customerId: z.string().optional(),
+  sellerId: z.string().optional(),
+  route: z.string().optional(),
+  indicator: z.string().optional(),
+  q: z.string().optional(),
 });
 
 export async function reportsRoutes(app: FastifyInstance) {
@@ -119,6 +131,224 @@ export async function reportsRoutes(app: FastifyInstance) {
           devolvido: totalDevolvido,
           liquido: totalLiquido,
           ticket_medio: ticketMedio,
+        },
+      };
+    }
+  );
+
+  app.get(
+    "/accounts-receivable/summary",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const q = parseQuery(AccountsReceivableQuery, request.query);
+      const dateFieldKey = q.dateField === "issue" ? "issueDate" : "dueDate";
+      const dateFilter = q.dateFrom || q.dateTo
+        ? {
+            ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
+            ...(q.dateTo ? { lte: new Date(q.dateTo) } : {}),
+          }
+        : undefined;
+
+      const where: Prisma.ArTitleWhereInput = {
+        companyId,
+        ...(q.status ? { status: q.status } : { status: { in: [TitleStatus.OPEN, TitleStatus.OVERDUE] } }),
+        ...(dateFilter ? { [dateFieldKey]: dateFilter } : {}),
+      };
+      const customerFilter: Prisma.CustomerWhereInput = {
+        ...(q.customerId ? { id: q.customerId } : {}),
+        ...(q.route ? { city: { contains: q.route, mode: "insensitive" } } : {}),
+        ...(q.indicator
+          ? { classification: { name: { contains: q.indicator, mode: "insensitive" } } }
+          : {}),
+        ...(q.sellerId ? { sales: { some: { sellerId: q.sellerId } } } : {}),
+        ...(q.q
+          ? {
+              OR: [
+                { name: { contains: q.q, mode: "insensitive" } },
+                { knownName: { contains: q.q, mode: "insensitive" } },
+                { document: { contains: q.q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      if (Object.keys(customerFilter).length) {
+        where.customer = customerFilter;
+      }
+
+      const titles = await prisma.arTitle.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              knownName: true,
+              document: true,
+              email: true,
+              phone: true,
+              city: true,
+              state: true,
+            },
+          },
+        },
+      });
+
+      const now = new Date();
+      const byCustomer = new Map<string, {
+        customerId: string | null;
+        customerName: string;
+        knownName: string | null;
+        document: string | null;
+        total: number;
+        daysSum: number;
+        count: number;
+      }>();
+
+      for (const t of titles) {
+        const key = t.customerId ?? "unknown";
+        const entry = byCustomer.get(key) ?? {
+          customerId: t.customerId ?? null,
+          customerName: t.customer?.name ?? "Cliente não informado",
+          knownName: t.customer?.knownName ?? null,
+          document: t.customer?.document ?? null,
+          total: 0,
+          daysSum: 0,
+          count: 0,
+        };
+        const days = Math.floor((now.getTime() - t.dueDate.getTime()) / 86400000);
+        entry.total += t.openAmount;
+        entry.daysSum += days;
+        entry.count += 1;
+        byCustomer.set(key, entry);
+      }
+
+      const totalGeral = Array.from(byCustomer.values()).reduce((sum, c) => sum + c.total, 0);
+      const items = Array.from(byCustomer.values())
+        .map((c) => ({
+          customerId: c.customerId,
+          customerName: c.customerName,
+          knownName: c.knownName,
+          document: c.document,
+          daysAvg: c.count ? c.daysSum / c.count : 0,
+          total: c.total,
+        }))
+        .sort((a, b) => b.total - a.total);
+
+      let percAcum = 0;
+      const withClass = items.map((c) => {
+        const percent = totalGeral ? (c.total / totalGeral) * 100 : 0;
+        percAcum += percent;
+        const classe = percAcum <= 80 ? "A" : percAcum <= 95 ? "B" : "C";
+        return {
+          ...c,
+          percent,
+          percentAccum: percAcum,
+          class: classe,
+        };
+      });
+
+      return {
+        items: withClass,
+        totals: {
+          totalGeral,
+          totalClientes: withClass.length,
+        },
+      };
+    }
+  );
+
+  app.get(
+    "/accounts-receivable/detail",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+      const q = parseQuery(AccountsReceivableQuery, request.query);
+      const dateFieldKey = q.dateField === "issue" ? "issueDate" : "dueDate";
+      const dateFilter = q.dateFrom || q.dateTo
+        ? {
+            ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
+            ...(q.dateTo ? { lte: new Date(q.dateTo) } : {}),
+          }
+        : undefined;
+
+      const where: Prisma.ArTitleWhereInput = {
+        companyId,
+        ...(q.status ? { status: q.status } : { status: { in: [TitleStatus.OPEN, TitleStatus.OVERDUE] } }),
+        ...(dateFilter ? { [dateFieldKey]: dateFilter } : {}),
+      };
+      const customerFilter: Prisma.CustomerWhereInput = {
+        ...(q.customerId ? { id: q.customerId } : {}),
+        ...(q.route ? { city: { contains: q.route, mode: "insensitive" } } : {}),
+        ...(q.indicator
+          ? { classification: { name: { contains: q.indicator, mode: "insensitive" } } }
+          : {}),
+        ...(q.sellerId ? { sales: { some: { sellerId: q.sellerId } } } : {}),
+        ...(q.q
+          ? {
+              OR: [
+                { name: { contains: q.q, mode: "insensitive" } },
+                { knownName: { contains: q.q, mode: "insensitive" } },
+                { document: { contains: q.q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      if (Object.keys(customerFilter).length) {
+        where.customer = customerFilter;
+      }
+
+      const titles = await prisma.arTitle.findMany({
+        where,
+        orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              knownName: true,
+              document: true,
+              email: true,
+              phone: true,
+              city: true,
+              state: true,
+            },
+          },
+        },
+      });
+
+      const now = new Date();
+      const items = titles.map((t) => {
+        const days = Math.floor((now.getTime() - t.dueDate.getTime()) / 86400000);
+        return {
+          id: t.id,
+          customerId: t.customerId,
+          customerName: t.customer?.name ?? "Cliente não informado",
+          knownName: t.customer?.knownName ?? null,
+          document: t.customer?.document ?? null,
+          email: t.customer?.email ?? null,
+          phone: t.customer?.phone ?? null,
+          city: t.customer?.city ?? null,
+          state: t.customer?.state ?? null,
+          issueDate: t.issueDate,
+          dueDate: t.dueDate,
+          paymentDate: t.paymentDate,
+          amount: t.amount,
+          openAmount: t.openAmount,
+          paidAmount: t.paidAmount ?? 0,
+          status: t.status,
+          documentNumber: t.documentNumber ?? null,
+          daysOverdue: days,
+        };
+      });
+
+      const totalOpen = items.reduce((sum, i) => sum + i.openAmount, 0);
+
+      return {
+        items,
+        totals: {
+          totalOpen,
+          totalTitulos: items.length,
         },
       };
     }

@@ -47,7 +47,7 @@ Dados: ${JSON.stringify(dadosCliente, null, 2)}`;
 
       // Reutiliza o provider configurado para a empresa (Sonnet 4.6, OpenAI, etc)
       // Usando cast para acessar o método privado ou usar o service. (Vou alterar para public ou expor método de prompt raw)
-      const provider = await (chatService as any).getProvider(companyId);
+      const provider = await chatService.getProvider(companyId);
       
       const resposta = await provider.generateResponse([{ role: "user", content: prompt }]);
       
@@ -71,7 +71,7 @@ Seja conciso (máximo 2 linhas por alerta).
 
 Dados: ${JSON.stringify(dadosCliente, null, 2)}`;
 
-      const provider = await (chatService as any).getProvider(companyId);
+      const provider = await chatService.getProvider(companyId);
       const resposta = await provider.generateResponse([{ role: "user", content: prompt }]);
       
       return reply.send({ alertas: resposta.content });

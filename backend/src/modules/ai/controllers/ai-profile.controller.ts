@@ -108,8 +108,9 @@ export class AIProfileController {
       } else {
         return reply.send({ success: false, message: "A API respondeu, mas o formato foi inesperado." });
       }
-    } catch (error: any) {
-      return reply.send({ success: false, message: `Erro: ${error.message}` });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      return reply.send({ success: false, message: `Erro: ${message}` });
     }
   }
 }
