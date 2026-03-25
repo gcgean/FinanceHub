@@ -15,6 +15,7 @@ export type Customer = {
   birthDate?: string | null
   city: string | null
   state: string | null
+  route?: string | null
   cityId?: string | null
   stateCode?: string | null
   neighborhood?: string | null

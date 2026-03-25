@@ -157,7 +157,15 @@ export async function reportsRoutes(app: FastifyInstance) {
       };
       const customerFilter: Prisma.CustomerWhereInput = {
         ...(q.customerId ? { id: q.customerId } : {}),
-        ...(q.route ? { city: { contains: q.route, mode: "insensitive" } } : {}),
+        ...(q.route
+          ? {
+              OR: [
+                { route: { contains: q.route, mode: "insensitive" } },
+                { neighborhood: { contains: q.route, mode: "insensitive" } },
+                { city: { contains: q.route, mode: "insensitive" } },
+              ],
+            }
+          : {}),
         ...(q.indicator
           ? { classification: { name: { contains: q.indicator, mode: "insensitive" } } }
           : {}),
@@ -182,6 +190,7 @@ export async function reportsRoutes(app: FastifyInstance) {
           customer: {
             select: {
               id: true,
+              externalId: true,
               name: true,
               knownName: true,
               document: true,
@@ -189,6 +198,7 @@ export async function reportsRoutes(app: FastifyInstance) {
               phone: true,
               city: true,
               state: true,
+              route: true,
             },
           },
         },
@@ -279,7 +289,15 @@ export async function reportsRoutes(app: FastifyInstance) {
       };
       const customerFilter: Prisma.CustomerWhereInput = {
         ...(q.customerId ? { id: q.customerId } : {}),
-        ...(q.route ? { city: { contains: q.route, mode: "insensitive" } } : {}),
+        ...(q.route
+          ? {
+              OR: [
+                { route: { contains: q.route, mode: "insensitive" } },
+                { neighborhood: { contains: q.route, mode: "insensitive" } },
+                { city: { contains: q.route, mode: "insensitive" } },
+              ],
+            }
+          : {}),
         ...(q.indicator
           ? { classification: { name: { contains: q.indicator, mode: "insensitive" } } }
           : {}),
@@ -305,6 +323,7 @@ export async function reportsRoutes(app: FastifyInstance) {
           customer: {
             select: {
               id: true,
+              externalId: true,
               name: true,
               knownName: true,
               document: true,
@@ -312,6 +331,7 @@ export async function reportsRoutes(app: FastifyInstance) {
               phone: true,
               city: true,
               state: true,
+              route: true,
             },
           },
         },
@@ -322,7 +342,10 @@ export async function reportsRoutes(app: FastifyInstance) {
         const days = Math.floor((now.getTime() - t.dueDate.getTime()) / 86400000);
         return {
           id: t.id,
+          externalId: t.externalId ?? null,
+          externalSeq: t.externalSeq ?? null,
           customerId: t.customerId,
+          customerExternalId: t.customer?.externalId ?? null,
           customerName: t.customer?.name ?? "Cliente não informado",
           knownName: t.customer?.knownName ?? null,
           document: t.customer?.document ?? null,
@@ -330,15 +353,20 @@ export async function reportsRoutes(app: FastifyInstance) {
           phone: t.customer?.phone ?? null,
           city: t.customer?.city ?? null,
           state: t.customer?.state ?? null,
+          route: t.customer?.route ?? null,
           issueDate: t.issueDate,
           dueDate: t.dueDate,
           paymentDate: t.paymentDate,
           amount: t.amount,
+          devolucao: t.refundReceived ?? 0,
+          acrescimo: t.interestReceived ?? 0,
+          valorLiquido: t.amount - (t.refundReceived ?? 0) + (t.interestReceived ?? 0),
           openAmount: t.openAmount,
           paidAmount: t.paidAmount ?? 0,
           status: t.status,
           documentNumber: t.documentNumber ?? null,
           daysOverdue: days,
+          sellerName: t.sellerName ?? null,
         };
       });
 

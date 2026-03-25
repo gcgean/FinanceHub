@@ -84,7 +84,10 @@ export type ArSummaryResponse = {
 
 export type ArDetailItem = {
   id: string
+  externalId: string | null
+  externalSeq: string | null
   customerId: string | null
+  customerExternalId: string | null
   customerName: string
   knownName: string | null
   document: string | null
@@ -92,15 +95,20 @@ export type ArDetailItem = {
   phone: string | null
   city: string | null
   state: string | null
+  route: string | null
   issueDate: string
   dueDate: string
   paymentDate: string | null
   amount: number
+  devolucao: number
+  acrescimo: number
+  valorLiquido: number
   openAmount: number
   paidAmount: number
   status: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
   documentNumber: string | null
   daysOverdue: number
+  sellerName: string | null
 }
 
 export type ArDetailResponse = {

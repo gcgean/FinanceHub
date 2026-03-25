@@ -495,6 +495,10 @@ var
   LClassCode: string;
   LClassName: string;
   LClassObj: TJSONObject;
+  LRouteName: string;
+  LRouteField: TField;
+  LRouteCodeField: TField;
+  LNeighborhood: string;
 
   function FindFieldByNames(AQuery: TFDQuery; const ANames: array of string): TField;
   var
@@ -534,12 +538,13 @@ begin
     LTotal := QCount.FieldByName('CNT').AsInteger;
 
     Q.Connection := FDB;
-    // Cadastro de cliente não é vinculado à empresa: sincroniza todos
-    Q.SQL.Text := 'SELECT * FROM CLIENTE';
+    Q.SQL.Text := 'SELECT C.*, RO.NOME_ROTA AS NOME_ROTA FROM CLIENTE C LEFT JOIN ROTAS RO ON RO.COD_ROTA = C.ROTA_CLI';
     Q.Open;
 
     LClassCodeField := FindFieldByNames(Q, ['COD_CLASSIFICACAO', 'COD_CLASS', 'COD_CLA', 'COD_CLASSIF']);
     LClassNameField := FindFieldByNames(Q, ['CLASSIFICACAO', 'NOME_CLASSIFICACAO', 'DESCRICAO_CLASSIFICACAO', 'DESCRICAO']);
+    LRouteField := FindFieldByNames(Q, ['NOME_ROTA', 'ROTA', 'ROTA_CLI']);
+    LRouteCodeField := FindFieldByNames(Q, ['ROTA_CLI', 'COD_ROTA', 'CODIGO_ROTA']);
     
     Log(Format('Clientes encontrados (global): %d', [LTotal]));
     
@@ -574,7 +579,16 @@ begin
         // Endereço (Prioridade: Residencial)
         LObj.AddPair('city', Q.FieldByName('CIDRES_CLI').AsString);
         LObj.AddPair('stateCode', Q.FieldByName('ESTRES_CLI').AsString);
-        LObj.AddPair('neighborhood', Q.FieldByName('BAIRES_CLI').AsString);
+        LNeighborhood := Trim(Q.FieldByName('BAIRES_CLI').AsString);
+        LObj.AddPair('neighborhood', LNeighborhood);
+
+        LRouteName := '';
+        if Assigned(LRouteField) then
+          LRouteName := Trim(LRouteField.AsString);
+        if (LRouteName = '') and Assigned(LRouteCodeField) then
+          LRouteName := Trim(LRouteCodeField.AsString);
+        if LRouteName <> '' then
+          LObj.AddPair('route', LRouteName);
 
         LClassCode := '';
         LClassName := '';
@@ -1641,11 +1655,14 @@ var
   LPaidAmount: Double;
   LDiscountReceived: Double;
   LInterestReceived: Double;
+  LRefundReceived: Double;
   LOpenAmount: Double;
   LStatus: string;
   LDoc: string;
   LSeq: string;
   LDateField: string;
+  LSellerCode: string;
+  LSellerName: string;
 
   function FieldFloat(const AFieldName: string): Double;
   begin
@@ -1828,7 +1845,10 @@ begin
     LTotal := QCount.FieldByName('CNT').AsInteger;
 
     Q.Connection := FDB;
-    Q.SQL.Text := 'SELECT * FROM CONTAS_RECEBER WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
+    Q.SQL.Text := 'SELECT R.*, V.COD_USU_VEND, VE.NOME_USU FROM CONTAS_RECEBER R ' +
+                  'LEFT JOIN VENDAS V ON (R.COD_VENDA = V.COD_VEN) ' +
+                  'LEFT JOIN USUARIO VE ON (V.COD_USU_VEND = VE.COD_USU) ' +
+                  'WHERE R.COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
     Q.ParamByName('CodEmp').AsInteger := ACodEmp;
     Q.ParamByName('DataIni').AsDate := ADateFrom;
     Q.ParamByName('DataFim').AsDate := ADateTo;
@@ -1865,7 +1885,8 @@ begin
       LPaidAmount := FieldFloat('VLRPAGO_CTR');
       LDiscountReceived := FieldFloat('DESCONTO_CONCEDIDO_CTR');
       LInterestReceived := FieldFloat('ACRESCIMO_RECEBIDO_CTR');
-      LOpenAmount := LAmount - LPaidAmount - LDiscountReceived + LInterestReceived;
+      LRefundReceived := FieldFloat('DEVOLUCAO_CTR');
+      LOpenAmount := LAmount - LPaidAmount - LDiscountReceived - LRefundReceived + LInterestReceived;
       if LOpenAmount < 0 then
         LOpenAmount := 0;
 
@@ -1880,10 +1901,22 @@ begin
       if LDoc = '' then
         LDoc := FieldStr('NUM_TITULO');
 
+      LSellerCode := FieldStr('COD_USU_VEND');
+      LSellerName := FieldStr('NOME_USU');
+
       LObj := TJSONObject.Create;
       try
         LObj.AddPair('externalId', LExternalId);
+        LObj.AddPair('externalSeq', LSeq);
         LObj.AddPair('customerExternalId', FieldStr('COD_CLI'));
+        if LSellerCode <> '' then
+          LObj.AddPair('sellerExternalId', LSellerCode)
+        else
+          LObj.AddPair('sellerExternalId', TJSONNull.Create);
+        if LSellerName <> '' then
+          LObj.AddPair('sellerName', LSellerName)
+        else
+          LObj.AddPair('sellerName', TJSONNull.Create);
         LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
         LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
         if VarIsNull(LPaymentDate) then
@@ -1895,6 +1928,7 @@ begin
         LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
         LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
         LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
+        LObj.AddPair('refundReceived', TJSONNumber.Create(LRefundReceived));
         LObj.AddPair('status', LStatus);
         if LDoc <> '' then
           LObj.AddPair('documentNumber', LDoc)

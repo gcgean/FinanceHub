@@ -625,6 +625,7 @@ model Customer {
   birthDate        DateTime?
   city             String?
   state            String?
+  route            String?
   cityId           String?
   cityRef          City?                   @relation(fields: [cityId], references: [id])
   stateCode        String?
@@ -843,6 +844,10 @@ model ArTitle {
   paidAmount       Float?
   discountReceived Float?
   interestReceived Float?
+  refundReceived   Float?
+  externalSeq      String?
+  sellerExternalId String?
+  sellerName       String?
   status           TitleStatus
   documentNumber   String?
   notes            String?

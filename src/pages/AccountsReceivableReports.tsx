@@ -18,6 +18,25 @@ const formatCurrency = (value: number) => value.toLocaleString("pt-BR", { style:
 export default function AccountsReceivableReports() {
   const [activeTab, setActiveTab] = useState<"summary" | "detail">("summary");
 
+  const formatForDisplay = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    if (!y || !m || !d) return dateStr;
+    return `${d}/${m}/${y}`;
+  };
+
+  const formatForValue = (displayStr: string) => {
+    if (!displayStr) return "";
+    const clean = displayStr.replace(/\D/g, "");
+    if (clean.length === 8) {
+      const d = clean.substring(0, 2);
+      const m = clean.substring(2, 4);
+      const y = clean.substring(4, 8);
+      return `${y}-${m}-${d}`;
+    }
+    return displayStr;
+  };
+
   const [dateFromInput, setDateFromInput] = useState<string>(
     format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd")
   );
@@ -158,11 +177,41 @@ export default function AccountsReceivableReports() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Inicial</label>
-              <Input type="date" value={dateFromInput} onChange={(e) => setDateFromInput(e.target.value)} />
+              <Input
+                type="text"
+                placeholder="DD/MM/AAAA"
+                maxLength={10}
+                value={formatForDisplay(dateFromInput)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const clean = val.replace(/\D/g, "");
+                  if (clean.length === 8) {
+                    setDateFromInput(formatForValue(val));
+                  } else {
+                    setDateFromInput(val);
+                  }
+                }}
+                className="w-32"
+              />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Final</label>
-              <Input type="date" value={dateToInput} onChange={(e) => setDateToInput(e.target.value)} />
+              <Input
+                type="text"
+                placeholder="DD/MM/AAAA"
+                maxLength={10}
+                value={formatForDisplay(dateToInput)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const clean = val.replace(/\D/g, "");
+                  if (clean.length === 8) {
+                    setDateToInput(formatForValue(val));
+                  } else {
+                    setDateToInput(val);
+                  }
+                }}
+                className="w-32"
+              />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Campo de Data</label>
@@ -310,35 +359,49 @@ export default function AccountsReceivableReports() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Cod</TableHead>
+                  <TableHead>Seq</TableHead>
+                  <TableHead>Cod Cliente</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead className="text-right">Dias</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Documento</TableHead>
+                  <TableHead>Nome fantasia</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Aberto</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Nº Doc</TableHead>
+                  <TableHead className="text-right">Devolução</TableHead>
+                  <TableHead className="text-right">Acrésc</TableHead>
+                  <TableHead className="text-right">Valor líquido</TableHead>
+                  <TableHead>Emissão</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead>Cidade</TableHead>
+                  <TableHead>Nº doc</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {!hasSearched ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
                 ) : detail.isLoading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={16} className="text-center py-10">Carregando...</TableCell></TableRow>
                 ) : detail.isError ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
                 ) : (detail.data?.items.length ?? 0) === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
                 ) : (
                   detail.data?.items.map((item) => (
                     <TableRow key={item.id}>
+                      <TableCell>{item.externalId || "-"}</TableCell>
+                      <TableCell>{item.externalSeq || "-"}</TableCell>
+                      <TableCell>{item.customerExternalId || "-"}</TableCell>
                       <TableCell>{new Date(item.dueDate).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell className="text-right">{item.daysOverdue}</TableCell>
                       <TableCell>{item.customerName}</TableCell>
-                      <TableCell>{item.document || "-"}</TableCell>
+                      <TableCell>{item.knownName || "-"}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.openAmount)}</TableCell>
-                      <TableCell>{item.status}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.devolucao)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.acrescimo)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.valorLiquido)}</TableCell>
+                      <TableCell>{new Date(item.issueDate).toLocaleDateString("pt-BR")}</TableCell>
+                      <TableCell>{item.sellerName || "-"}</TableCell>
+                      <TableCell>{item.city || "-"}</TableCell>
                       <TableCell>{item.documentNumber || "-"}</TableCell>
                     </TableRow>
                   ))
