@@ -132,18 +132,25 @@ export default function AccountsReceivableReports() {
       downloadCsv("contas_receber_resumido.csv", headers, rows);
       return;
     }
-    const headers = ["Vencimento", "Dias", "Cliente", "Documento", "Valor", "Aberto", "Status", "Nº Doc"];
+    const headers = ["Cod", "Seq", "Cod Cliente", "Nome Cliente", "Nome Fantasia", "Valor", "Devolução", "Acrésc", "Valor líquido", "Emissão", "Dias", "Vencimento", "Vendedor", "Cidade", "Nº Doc"];
     const rows = (detail.data?.items ?? []).map((i) => [
-      i.dueDate,
-      i.daysOverdue,
+      i.externalId || "",
+      i.externalSeq || "",
+      i.customerExternalId || "",
       i.customerName,
-      i.document || "",
+      i.knownName || "",
       i.amount,
-      i.openAmount,
-      i.status,
+      i.devolucao,
+      i.acrescimo,
+      i.valorLiquido,
+      i.issueDate,
+      i.daysOverdue,
+      i.dueDate,
+      i.sellerName || "",
+      i.city || "",
       i.documentNumber || "",
     ]);
-    downloadXlsx("contas_receber_detalhado.xlsx", headers, rows, "Detalhado", { currencyColumns: [4, 5], dateColumns: [0] });
+    downloadXlsx("contas_receber_detalhado.xlsx", headers, rows, "Detalhado", { currencyColumns: [5, 6, 7, 8], dateColumns: [9, 11] });
     downloadCsv("contas_receber_detalhado.csv", headers, rows);
   };
 
@@ -362,8 +369,6 @@ export default function AccountsReceivableReports() {
                   <TableHead>Cod</TableHead>
                   <TableHead>Seq</TableHead>
                   <TableHead>Cod Cliente</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead className="text-right">Dias</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Nome fantasia</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -371,6 +376,8 @@ export default function AccountsReceivableReports() {
                   <TableHead className="text-right">Acrésc</TableHead>
                   <TableHead className="text-right">Valor líquido</TableHead>
                   <TableHead>Emissão</TableHead>
+                  <TableHead className="text-right">Dias</TableHead>
+                  <TableHead>Vencimento</TableHead>
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Cidade</TableHead>
                   <TableHead>Nº doc</TableHead>
@@ -391,8 +398,6 @@ export default function AccountsReceivableReports() {
                       <TableCell>{item.externalId || "-"}</TableCell>
                       <TableCell>{item.externalSeq || "-"}</TableCell>
                       <TableCell>{item.customerExternalId || "-"}</TableCell>
-                      <TableCell>{new Date(item.dueDate).toLocaleDateString("pt-BR")}</TableCell>
-                      <TableCell className="text-right">{item.daysOverdue}</TableCell>
                       <TableCell>{item.customerName}</TableCell>
                       <TableCell>{item.knownName || "-"}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
@@ -400,6 +405,8 @@ export default function AccountsReceivableReports() {
                       <TableCell className="text-right">{formatCurrency(item.acrescimo)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.valorLiquido)}</TableCell>
                       <TableCell>{new Date(item.issueDate).toLocaleDateString("pt-BR")}</TableCell>
+                      <TableCell className="text-right">{item.daysOverdue}</TableCell>
+                      <TableCell>{new Date(item.dueDate).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell>{item.sellerName || "-"}</TableCell>
                       <TableCell>{item.city || "-"}</TableCell>
                       <TableCell>{item.documentNumber || "-"}</TableCell>
