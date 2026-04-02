@@ -1,17 +1,20 @@
-﻿unit uMain;
+unit uMain;
 
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uDM, uFinanceHubAPI, uSyncService,
-  FireDAC.Comp.Client, Vcl.CheckLst, FireDAC.DApt, Vcl.ComCtrls; // Adicionado FireDAC.DApt para TFDQuery
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
+  System.IniFiles, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
+  uDM, uFinanceHubAPI, uSyncService,
+  FireDAC.Comp.Client, Vcl.CheckLst, FireDAC.DApt, Vcl.ComCtrls;
 
 type
   TfrmMain = class(TForm)
     btnConnectDB: TButton;
     btnLoginAPI: TButton;
     btnSync: TButton;
+    btnMarcarTodos: TButton;
+    btnDesmarcarTodos: TButton;
     ProgressBar1: TProgressBar;
     lblProgress: TLabel;
     MemoLog: TMemo;
@@ -19,6 +22,7 @@ type
     edtPass: TEdit;
     Label1: TLabel;
     Label2: TLabel;
+    Label3: TLabel;
     Label4: TLabel;
     Label5: TLabel;
     Label6: TLabel;
@@ -31,6 +35,8 @@ type
     procedure btnConnectDBClick(Sender: TObject);
     procedure btnLoginAPIClick(Sender: TObject);
     procedure btnSyncClick(Sender: TObject);
+    procedure btnMarcarTodosClick(Sender: TObject);
+    procedure btnDesmarcarTodosClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
   private
@@ -39,6 +45,9 @@ type
     procedure Log(const AMsg: string);
     procedure CarregarEmpresas;
     procedure SetProgress(const AMsg: string; ACurrent, ATotal: Integer);
+    function IniFilePath: string;
+    procedure LoadSettings;
+    procedure SaveSettings;
   public
     { Public declarations }
   end;
@@ -50,30 +59,62 @@ implementation
 
 {$R *.dfm}
 
+function TfrmMain.IniFilePath: string;
+begin
+  Result := ExtractFilePath(Application.ExeName) + 'FinanceHubIntegrator.ini';
+end;
+
+procedure TfrmMain.LoadSettings;
+var
+  Ini: TIniFile;
+  I: Integer;
+begin
+  if not FileExists(IniFilePath) then
+    Exit;
+  Ini := TIniFile.Create(IniFilePath);
+  try
+    edtEmail.Text := Ini.ReadString('Credentials', 'Email', edtEmail.Text);
+    for I := 0 to clbEntidades.Count - 1 do
+      clbEntidades.Checked[I] := Ini.ReadBool('Entities', 'Entity_' + IntToStr(I), True);
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TfrmMain.SaveSettings;
+var
+  Ini: TIniFile;
+  I: Integer;
+begin
+  Ini := TIniFile.Create(IniFilePath);
+  try
+    Ini.WriteString('Credentials', 'Email', edtEmail.Text);
+    for I := 0 to clbEntidades.Count - 1 do
+      Ini.WriteBool('Entities', 'Entity_' + IntToStr(I), clbEntidades.Checked[I]);
+  finally
+    Ini.Free;
+  end;
+end;
+
 procedure TfrmMain.FormCreate(Sender: TObject);
 var
   I: Integer;
 begin
-  // URL do servidor de produção/homologação
-  // IP Local detectado: 127.0.0.1 (localhost) ou 26.191.165.250
-  // O IP 26.241.132.21 responde com latência (~15ms), indicando ser uma máquina remota na VPN.
-  // Como o backend está rodando LOCALMENTE, usamos localhost.
   FAPI := TFinanceHubAPI.Create('http://127.0.0.1:4000');
   FSync := TSyncService.Create(FAPI, DM.fdConCommand);
   FSync.OnLog := procedure(AMsg: string)
     begin
       Self.Log(AMsg);
     end;
-    FSync.OnProgress := procedure(AMsg: string; ACurrent, ATotal: Integer)
+  FSync.OnProgress := procedure(AMsg: string; ACurrent, ATotal: Integer)
     begin
       Self.SetProgress(AMsg, ACurrent, ATotal);
     end;
-  
-  // Log inicial para confirmar criação
+
   if Assigned(MemoLog) then
     Log('Sistema inicializado. Conectando em: http://127.0.0.1:4000 (Localhost)');
-    
-  // Marcar todas as entidades por padrão
+
+  // Defaults: marcar todas as entidades
   if Assigned(clbEntidades) then
     for I := 0 to clbEntidades.Count - 1 do
       clbEntidades.Checked[I] := True;
@@ -85,23 +126,42 @@ begin
   if Assigned(cbTitleDate) then
   begin
     cbTitleDate.Items.Clear;
-    cbTitleDate.Items.Add('Emissão');
+    cbTitleDate.Items.Add('Emiss'#227'o');
     cbTitleDate.Items.Add('Vencimento');
     cbTitleDate.Items.Add('Pagamento');
     cbTitleDate.ItemIndex := 0;
   end;
+
+  // Sobrescreve defaults com o que estava salvo
+  LoadSettings;
 end;
 
 procedure TfrmMain.FormDestroy(Sender: TObject);
 begin
+  SaveSettings;
   FSync.Free;
   FAPI.Free;
+end;
+
+procedure TfrmMain.btnMarcarTodosClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  for I := 0 to clbEntidades.Count - 1 do
+    clbEntidades.Checked[I] := True;
+end;
+
+procedure TfrmMain.btnDesmarcarTodosClick(Sender: TObject);
+var
+  I: Integer;
+begin
+  for I := 0 to clbEntidades.Count - 1 do
+    clbEntidades.Checked[I] := False;
 end;
 
 procedure TfrmMain.Log(const AMsg: string);
 begin
   MemoLog.Lines.Add(FormatDateTime('hh:nn:ss', Now) + ' - ' + AMsg);
-  // Rolagem automática
   SendMessage(MemoLog.Handle, EM_SCROLL, SB_BOTTOM, 0);
 end;
 
@@ -146,7 +206,6 @@ begin
       clbEmpresas.Items.Clear;
       while not LQuery.Eof do
       begin
-        // Formato: "COD_EMP - RAZAO_EMP (FANTASIA)"
         clbEmpresas.Items.AddObject(
           Format('%d - %s', [LQuery.FieldByName('COD_EMP').AsInteger, LQuery.FieldByName('RAZAO_EMP').AsString]),
           TObject(LQuery.FieldByName('COD_EMP').AsInteger)
@@ -154,11 +213,7 @@ begin
         LQuery.Next;
       end;
       if clbEmpresas.Items.Count > 0 then
-      begin
-        // Seleciona o primeiro item por padrão (opcional)
-        // clbEmpresas.Checked[0] := True;
-        Log(Format('Carregadas %d empresas.', [clbEmpresas.Items.Count]));
-      end
+        Log(Format('Carregadas %d empresas.', [clbEmpresas.Items.Count]))
       else
         Log('Nenhuma empresa encontrada no banco de dados.');
     except
@@ -205,13 +260,13 @@ begin
     Log('Conecte no banco primeiro.');
     Exit;
   end;
-  
+
   if FAPI.Token = '' then
   begin
-    Log('Faça login na API primeiro.');
+    Log('Fa'#231'a login na API primeiro.');
     Exit;
   end;
-  
+
   LCount := 0;
   for I := 0 to clbEmpresas.Count - 1 do
     if clbEmpresas.Checked[I] then
@@ -222,140 +277,97 @@ begin
     Log('Selecione ao menos uma empresa para sincronizar.');
     Exit;
   end;
-  
-  Log(Format('Iniciando sincronização de %d empresa(s)...', [LCount]));
-  
+
+  Log(Format('Iniciando sincroniza'#231#227'o de %d empresa(s)...', [LCount]));
+
   try
     for I := 0 to clbEmpresas.Count - 1 do
     begin
       if clbEmpresas.Checked[I] then
       begin
         LCodEmp := Integer(clbEmpresas.Items.Objects[I]);
-        Log(Format('Sincronizando Empresa Cód: %d...', [LCodEmp]));
-        
-        // Empresa (Cadastro) (Índice 0)
+        Log(Format('Sincronizando Empresa C'#243'd: %d...', [LCodEmp]));
+
         if clbEntidades.Checked[0] then
         begin
           if FSync.SyncCompany(LCodEmp) then
-             Log('Empresa sincronizada.')
+            Log('Empresa sincronizada.')
           else
-             Log('Erro ao sincronizar dados da empresa (Cadastro Principal): ' + FAPI.LastErrorMessage);
+            Log('Erro ao sincronizar dados da empresa (Cadastro Principal): ' + FAPI.LastErrorMessage);
         end
         else
-        begin
-          // Se não sincronizou explicitamente, garante o contexto da empresa para as outras tabelas
           FSync.EnsureCompanyContext(LCodEmp);
-        end;
 
         Application.ProcessMessages;
 
-        // Contas Bancárias (Índice 1)
         if clbEntidades.Checked[1] then
-        begin
           if FSync.SyncAccounts(LCodEmp) > 0 then
-             Log('Contas Bancárias sincronizadas.');
-        end;
+            Log('Contas Banc'#225'rias sincronizadas.');
 
-        // Clientes (Índice 2)
         if clbEntidades.Checked[2] then
-        begin
           if FSync.SyncCustomers(LCodEmp) > 0 then
-             Log('Clientes sincronizados.');
-        end;
+            Log('Clientes sincronizados.');
 
-        // Fornecedores (Índice 3)
         if clbEntidades.Checked[3] then
-        begin
           if FSync.SyncSuppliers(LCodEmp) > 0 then
             Log('Fornecedores sincronizados.');
-        end;
-        
-        // Produtos (Índice 4)
+
         if clbEntidades.Checked[4] then
-        begin
           if FSync.SyncProducts(LCodEmp) > 0 then
-            Log('Catálogo de produtos sincronizado.');
-        end;
-        
-        // Vendas (Índice 5)
+            Log('Cat'#225'logo de produtos sincronizado.');
+
         if clbEntidades.Checked[5] then
-        begin
           if FSync.SyncSales(LCodEmp, dtpFrom.Date, dtpTo.Date) > 0 then
             Log('Vendas sincronizadas.');
-        end;
-        
-        // Contas a Pagar (Índice 6)
+
         if clbEntidades.Checked[6] then
-        begin
           if FSync.SyncApTitles(LCodEmp, dtpFrom.Date, dtpTo.Date, cbTitleDate.ItemIndex) > 0 then
             Log('Contas a pagar sincronizadas.');
-        end;
-        
-        // Contas a Receber (Índice 7)
+
         if clbEntidades.Checked[7] then
-        begin
           if FSync.SyncArTitles(LCodEmp, dtpFrom.Date, dtpTo.Date, cbTitleDate.ItemIndex) > 0 then
             Log('Contas a receber sincronizadas.');
-        end;
 
-        // Centros de Custo (Índice 8)
         if clbEntidades.Checked[8] then
-        begin
           if FSync.SyncCostCenters(LCodEmp) > 0 then
-             Log('Centros de Custo sincronizados.');
-        end;
+            Log('Centros de Custo sincronizados.');
 
-        // Plano de Contas (Índice 9)
         if clbEntidades.Checked[9] then
-        begin
           if FSync.SyncChartAccounts(LCodEmp) > 0 then
-             Log('Plano de Contas sincronizado.');
-        end;
+            Log('Plano de Contas sincronizado.');
 
         if clbEntidades.Checked[10] then
-        begin
           if FSync.SyncCustomerDeactivationReasons(LCodEmp) > 0 then
-             Log('Motivos de desativação sincronizados.');
-        end;
+            Log('Motivos de desativa'#231#227'o sincronizados.');
 
         if clbEntidades.Checked[11] then
-        begin
           if FSync.SyncCustomerDeactivationHistory(LCodEmp) > 0 then
-             Log('Histórico de desativação sincronizado.');
-        end;
+            Log('Hist'#243'rico de desativa'#231#227'o sincronizado.');
 
         if clbEntidades.Checked[12] then
-        begin
           if FSync.SyncCustomerClassifications(LCodEmp) > 0 then
-             Log('Classificações de clientes sincronizadas.');
-        end;
+            Log('Classifica'#231#245'es de clientes sincronizadas.');
 
         if clbEntidades.Checked[13] then
-        begin
           if FSync.SyncPaymentMethods(LCodEmp) > 0 then
             Log('Formas de pagamento sincronizadas.');
-        end;
 
         if clbEntidades.Checked[14] then
-        begin
           if FSync.SyncSellers(LCodEmp) > 0 then
             Log('Vendedores sincronizados.');
-        end;
 
         if clbEntidades.Checked[15] then
-        begin
           if FSync.SyncCashiers(LCodEmp) > 0 then
             Log('Caixas sincronizados.');
-        end;
-          
-        Application.ProcessMessages; // Mantém UI responsiva
+
+        Application.ProcessMessages;
       end;
     end;
-     
-    Log('Processo de sincronização finalizado.');
+
+    Log('Processo de sincroniza'#231#227'o finalizado.');
   except
     on E: Exception do
-      Log('Erro fatal na sincronização: ' + E.Message);
+      Log('Erro fatal na sincroniza'#231#227'o: ' + E.Message);
   end;
 end;
 

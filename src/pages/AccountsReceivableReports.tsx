@@ -8,10 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAccountsReceivableDetail, getAccountsReceivableSummary } from "@/api/reports";
-import { listCustomers, listSellers } from "@/api/canonical";
+import { listCustomers, listSellers, reconcileArTitleCustomers } from "@/api/canonical";
 import { downloadCsv } from "@/utils/csv";
 import { downloadXlsx } from "@/utils/xlsx";
-import { CreditCard, Download, FileText, Filter, List, Search } from "lucide-react";
+import { CreditCard, Download, FileText, Filter, List, RefreshCw, Search } from "lucide-react";
 
 const formatCurrency = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -59,6 +59,8 @@ export default function AccountsReceivableReports() {
   const [indicator, setIndicator] = useState(indicatorInput);
   const [search, setSearch] = useState(searchInput);
   const [hasSearched, setHasSearched] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const params = useMemo(() => {
     return {
@@ -76,12 +78,12 @@ export default function AccountsReceivableReports() {
 
   const customers = useQuery({
     queryKey: ["customers", "all"],
-    queryFn: () => listCustomers({ status: "all", take: 500, skip: 0 }),
+    queryFn: () => listCustomers({ status: "all", take: 200, skip: 0 }),
   });
 
   const sellers = useQuery({
     queryKey: ["sellers", "all"],
-    queryFn: () => listSellers({ take: 500, skip: 0 }),
+    queryFn: () => listSellers({ take: 200, skip: 0 }),
   });
 
   const summary = useQuery({
@@ -98,6 +100,9 @@ export default function AccountsReceivableReports() {
 
   const totalGeral = summary.data?.totals.totalGeral ?? 0;
   const totalClientes = summary.data?.totals.totalClientes ?? 0;
+  const totalTitulosResumo = summary.data?.totals.totalTitulos ?? 0;
+  const daysAvgGeral = summary.data?.totals.daysAvgGeral ?? 0;
+  const dividaMedia = summary.data?.totals.dividaMedia ?? 0;
   const totalOpen = detail.data?.totals.totalOpen ?? 0;
   const totalTitulos = detail.data?.totals.totalTitulos ?? 0;
 
@@ -114,21 +119,36 @@ export default function AccountsReceivableReports() {
     setHasSearched(true);
   };
 
+  const handleReconcile = async () => {
+    setReconciling(true);
+    setReconcileMsg(null);
+    try {
+      const result = await reconcileArTitleCustomers();
+      setReconcileMsg(`${result.updated} de ${result.total} títulos vinculados ao cliente.`);
+    } catch {
+      setReconcileMsg("Erro ao reconciliar. Verifique se os clientes foram sincronizados.");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   const handleExport = () => {
     if (!hasSearched) return;
     if (activeTab === "summary") {
-      const headers = ["Cliente", "Nome conhecido", "Documento", "Dias (média)", "Total", "%", "% Acum", "Classe"];
+      const headers = ["Cod", "Nome", "Nome conhecido", "Documento", "Dias (média)", "Títulos", "Total", "%", "% Acum", "Classe"];
       const rows = (summary.data?.items ?? []).map((i) => [
+        i.customerExternalId || "",
         i.customerName,
         i.knownName || "",
         i.document || "",
         Number.isFinite(i.daysAvg) ? Math.round(i.daysAvg) : 0,
+        i.titulos,
         i.total,
         i.percent,
         i.percentAccum,
         i.class,
       ]);
-      downloadXlsx("contas_receber_resumido.xlsx", headers, rows, "Resumo", { currencyColumns: [4] });
+      downloadXlsx("contas_receber_resumido.xlsx", headers, rows, "Resumo", { currencyColumns: [6] });
       downloadCsv("contas_receber_resumido.csv", headers, rows);
       return;
     }
@@ -161,15 +181,24 @@ export default function AccountsReceivableReports() {
           <h2 className="text-2xl font-bold text-foreground">Relatórios de Contas a Receber</h2>
           <p className="text-muted-foreground">Acompanhamento resumido e detalhado dos títulos em aberto.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport} disabled={!hasSearched}>
-            <Download className="w-4 h-4 mr-2" />
-            Exportar
-          </Button>
-          <Button onClick={() => window.print()}>
-            <FileText className="w-4 h-4 mr-2" />
-            Imprimir
-          </Button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleReconcile} disabled={reconciling} title="Vincula títulos sem cliente usando o código externo salvo na importação">
+              <RefreshCw className={`w-4 h-4 mr-2 ${reconciling ? "animate-spin" : ""}`} />
+              {reconciling ? "Reconciliando..." : "Vincular Clientes"}
+            </Button>
+            <Button variant="outline" onClick={handleExport} disabled={!hasSearched}>
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+            <Button onClick={() => window.print()}>
+              <FileText className="w-4 h-4 mr-2" />
+              Imprimir
+            </Button>
+          </div>
+          {reconcileMsg && (
+            <p className="text-xs text-muted-foreground">{reconcileMsg}</p>
+          )}
         </div>
       </div>
 
@@ -307,16 +336,19 @@ export default function AccountsReceivableReports() {
             <h3 className="text-lg font-semibold text-foreground">Relatório Resumido de Contas a Receber</h3>
             <p className="text-sm text-muted-foreground">Consolidação por cliente com percentual e curva ABC.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">TOTAL EM ABERTO</div><div className="text-2xl font-bold text-blue-600">{formatCurrency(totalGeral)}</div></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">CLIENTES</div><div className="text-2xl font-bold">{totalClientes}</div></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">TÍTULOS</div><div className="text-2xl font-bold">{totalTitulos}</div></CardContent></Card>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">TOTAL</div><div className="text-xl font-bold text-blue-600">{formatCurrency(totalGeral)}</div></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">CLIENTES</div><div className="text-xl font-bold">{totalClientes}</div></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">TÍTULOS</div><div className="text-xl font-bold">{totalTitulosResumo}</div></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">DIAS MÉDIO</div><div className="text-xl font-bold">{daysAvgGeral.toFixed(1)}</div></CardContent></Card>
+            <Card><CardContent className="p-4 text-center"><div className="text-xs text-muted-foreground">DÍVIDA MÉDIA</div><div className="text-xl font-bold">{formatCurrency(dividaMedia)}</div></CardContent></Card>
           </div>
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Cliente</TableHead>
+                  <TableHead className="w-16">Cod</TableHead>
+                  <TableHead>Nome</TableHead>
                   <TableHead>Nome conhecido</TableHead>
                   <TableHead className="text-right">Dias PGTO</TableHead>
                   <TableHead className="text-right">Total (R$)</TableHead>
@@ -327,16 +359,17 @@ export default function AccountsReceivableReports() {
               </TableHeader>
               <TableBody>
                 {!hasSearched ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
                 ) : summary.isLoading ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-10">Carregando...</TableCell></TableRow>
                 ) : summary.isError ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
                 ) : (summary.data?.items.length ?? 0) === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
                 ) : (
                   summary.data?.items.map((item) => (
                     <TableRow key={item.customerId ?? item.customerName}>
+                      <TableCell className="text-muted-foreground">{item.customerExternalId || "-"}</TableCell>
                       <TableCell>{item.customerName}</TableCell>
                       <TableCell>{item.knownName || "-"}</TableCell>
                       <TableCell className="text-right">{item.daysAvg.toFixed(0)}</TableCell>
@@ -349,7 +382,7 @@ export default function AccountsReceivableReports() {
                 )}
               </TableBody>
             </Table>
-            <div className="p-4 border-t text-sm text-muted-foreground">Registros: {summary.data?.items.length ?? 0}</div>
+            <div className="p-4 border-t text-sm text-muted-foreground">Reg: {summary.data?.items.length ?? 0} | Média dias: {daysAvgGeral.toFixed(2)} | Total: {formatCurrency(totalGeral)} | Dívida média: {formatCurrency(dividaMedia)}</div>
           </Card>
         </TabsContent>
 

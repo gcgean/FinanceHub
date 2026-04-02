@@ -845,10 +845,11 @@ model ArTitle {
   discountReceived Float?
   interestReceived Float?
   refundReceived   Float?
-  externalSeq      String?
-  sellerExternalId String?
-  sellerName       String?
-  status           TitleStatus
+  externalSeq        String?
+  customerExternalId String?
+  sellerExternalId   String?
+  sellerName         String?
+  status             TitleStatus
   documentNumber   String?
   notes            String?
   externalId       String?

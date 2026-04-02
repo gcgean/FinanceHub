@@ -64,11 +64,13 @@ export async function runDre(body: { dateFrom: string; dateTo: string }) {
 
 export type ArSummaryItem = {
   customerId: string | null
+  customerExternalId: string | null
   customerName: string
   knownName: string | null
   document: string | null
   daysAvg: number
   total: number
+  titulos: number
   percent: number
   percentAccum: number
   class: "A" | "B" | "C"
@@ -79,6 +81,9 @@ export type ArSummaryResponse = {
   totals: {
     totalGeral: number
     totalClientes: number
+    totalTitulos: number
+    daysAvgGeral: number
+    dividaMedia: number
   }
 }
 

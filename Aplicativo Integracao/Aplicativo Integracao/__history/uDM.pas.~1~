@@ -1,0 +1,68 @@
+unit uDM;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+  FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.FB,
+  FireDAC.Phys.FBDef, FireDAC.VCLUI.Wait, FireDAC.Comp.Client, Data.DB,
+  FireDAC.Comp.UI, FireDAC.Phys.IBBase, REST.Types, REST.Client,
+  Data.Bind.Components, Data.Bind.ObjectScope;
+
+type
+  TDM = class(TDataModule)
+    fdConCommand: TFDConnection;
+    fdPhysFBDriverLink1: TFDPhysFBDriverLink;
+    fdGUIxWaitCursor1: TFDGUIxWaitCursor;
+    RESTClient1: TRESTClient;
+    RESTRequest1: TRESTRequest;
+    RESTResponse1: TRESTResponse;
+    procedure DataModuleCreate(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+    procedure ConfigurarConexaoCommand;
+    procedure ConfigurarAPI(const ABaseURL: string);
+  end;
+
+var
+  DM: TDM;
+
+implementation
+
+{%CLASSGROUP 'Vcl.Controls.TControl'}
+
+{$R *.dfm}
+
+procedure TDM.DataModuleCreate(Sender: TObject);
+begin
+  ConfigurarConexaoCommand;
+end;
+
+procedure TDM.ConfigurarConexaoCommand;
+begin
+  fdConCommand.Connected := False;
+  fdConCommand.Params.Clear;
+  fdConCommand.Params.DriverID := 'FB';
+  
+  // Parâmetros do Usuário
+  fdConCommand.Params.Add('Server=commandsystem.commandcloud.com.br');
+  fdConCommand.Params.Add('Database=C:\Windows\DataCloud\Connection - Command System\data\data.fdb');
+  fdConCommand.Params.Add('User_Name=SYSDBA');
+  fdConCommand.Params.Add('Password=csqwe123');
+  fdConCommand.Params.Add('Protocol=TCPIP');
+  fdConCommand.Params.Add('CharacterSet=WIN1252'); // Ajuste conforme necessário
+  
+  // Opcional: configurar caminho da DLL se necessário via código, mas melhor colocar no Path ou junto ao exe
+  // fdPhysFBDriverLink1.VendorLib := 'fbclient.dll';
+end;
+
+procedure TDM.ConfigurarAPI(const ABaseURL: string);
+begin
+  RESTClient1.BaseURL := ABaseURL;
+  RESTClient1.ContentType := 'application/json';
+end;
+
+end.

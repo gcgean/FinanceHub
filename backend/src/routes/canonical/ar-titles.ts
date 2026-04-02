@@ -80,6 +80,7 @@ export async function arTitlesRoutes(app: FastifyInstance) {
       const data = {
         companyId,
         customerId,
+        customerExternalId: b.customerExternalId ?? null,
         issueDate: new Date(b.issueDate),
         dueDate: new Date(b.dueDate),
         paymentDate: b.paymentDate ? new Date(b.paymentDate) : null,
@@ -160,6 +161,47 @@ export async function arTitlesRoutes(app: FastifyInstance) {
       }
       await prisma.arTitle.delete({ where: { id: params.id } });
       return { ok: true };
+    }
+  );
+
+  // Reconcilia títulos sem customerId usando customerExternalId salvo
+  app.post(
+    "/reconcile-customers",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request) => {
+      const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
+      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+
+      // Busca todos os títulos sem cliente mas com customerExternalId
+      const orphans = await prisma.arTitle.findMany({
+        where: { companyId, customerId: null, customerExternalId: { not: null } },
+        select: { id: true, customerExternalId: true },
+      });
+
+      if (orphans.length === 0) return { updated: 0 };
+
+      // Busca todos os clientes da empresa de uma vez
+      const externalIds = [...new Set(orphans.map((t) => t.customerExternalId as string))];
+      const customers = await prisma.customer.findMany({
+        where: { companyId, externalId: { in: externalIds } },
+        select: { id: true, externalId: true },
+      });
+      const customerMap = new Map(customers.map((c) => [c.externalId, c.id]));
+
+      // Atualiza em lote usando updateMany por customerId resolvido
+      let updated = 0;
+      const updates = orphans
+        .map((t) => ({ id: t.id, customerId: customerMap.get(t.customerExternalId!) ?? null }))
+        .filter((u) => u.customerId !== null);
+
+      await Promise.all(
+        updates.map((u) =>
+          prisma.arTitle.update({ where: { id: u.id }, data: { customerId: u.customerId } })
+        )
+      );
+      updated = updates.length;
+
+      return { updated, total: orphans.length };
     }
   );
 }

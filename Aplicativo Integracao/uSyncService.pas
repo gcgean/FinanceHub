@@ -1803,11 +1803,14 @@ var
   LPaidAmount: Double;
   LDiscountReceived: Double;
   LInterestReceived: Double;
+  LRefundReceived: Double;
   LOpenAmount: Double;
   LStatus: string;
   LDoc: string;
   LSeq: string;
   LDateField: string;
+  LSellerCode: string;
+  LSellerName: string;
 
   function FieldFloat(const AFieldName: string): Double;
   begin

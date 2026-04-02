@@ -207,6 +207,7 @@ export async function reportsRoutes(app: FastifyInstance) {
       const now = new Date();
       const byCustomer = new Map<string, {
         customerId: string | null;
+        customerExternalId: string | null;
         customerName: string;
         knownName: string | null;
         document: string | null;
@@ -216,9 +217,10 @@ export async function reportsRoutes(app: FastifyInstance) {
       }>();
 
       for (const t of titles) {
-        const key = t.customerId ?? "unknown";
+        const key = t.customerId ?? `ext:${t.customerExternalId ?? "unknown"}`;
         const entry = byCustomer.get(key) ?? {
           customerId: t.customerId ?? null,
+          customerExternalId: t.customer?.externalId ?? t.customerExternalId ?? null,
           customerName: t.customer?.name ?? "Cliente não informado",
           knownName: t.customer?.knownName ?? null,
           document: t.customer?.document ?? null,
@@ -227,7 +229,8 @@ export async function reportsRoutes(app: FastifyInstance) {
           count: 0,
         };
         const days = Math.floor((now.getTime() - t.dueDate.getTime()) / 86400000);
-        entry.total += t.openAmount;
+        // Matching Delphi: sum(VALOR_CTR - DEVOLUCAO_CTR)
+        entry.total += t.amount - (t.refundReceived ?? 0);
         entry.daysSum += days;
         entry.count += 1;
         byCustomer.set(key, entry);
@@ -237,11 +240,13 @@ export async function reportsRoutes(app: FastifyInstance) {
       const items = Array.from(byCustomer.values())
         .map((c) => ({
           customerId: c.customerId,
+          customerExternalId: c.customerExternalId,
           customerName: c.customerName,
           knownName: c.knownName,
           document: c.document,
           daysAvg: c.count ? c.daysSum / c.count : 0,
           total: c.total,
+          titulos: c.count,
         }))
         .sort((a, b) => b.total - a.total);
 
@@ -258,11 +263,19 @@ export async function reportsRoutes(app: FastifyInstance) {
         };
       });
 
+      const totalTitulos = withClass.reduce((sum, c) => sum + c.titulos, 0);
+      const daysAvgGeral = withClass.length
+        ? withClass.reduce((sum, c) => sum + c.daysAvg, 0) / withClass.length
+        : 0;
+
       return {
         items: withClass,
         totals: {
           totalGeral,
           totalClientes: withClass.length,
+          totalTitulos,
+          daysAvgGeral,
+          dividaMedia: withClass.length ? totalGeral / withClass.length : 0,
         },
       };
     }

@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(curl -s http://127.0.0.1:4000/health -w \"\\\\n%{http_code}\")",
+      "Bash(pg_isready)",
+      "Bash(psql -U postgres -c \"\\\\du\")",
+      "Read(//c//**)",
+      "Read(//c/Program Files//**)",
+      "Bash(cmd /c \"dir \"\"C:\\\\Program Files\"\" /b\")",
+      "Bash(cmd /c \"where psql\")",
+      "Bash(cmd /c \"dir C:\\\\ /b\")",
+      "Bash(cmd /c \"dir \"\"C:\\\\Program Files\\\\PostgreSQL\"\" /b\")",
+      "Bash(wmic service:*)",
+      "Bash(cmd /c \"sc query postgresql\")",
+      "Bash(cmd /c \"sc query | findstr /i postgres\")",
+      "Bash(docker exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl -s http://127.0.0.1:4000/health)",
+      "Bash(find 'C:\\\\Projetos Web\\\\FinanceHub' -type f \\\\\\(-name *ArTitle* -o -name *ar-title* -o -name *AccountsReceivable* -o -name *receivable* \\\\\\))",
+      "Bash(tasklist /FI \"IMAGENAME eq node.exe\" /FO CSV)",
+      "Bash(powershell -Command \"Get-Process node | Select-Object Id, CPU, WorkingSet, StartTime | Format-Table\")",
+      "Bash(powershell -Command \"Get-Process node | Where-Object {$_WorkingSet -gt 200MB} | Select-Object Id, WorkingSet, StartTime | Format-Table\")",
+      "Bash(powershell -Command \"Get-WmiObject Win32_Process | Where-Object {$_CommandLine -like ''*server.ts*''} | Select-Object ProcessId, CommandLine\")",
+      "Bash(cmd //c \"wmic process where \"\"CommandLine like ''%server.ts%''\"\" get ProcessId,CommandLine\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/)"
+    ]
+  }
+}

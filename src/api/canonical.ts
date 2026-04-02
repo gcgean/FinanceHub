@@ -144,6 +144,7 @@ export type ArTitle = {
   id: string
   companyId: string
   customerId: string | null
+  customerExternalId?: string | null
   issueDate: string
   dueDate: string
   paymentDate?: string | null
@@ -468,6 +469,10 @@ export async function updateArTitle(id: string, body: Partial<ArTitleInput>) {
 
 export async function deleteArTitle(id: string) {
   return apiFetch<{ ok: true }>(`/ar-titles/${id}`, { method: "DELETE" })
+}
+
+export async function reconcileArTitleCustomers() {
+  return apiFetch<{ updated: number; total: number }>("/ar-titles/reconcile-customers", { method: "POST" })
 }
 
 export type SaleItem = {
