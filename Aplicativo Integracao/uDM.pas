@@ -3,7 +3,8 @@
 interface
 
 uses
-  System.SysUtils, System.Classes, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  System.SysUtils, System.Classes, System.IniFiles,
+  FireDAC.Stan.Intf, FireDAC.Stan.Option,
   FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
   FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.FB,
   FireDAC.Phys.FBDef, FireDAC.VCLUI.Wait, FireDAC.Comp.Client, Data.DB,
@@ -42,21 +43,33 @@ begin
 end;
 
 procedure TDM.ConfigurarConexaoCommand;
+var
+  Ini: TIniFile;
+  LHost, LPort, LUser, LPassword, LDatabase: string;
 begin
+  Ini := TIniFile.Create(ChangeFileExt(ParamStr(0), '.ini'));
+  try
+    LHost     := Ini.ReadString('Database', 'Host',     '26.241.132.21');
+    LPort     := Ini.ReadString('Database', 'Port',     '3050');
+    LUser     := Ini.ReadString('Database', 'User',     'SYSDBA');
+    LPassword := Ini.ReadString('Database', 'Password', 'csqwe123');
+    LDatabase := Ini.ReadString('Database', 'Database',
+      'C:\Windows\DataCloud\Connection - Command System\data\data.fdb');
+  finally
+    Ini.Free;
+  end;
+
   fdConCommand.Connected := False;
   fdConCommand.Params.Clear;
   fdConCommand.Params.DriverID := 'FB';
-
-  // Parâmetros do Usuário
-  fdConCommand.Params.Add('Server=26.241.132.21');
-  fdConCommand.Params.Add('Database=C:\Windows\DataCloud\Connection - Command System\data\data.fdb');
-  fdConCommand.Params.Add('User_Name=SYSDBA');
-  fdConCommand.Params.Add('Password=csqwe123');
+  fdConCommand.Params.Add('Server=' + LHost);
+  if LPort <> '' then
+    fdConCommand.Params.Add('Port=' + LPort);
+  fdConCommand.Params.Add('Database=' + LDatabase);
+  fdConCommand.Params.Add('User_Name=' + LUser);
+  fdConCommand.Params.Add('Password=' + LPassword);
   fdConCommand.Params.Add('Protocol=TCPIP');
-  fdConCommand.Params.Add('CharacterSet=WIN1252'); // Ajuste conforme necessário
-  
-  // Opcional: configurar caminho da DLL se necessário via código, mas melhor colocar no Path ou junto ao exe
-  // fdPhysFBDriverLink1.VendorLib := 'fbclient.dll';
+  fdConCommand.Params.Add('CharacterSet=WIN1252');
 end;
 
 procedure TDM.ConfigurarAPI(const ABaseURL: string);

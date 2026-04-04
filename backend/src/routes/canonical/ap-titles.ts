@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { parseBody, parseQuery } from "../../lib/validation";
 import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth";
 import { TitleStatus, UserRole, Prisma } from "@prisma/client";
+import { resolveCompanyId } from "../../lib/company";
 
 const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
@@ -61,8 +62,7 @@ export async function apTitlesRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request: FastifyRequest) => {
-      const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const companyId = await resolveCompanyId(request);
       const b = parseBody(Body, request.body);
       let supplierId = b.supplierId ?? null;
       if (!supplierId && b.supplierExternalId) {

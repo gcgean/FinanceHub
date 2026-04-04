@@ -847,6 +847,7 @@ model ArTitle {
   refundReceived   Float?
   externalSeq        String?
   customerExternalId String?
+  saleExternalId     String?
   sellerExternalId   String?
   sellerName         String?
   status             TitleStatus

@@ -93,6 +93,7 @@ export type ArDetailItem = {
   externalSeq: string | null
   customerId: string | null
   customerExternalId: string | null
+  saleExternalId: string | null
   customerName: string
   knownName: string | null
   document: string | null

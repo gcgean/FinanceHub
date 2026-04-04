@@ -27,7 +27,23 @@
       "Bash(powershell -Command \"Get-WmiObject Win32_Process | Where-Object {$_CommandLine -like ''*server.ts*''} | Select-Object ProcessId, CommandLine\")",
       "Bash(cmd //c \"wmic process where \"\"CommandLine like ''%server.ts%''\"\" get ProcessId,CommandLine\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/health)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:4000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8080)",
+      "Bash(node -e \":*)",
+      "Bash(start cmd:*)",
+      "Bash(findstr \":4000\")",
+      "Bash(findstr \"4000\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue\")",
+      "Bash(node -e \"const http = require\\(''http''\\); http.get\\(''http://localhost:4000/health'', r => console.log\\(''OK'', r.statusCode\\)\\).on\\(''error'', e => console.log\\(''ERRO:'', e.message\\)\\)\")",
+      "Bash(node -e \"const http = require\\(''http''\\); const req = http.get\\(''http://localhost:4000/health'', r => { let d=''''; r.on\\(''data'', c=>d+=c\\); r.on\\(''end'', \\(\\)=>console.log\\(''OK'', r.statusCode, d\\)\\); }\\); req.on\\(''error'', e => console.log\\(''ERRO:'', e.code, e.message\\)\\); req.setTimeout\\(3000\\);\")",
+      "Bash(start \"FinanceHub Backend\" cmd /k \"npm run dev\")",
+      "Bash(start \"FinanceHub Frontend\" cmd /k \"npm run dev\")",
+      "Bash(timeout /t 8 /nobreak)",
+      "Bash(node -e \"const http=require\\(''http''\\);http.get\\(''http://localhost:4000/health'',r=>{console.log\\(''Backend OK porta 4000, status:'',r.statusCode\\)}\\).on\\(''error'',e=>console.log\\(''ERRO:'',e.code\\)\\)\")",
+      "Bash(node -e \"const http=require\\(''http''\\);http.get\\(''http://localhost:4000/health'',r=>console.log\\(''Backend OK - status:'',r.statusCode\\)\\).on\\(''error'',e=>console.log\\(''Backend OFFLINE:'',e.code\\)\\)\")",
+      "Bash(node -e \"const http=require\\(''http''\\);http.get\\(''http://localhost:8080'',r=>console.log\\(''Frontend OK - status:'',r.statusCode\\)\\).on\\(''error'',e=>console.log\\(''Frontend OFFLINE:'',e.code\\)\\)\")",
+      "Bash(node -e \"const http=require\\(''http''\\);http.get\\(''http://localhost:4000/health'',r=>console.log\\(''Backend OK:'',r.statusCode\\)\\).on\\(''error'',e=>console.log\\(''Backend OFFLINE:'',e.code\\)\\)\")",
+      "Bash(node -e \"const http=require\\(''http''\\);http.get\\(''http://localhost:8080'',r=>console.log\\(''Frontend OK:'',r.statusCode\\)\\).on\\(''error'',e=>console.log\\(''Frontend OFFLINE:'',e.code\\)\\)\")"
     ]
   }
 }

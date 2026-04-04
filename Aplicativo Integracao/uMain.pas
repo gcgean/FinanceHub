@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
   System.IniFiles, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
-  uDM, uFinanceHubAPI, uSyncService,
+  Vcl.Menus, uDM, uFinanceHubAPI, uSyncService, uFormConfig,
   FireDAC.Comp.Client, Vcl.CheckLst, FireDAC.DApt, Vcl.ComCtrls;
 
 type
@@ -15,6 +15,7 @@ type
     btnSync: TButton;
     btnMarcarTodos: TButton;
     btnDesmarcarTodos: TButton;
+    btnConfigDB: TButton;
     ProgressBar1: TProgressBar;
     lblProgress: TLabel;
     MemoLog: TMemo;
@@ -32,13 +33,24 @@ type
     clbEntidades: TCheckListBox;
     dtpFrom: TDateTimePicker;
     dtpTo: TDateTimePicker;
+    MainMenu1: TMainMenu;
+    mnuConfig: TMenuItem;
+    mnuConfigBanco: TMenuItem;
+    mnuSep1: TMenuItem;
+    mnuSair: TMenuItem;
+    mnuAjuda: TMenuItem;
+    mnuComoUsar: TMenuItem;
     procedure btnConnectDBClick(Sender: TObject);
     procedure btnLoginAPIClick(Sender: TObject);
     procedure btnSyncClick(Sender: TObject);
     procedure btnMarcarTodosClick(Sender: TObject);
     procedure btnDesmarcarTodosClick(Sender: TObject);
+    procedure btnConfigDBClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
+    procedure mnuConfigBancoClick(Sender: TObject);
+    procedure mnuSairClick(Sender: TObject);
+    procedure mnuComoUsarClick(Sender: TObject);
   private
     FAPI: TFinanceHubAPI;
     FSync: TSyncService;
@@ -228,13 +240,57 @@ end;
 procedure TfrmMain.btnConnectDBClick(Sender: TObject);
 begin
   try
+    DM.ConfigurarConexaoCommand;
     DM.fdConCommand.Connected := True;
     Log('Conectado ao Firebird com sucesso!');
+    Application.ProcessMessages;
     CarregarEmpresas;
   except
     on E: Exception do
       Log('Erro ao conectar Firebird: ' + E.Message);
   end;
+end;
+
+procedure TfrmMain.btnConfigDBClick(Sender: TObject);
+var
+  F: TfrmConfig;
+begin
+  F := TfrmConfig.Create(Self);
+  try
+    F.ShowModal;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TfrmMain.mnuConfigBancoClick(Sender: TObject);
+begin
+  btnConfigDBClick(Sender);
+end;
+
+procedure TfrmMain.mnuSairClick(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TfrmMain.mnuComoUsarClick(Sender: TObject);
+begin
+  ShowMessage(
+    'Como usar o FinanceHub Integrador:' + #13#10 + #13#10 +
+    '1. Config. Banco' + #13#10 +
+    '   Clique em "Config. Banco" e preencha os dados' + #13#10 +
+    '   de conexao (Host, Porta, Usuario, Senha, Banco).' + #13#10 +
+    '   Clique Salvar - as configuracoes ficam gravadas' + #13#10 +
+    '   no arquivo FinanceHubIntegrator.ini.' + #13#10 + #13#10 +
+    '2. Conectar BD' + #13#10 +
+    '   Conecta ao banco Firebird e carrega as empresas.' + #13#10 + #13#10 +
+    '3. Login API' + #13#10 +
+    '   Informe o e-mail e senha do FinanceHub e clique' + #13#10 +
+    '   Login API para autenticar no servidor.' + #13#10 + #13#10 +
+    '4. Sincronizar' + #13#10 +
+    '   Selecione as entidades e empresas, defina o' + #13#10 +
+    '   periodo e clique Sincronizar.'
+  );
 end;
 
 procedure TfrmMain.btnLoginAPIClick(Sender: TObject);

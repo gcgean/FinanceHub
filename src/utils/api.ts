@@ -57,6 +57,10 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   const payload: unknown = isJson ? await res.json().catch(() => null) : await res.text().catch(() => "")
 
   if (!res.ok) {
+    // Token expirado: limpa sessão para forçar novo login
+    if (res.status === 401) {
+      useAuthStore.getState().logout()
+    }
     const code =
       payload &&
       typeof payload === "object" &&

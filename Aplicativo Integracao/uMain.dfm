@@ -10,6 +10,7 @@ object frmMain: TfrmMain
   Font.Height = -13
   Font.Name = 'Segoe UI'
   Font.Style = []
+  Menu = MainMenu1
   OldCreateOrder = True
   Position = poScreenCenter
   OnCreate = FormCreate
@@ -70,7 +71,7 @@ object frmMain: TfrmMain
     Top = 515
     Width = 42
     Height = 16
-    Anchors = [akLeft, akBottom]
+    Anchors = [akLeft, akTop]
     Caption = 'Pronto.'
   end
   object edtEmail: TEdit
@@ -205,18 +206,52 @@ object frmMain: TfrmMain
     Top = 492
     Width = 788
     Height = 20
-    Anchors = [akLeft, akRight, akBottom]
+    Anchors = [akLeft, akTop, akRight]
     TabOrder = 8
   end
   object MemoLog: TMemo
     Left = 16
-    Top = 534
+    Top = 538
     Width = 788
-    Height = 130
+    Height = 126
     Anchors = [akLeft, akTop, akRight, akBottom]
     Lines.Strings = (
       'Logs do sistema...')
     ScrollBars = ssVertical
     TabOrder = 3
+  end
+  object btnConfigDB: TButton
+    Left = 320
+    Top = 362
+    Width = 150
+    Height = 26
+    Caption = 'Config. Banco'
+    TabOrder = 14
+    OnClick = btnConfigDBClick
+  end
+  object MainMenu1: TMainMenu
+    Left = 700
+    Top = 8
+    object mnuConfig: TMenuItem
+      Caption = 'Configura'#231#245'es'
+      object mnuConfigBanco: TMenuItem
+        Caption = 'Banco de Dados'
+        OnClick = mnuConfigBancoClick
+      end
+      object mnuSep1: TMenuItem
+        Caption = '-'
+      end
+      object mnuSair: TMenuItem
+        Caption = 'Sair'
+        OnClick = mnuSairClick
+      end
+    end
+    object mnuAjuda: TMenuItem
+      Caption = 'Ajuda'
+      object mnuComoUsar: TMenuItem
+        Caption = 'Como Usar'
+        OnClick = mnuComoUsarClick
+      end
+    end
   end
 end

@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { parseBody, parseQuery } from "../../lib/validation";
 import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth";
 import { TitleStatus, UserRole, Prisma } from "@prisma/client";
+import { resolveCompanyId } from "../../lib/company";
 
 const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),
@@ -26,6 +27,7 @@ const Body = z.object({
   interestReceived: z.number().optional().nullable(),
   refundReceived: z.number().optional().nullable(),
   externalSeq: z.string().optional().nullable(),
+  saleExternalId: z.string().optional().nullable(),
   sellerExternalId: z.string().optional().nullable(),
   sellerName: z.string().optional().nullable(),
   status: z.nativeEnum(TitleStatus),
@@ -65,8 +67,7 @@ export async function arTitlesRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request) => {
-      const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const companyId = await resolveCompanyId(request);
       const b = parseBody(Body, request.body);
       let customerId = b.customerId ?? null;
       if (!customerId && b.customerExternalId) {
@@ -81,6 +82,7 @@ export async function arTitlesRoutes(app: FastifyInstance) {
         companyId,
         customerId,
         customerExternalId: b.customerExternalId ?? null,
+        saleExternalId: b.saleExternalId ?? null,
         issueDate: new Date(b.issueDate),
         dueDate: new Date(b.dueDate),
         paymentDate: b.paymentDate ? new Date(b.paymentDate) : null,
@@ -169,8 +171,7 @@ export async function arTitlesRoutes(app: FastifyInstance) {
     "/reconcile-customers",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
     async (request) => {
-      const companyId = request.user.role === UserRole.ADMIN ? request.user.companyId ?? null : request.user.companyId;
-      if (!companyId) throw Object.assign(new Error("COMPANY_REQUIRED"), { statusCode: 400 });
+      const companyId = await resolveCompanyId(request);
 
       // Busca todos os títulos sem cliente mas com customerExternalId
       const orphans = await prisma.arTitle.findMany({

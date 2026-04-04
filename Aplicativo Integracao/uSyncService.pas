@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, System.JSON, System.Variants, FireDAC.Comp.Client, uFinanceHubAPI, uDM, FireDAC.DApt,
-  System.Generics.Collections, Data.DB;
+  System.Generics.Collections, Data.DB, FireDAC.Stan.Option;
 
 type
   TSyncService = class
@@ -1655,14 +1655,12 @@ var
   LPaidAmount: Double;
   LDiscountReceived: Double;
   LInterestReceived: Double;
-  LRefundReceived: Double;
   LOpenAmount: Double;
   LStatus: string;
   LDoc: string;
   LSeq: string;
   LDateField: string;
-  LSellerCode: string;
-  LSellerName: string;
+  LBuffer: TObjectList<TJSONObject>;
 
   function FieldFloat(const AFieldName: string): Double;
   begin
@@ -1681,6 +1679,7 @@ var
   end;
 begin
   Result := 0;
+  LBuffer := TObjectList<TJSONObject>.Create(True);
   QCount := TFDQuery.Create(nil);
   Q := TFDQuery.Create(nil);
   try
@@ -1699,7 +1698,10 @@ begin
     QCount.Open;
     LTotal := QCount.FieldByName('CNT').AsInteger;
 
+    // FASE 1: Lê todos os registros do Firebird para memória
     Q.Connection := FDB;
+    Q.FetchOptions.Mode := fmAll;
+    Q.FetchOptions.Unidirectional := False;
     Q.SQL.Text := 'SELECT * FROM CONTAS_PAGAR WHERE COD_EMP = :CodEmp AND ' + LDateField + ' BETWEEN :DataIni AND :DataFim';
     Q.ParamByName('CodEmp').AsInteger := ACodEmp;
     Q.ParamByName('DataIni').AsDate := ADateFrom;
@@ -1707,13 +1709,10 @@ begin
     Q.Open;
 
     Log(Format('Contas a Pagar encontradas (%s a %s): %d', [DateToStr(ADateFrom), DateToStr(ADateTo), LTotal]));
-    LCurrent := 0;
+    Log('Carregando registros para memória...');
 
     while not Q.Eof do
     begin
-      Inc(LCurrent);
-      Progress('Sincronizando contas a pagar...', LCurrent, LTotal);
-
       LExternalId := FieldStr('COD_CPT');
       LSeq := FieldStr('SEQUENCIA_CTP');
       if LSeq <> '' then
@@ -1739,7 +1738,9 @@ begin
       if LOpenAmount < 0 then
         LOpenAmount := 0;
 
-      if (LAmount > 0) and (LPaidAmount >= LAmount) then
+      if not VarIsNull(LPaymentDate) then
+        LStatus := 'PAID'
+      else if (LAmount > 0) and (LOpenAmount < 0.01) then
         LStatus := 'PAID'
       else if (LDueDate < Date) and (LOpenAmount > 0) then
         LStatus := 'OVERDUE'
@@ -1751,40 +1752,55 @@ begin
         LDoc := FieldStr('CHEQUE');
 
       LObj := TJSONObject.Create;
-      try
-        LObj.AddPair('externalId', LExternalId);
-        LObj.AddPair('supplierExternalId', FieldStr('COD_FOR'));
-        LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
-        LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
-        if VarIsNull(LPaymentDate) then
-          LObj.AddPair('paymentDate', TJSONNull.Create)
-        else
-          LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
-        LObj.AddPair('amount', TJSONNumber.Create(LAmount));
-        LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
-        LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
-        LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
-        LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
-        LObj.AddPair('status', LStatus);
-        if LDoc <> '' then
-          LObj.AddPair('documentNumber', LDoc)
-        else
-          LObj.AddPair('documentNumber', TJSONNull.Create);
-        LObj.AddPair('notes', FieldStr('OBS_CTP'));
+      LObj.AddPair('externalId', LExternalId);
+      LObj.AddPair('supplierExternalId', FieldStr('COD_FOR'));
+      LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
+      LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
+      if VarIsNull(LPaymentDate) then
+        LObj.AddPair('paymentDate', TJSONNull.Create)
+      else
+        LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
+      LObj.AddPair('amount', TJSONNumber.Create(LAmount));
+      LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
+      LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
+      LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
+      LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
+      LObj.AddPair('status', LStatus);
+      if LDoc <> '' then
+        LObj.AddPair('documentNumber', LDoc)
+      else
+        LObj.AddPair('documentNumber', TJSONNull.Create);
+      LObj.AddPair('notes', FieldStr('OBS_CTP'));
 
-        if FAPI.SyncApTitle(LObj) then
-          Inc(Result)
-        else
-          Log('Erro ao sincronizar conta a pagar ' + LExternalId + ': ' + FAPI.LastErrorMessage);
-      finally
-        LObj.Free;
-      end;
-
+      LBuffer.Add(LObj);
       Q.Next;
     end;
+
+    // Fecha Firebird ANTES dos POSTs HTTP
+    Q.Close;
+    QCount.Close;
+    FDB.Connected := False;
+    Log(Format('Registros carregados: %d. Iniciando envio para API...', [LBuffer.Count]));
+
+    // FASE 2: Envia para a API
+    LTotal := LBuffer.Count;
+    LCurrent := 0;
+    for LObj in LBuffer do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando contas a pagar...', LCurrent, LTotal);
+      if FAPI.SyncApTitle(LObj) then
+        Inc(Result)
+      else
+        Log('Erro ao sincronizar conta a pagar: ' + FAPI.LastErrorMessage);
+    end;
+
+    FDB.Connected := True;
+
   finally
     Q.Free;
     QCount.Free;
+    LBuffer.Free;
   end;
 end;
 
@@ -1811,6 +1827,8 @@ var
   LDateField: string;
   LSellerCode: string;
   LSellerName: string;
+  // Lista em memória: separa fase de leitura do Firebird da fase de envio HTTP
+  LBuffer: TObjectList<TJSONObject>;
 
   function FieldFloat(const AFieldName: string): Double;
   begin
@@ -1829,6 +1847,7 @@ var
   end;
 begin
   Result := 0;
+  LBuffer := TObjectList<TJSONObject>.Create(True); // True = owns objects
   QCount := TFDQuery.Create(nil);
   Q := TFDQuery.Create(nil);
   try
@@ -1847,7 +1866,11 @@ begin
     QCount.Open;
     LTotal := QCount.FieldByName('CNT').AsInteger;
 
+    // FASE 1: Lê todos os registros do Firebird para memória (LBuffer)
+    // A conexão com Firebird fica ativa apenas durante esta fase rápida
     Q.Connection := FDB;
+    Q.FetchOptions.Mode := fmAll;
+    Q.FetchOptions.Unidirectional := False;
     Q.SQL.Text := 'SELECT R.*, V.COD_USU_VEND, VE.NOME_USU FROM CONTAS_RECEBER R ' +
                   'LEFT JOIN VENDAS V ON (R.COD_VENDA = V.COD_VEN) ' +
                   'LEFT JOIN USUARIO VE ON (V.COD_USU_VEND = VE.COD_USU) ' +
@@ -1858,13 +1881,10 @@ begin
     Q.Open;
 
     Log(Format('Contas a Receber encontradas (%s a %s): %d', [DateToStr(ADateFrom), DateToStr(ADateTo), LTotal]));
-    LCurrent := 0;
+    Log('Carregando registros para memória...');
 
     while not Q.Eof do
     begin
-      Inc(LCurrent);
-      Progress('Sincronizando contas a receber...', LCurrent, LTotal);
-
       LExternalId := FieldStr('COD_CTR');
       LSeq := FieldStr('SEQUENCIA_CTR');
       if LSeq <> '' then
@@ -1893,7 +1913,10 @@ begin
       if LOpenAmount < 0 then
         LOpenAmount := 0;
 
-      if (LAmount > 0) and (LPaidAmount >= LAmount) then
+      // Se DTPAGTO_CTR preenchido → pago (regra principal do Delphi)
+      if not VarIsNull(LPaymentDate) then
+        LStatus := 'PAID'
+      else if (LAmount > 0) and (LOpenAmount < 0.01) then
         LStatus := 'PAID'
       else if (LDueDate < Date) and (LOpenAmount > 0) then
         LStatus := 'OVERDUE'
@@ -1908,50 +1931,70 @@ begin
       LSellerName := FieldStr('NOME_USU');
 
       LObj := TJSONObject.Create;
-      try
-        LObj.AddPair('externalId', LExternalId);
-        LObj.AddPair('externalSeq', LSeq);
-        LObj.AddPair('customerExternalId', FieldStr('COD_CLI'));
-        if LSellerCode <> '' then
-          LObj.AddPair('sellerExternalId', LSellerCode)
-        else
-          LObj.AddPair('sellerExternalId', TJSONNull.Create);
-        if LSellerName <> '' then
-          LObj.AddPair('sellerName', LSellerName)
-        else
-          LObj.AddPair('sellerName', TJSONNull.Create);
-        LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
-        LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
-        if VarIsNull(LPaymentDate) then
-          LObj.AddPair('paymentDate', TJSONNull.Create)
-        else
-          LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
-        LObj.AddPair('amount', TJSONNumber.Create(LAmount));
-        LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
-        LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
-        LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
-        LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
-        LObj.AddPair('refundReceived', TJSONNumber.Create(LRefundReceived));
-        LObj.AddPair('status', LStatus);
-        if LDoc <> '' then
-          LObj.AddPair('documentNumber', LDoc)
-        else
-          LObj.AddPair('documentNumber', TJSONNull.Create);
-        LObj.AddPair('notes', FieldStr('OBS_CTR'));
+      LObj.AddPair('externalId', LExternalId);
+      LObj.AddPair('externalSeq', LSeq);
+      LObj.AddPair('customerExternalId', FieldStr('COD_CLI'));
+      if not Q.FieldByName('COD_VENDA').IsNull then
+        LObj.AddPair('saleExternalId', FieldStr('COD_VENDA'))
+      else
+        LObj.AddPair('saleExternalId', TJSONNull.Create);
+      if LSellerCode <> '' then
+        LObj.AddPair('sellerExternalId', LSellerCode)
+      else
+        LObj.AddPair('sellerExternalId', TJSONNull.Create);
+      if LSellerName <> '' then
+        LObj.AddPair('sellerName', LSellerName)
+      else
+        LObj.AddPair('sellerName', TJSONNull.Create);
+      LObj.AddPair('issueDate', FormatDateTime('yyyy-mm-dd', LIssueDate));
+      LObj.AddPair('dueDate', FormatDateTime('yyyy-mm-dd', LDueDate));
+      if VarIsNull(LPaymentDate) then
+        LObj.AddPair('paymentDate', TJSONNull.Create)
+      else
+        LObj.AddPair('paymentDate', FormatDateTime('yyyy-mm-dd', LPaymentDate));
+      LObj.AddPair('amount', TJSONNumber.Create(LAmount));
+      LObj.AddPair('openAmount', TJSONNumber.Create(LOpenAmount));
+      LObj.AddPair('paidAmount', TJSONNumber.Create(LPaidAmount));
+      LObj.AddPair('discountReceived', TJSONNumber.Create(LDiscountReceived));
+      LObj.AddPair('interestReceived', TJSONNumber.Create(LInterestReceived));
+      LObj.AddPair('refundReceived', TJSONNumber.Create(LRefundReceived));
+      LObj.AddPair('status', LStatus);
+      if LDoc <> '' then
+        LObj.AddPair('documentNumber', LDoc)
+      else
+        LObj.AddPair('documentNumber', TJSONNull.Create);
+      LObj.AddPair('notes', FieldStr('OBS_CTR'));
 
-        if FAPI.SyncArTitle(LObj) then
-          Inc(Result)
-        else
-          Log('Erro ao sincronizar conta a receber ' + LExternalId + ': ' + FAPI.LastErrorMessage);
-      finally
-        LObj.Free;
-      end;
-
+      LBuffer.Add(LObj); // Acumula em memória - NÃO envia HTTP ainda
       Q.Next;
     end;
+
+    // Fecha o Firebird ANTES dos POSTs HTTP para evitar timeout de conexão ociosa
+    Q.Close;
+    QCount.Close;
+    FDB.Connected := False;
+    Log(Format('Registros carregados: %d. Iniciando envio para API...', [LBuffer.Count]));
+
+    // FASE 2: Envia para a API (sem conexão Firebird ativa)
+    LTotal := LBuffer.Count;
+    LCurrent := 0;
+    for LObj in LBuffer do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando contas a receber...', LCurrent, LTotal);
+      if FAPI.SyncArTitle(LObj) then
+        Inc(Result)
+      else
+        Log('Erro ao sincronizar conta a receber: ' + FAPI.LastErrorMessage);
+    end;
+
+    // Reconecta o Firebird para operações futuras
+    FDB.Connected := True;
+
   finally
     Q.Free;
     QCount.Free;
+    LBuffer.Free;
   end;
 end;
 

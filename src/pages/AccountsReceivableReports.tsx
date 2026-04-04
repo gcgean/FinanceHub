@@ -42,7 +42,7 @@ export default function AccountsReceivableReports() {
   );
   const [dateToInput, setDateToInput] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [dateFieldInput, setDateFieldInput] = useState<"issue" | "due">("due");
-  const [statusInput, setStatusInput] = useState<"ALL" | "OPEN" | "OVERDUE" | "PAID" | "CANCELED">("OPEN");
+  const [statusInput, setStatusInput] = useState<"ALL" | "UNPAID" | "OPEN" | "OVERDUE" | "PAID" | "CANCELED">("UNPAID");
   const [customerIdInput, setCustomerIdInput] = useState("all");
   const [sellerIdInput, setSellerIdInput] = useState("all");
   const [routeInput, setRouteInput] = useState("");
@@ -52,7 +52,7 @@ export default function AccountsReceivableReports() {
   const [dateFrom, setDateFrom] = useState(dateFromInput);
   const [dateTo, setDateTo] = useState(dateToInput);
   const [dateField, setDateField] = useState<"issue" | "due">(dateFieldInput);
-  const [status, setStatus] = useState<"ALL" | "OPEN" | "OVERDUE" | "PAID" | "CANCELED">(statusInput);
+  const [status, setStatus] = useState<"ALL" | "UNPAID" | "OPEN" | "OVERDUE" | "PAID" | "CANCELED">(statusInput);
   const [customerId, setCustomerId] = useState(customerIdInput);
   const [sellerId, setSellerId] = useState(sellerIdInput);
   const [route, setRoute] = useState(routeInput);
@@ -67,7 +67,7 @@ export default function AccountsReceivableReports() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       dateField,
-      status: status === "ALL" ? undefined : status,
+      status: (status === "ALL" || status === "UNPAID") ? undefined : status as "OPEN" | "OVERDUE" | "PAID" | "CANCELED",
       customerId: customerId === "all" ? undefined : customerId,
       sellerId: sellerId === "all" ? undefined : sellerId,
       route: route.trim() || undefined,
@@ -152,7 +152,7 @@ export default function AccountsReceivableReports() {
       downloadCsv("contas_receber_resumido.csv", headers, rows);
       return;
     }
-    const headers = ["Cod", "Seq", "Cod Cliente", "Nome Cliente", "Nome Fantasia", "Valor", "Devolução", "Acrésc", "Valor líquido", "Emissão", "Dias", "Vencimento", "Vendedor", "Cidade", "Nº Doc"];
+    const headers = ["Cod", "Seq", "Cod Cliente", "Nome Cliente", "Nome Fantasia", "Valor", "Devolução", "Acrésc", "Valor líquido", "Emissão", "Dias", "Vencimento", "Venda", "Vendedor", "Cidade", "Nº Doc"];
     const rows = (detail.data?.items ?? []).map((i) => [
       i.externalId || "",
       i.externalSeq || "",
@@ -166,6 +166,7 @@ export default function AccountsReceivableReports() {
       i.issueDate,
       i.daysOverdue,
       i.dueDate,
+      i.saleExternalId || "",
       i.sellerName || "",
       i.city || "",
       i.documentNumber || "",
@@ -264,7 +265,8 @@ export default function AccountsReceivableReports() {
               <Select value={statusInput} onValueChange={(v) => setStatusInput(v as typeof statusInput)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="OPEN">Em aberto</SelectItem>
+                  <SelectItem value="UNPAID">Em aberto</SelectItem>
+                  <SelectItem value="OPEN">Em dia (não vencido)</SelectItem>
                   <SelectItem value="OVERDUE">Vencidos</SelectItem>
                   <SelectItem value="PAID">Pagos</SelectItem>
                   <SelectItem value="CANCELED">Cancelados</SelectItem>
@@ -411,6 +413,7 @@ export default function AccountsReceivableReports() {
                   <TableHead>Emissão</TableHead>
                   <TableHead className="text-right">Dias</TableHead>
                   <TableHead>Vencimento</TableHead>
+                  <TableHead>Venda</TableHead>
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Cidade</TableHead>
                   <TableHead>Nº doc</TableHead>
@@ -418,13 +421,13 @@ export default function AccountsReceivableReports() {
               </TableHeader>
               <TableBody>
                 {!hasSearched ? (
-                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={17} className="text-center py-10 text-muted-foreground">Clique em Buscar para carregar.</TableCell></TableRow>
                 ) : detail.isLoading ? (
-                  <TableRow><TableCell colSpan={16} className="text-center py-10">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={17} className="text-center py-10">Carregando...</TableCell></TableRow>
                 ) : detail.isError ? (
-                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={17} className="text-center py-10 text-destructive">Erro ao carregar relatório.</TableCell></TableRow>
                 ) : (detail.data?.items.length ?? 0) === 0 ? (
-                  <TableRow><TableCell colSpan={16} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={17} className="text-center py-10 text-muted-foreground">Nenhum registro encontrado para o período.</TableCell></TableRow>
                 ) : (
                   detail.data?.items.map((item) => (
                     <TableRow key={item.id}>
@@ -440,6 +443,7 @@ export default function AccountsReceivableReports() {
                       <TableCell>{new Date(item.issueDate).toLocaleDateString("pt-BR")}</TableCell>
                       <TableCell className="text-right">{item.daysOverdue}</TableCell>
                       <TableCell>{new Date(item.dueDate).toLocaleDateString("pt-BR")}</TableCell>
+                      <TableCell>{item.saleExternalId || "-"}</TableCell>
                       <TableCell>{item.sellerName || "-"}</TableCell>
                       <TableCell>{item.city || "-"}</TableCell>
                       <TableCell>{item.documentNumber || "-"}</TableCell>
@@ -448,7 +452,7 @@ export default function AccountsReceivableReports() {
                 )}
               </TableBody>
             </Table>
-            <div className="p-4 border-t text-sm text-muted-foreground">Registros: {detail.data?.items.length ?? 0}</div>
+            <div className="p-4 border-t text-sm text-muted-foreground">Reg: {detail.data?.items.length ?? 0} | Valor total: {formatCurrency(totalOpen)}</div>
           </Card>
         </TabsContent>
       </Tabs>

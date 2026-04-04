@@ -76,20 +76,31 @@ export async function companiesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN])] },
     async (request) => {
       const { name, cnpj, email, phone, plan, status } = parseBody(CompanyBody, request.body);
-      
-      // Verifica se já existe empresa com este CNPJ
-      if (cnpj) {
-        const existing = await prisma.company.findUnique({ where: { cnpj } });
+
+      // Normaliza CNPJ para somente dígitos
+      const cnpjNorm = cnpj ? cnpj.replace(/\D/g, "") : null;
+
+      // Upsert por CNPJ normalizado: busca com LIKE para compatibilidade com dados legados formatados
+      if (cnpjNorm) {
+        const existing = await prisma.company.findFirst({
+          where: {
+            OR: [
+              { cnpj: cnpjNorm },
+              { cnpj: { contains: cnpjNorm } },
+            ],
+          },
+        });
         if (existing) {
-          // Se já existe, atualiza em vez de criar (upsert logic simplificada)
           return prisma.company.update({
             where: { id: existing.id },
-            data: { name, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined }
+            data: { name, cnpj: cnpjNorm, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined },
           });
         }
       }
-      
-      return prisma.company.create({ data: { name, cnpj: cnpj ?? null, email: email ?? null, phone: phone ?? null, plan: plan ?? "PROFESSIONAL", status: status ?? "ACTIVE" } });
+
+      return prisma.company.create({
+        data: { name, cnpj: cnpjNorm, email: email ?? null, phone: phone ?? null, plan: plan ?? "PROFESSIONAL", status: status ?? "ACTIVE" },
+      });
     }
   );
 

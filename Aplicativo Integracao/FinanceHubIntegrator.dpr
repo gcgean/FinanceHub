@@ -5,7 +5,8 @@ uses
   uMain in 'uMain.pas' {frmMain},
   uDM in 'uDM.pas' {DM: TDataModule},
   uFinanceHubAPI in 'uFinanceHubAPI.pas',
-  uSyncService in 'uSyncService.pas';
+  uSyncService in 'uSyncService.pas',
+  uFormConfig in 'uFormConfig.pas' {frmConfig};
 
 {$R *.res}
 

@@ -204,6 +204,25 @@ export async function reportsRoutes(app: FastifyInstance) {
         },
       });
 
+      // Batch lookup para títulos sem customerId mas com customerExternalId
+      const missingExtIds = [
+        ...new Set(
+          titles
+            .filter((t) => !t.customer && t.customerExternalId)
+            .map((t) => t.customerExternalId as string)
+        ),
+      ];
+      const extCustomerMap = new Map<string, { id: string; externalId: string | null; name: string; knownName: string | null; document: string | null }>();
+      if (missingExtIds.length > 0) {
+        const extCustomers = await prisma.customer.findMany({
+          where: { companyId, externalId: { in: missingExtIds } },
+          select: { id: true, externalId: true, name: true, knownName: true, document: true },
+        });
+        for (const c of extCustomers) {
+          if (c.externalId) extCustomerMap.set(c.externalId, c);
+        }
+      }
+
       const now = new Date();
       const byCustomer = new Map<string, {
         customerId: string | null;
@@ -217,13 +236,15 @@ export async function reportsRoutes(app: FastifyInstance) {
       }>();
 
       for (const t of titles) {
-        const key = t.customerId ?? `ext:${t.customerExternalId ?? "unknown"}`;
+        // Fallback: tenta buscar cliente pelo customerExternalId quando customerId é null
+        const resolvedCustomer = t.customer ?? (t.customerExternalId ? extCustomerMap.get(t.customerExternalId) ?? null : null);
+        const key = t.customerId ?? resolvedCustomer?.id ?? `ext:${t.customerExternalId ?? "unknown"}`;
         const entry = byCustomer.get(key) ?? {
-          customerId: t.customerId ?? null,
-          customerExternalId: t.customer?.externalId ?? t.customerExternalId ?? null,
-          customerName: t.customer?.name ?? "Cliente não informado",
-          knownName: t.customer?.knownName ?? null,
-          document: t.customer?.document ?? null,
+          customerId: t.customerId ?? resolvedCustomer?.id ?? null,
+          customerExternalId: resolvedCustomer?.externalId ?? t.customerExternalId ?? null,
+          customerName: resolvedCustomer?.name ?? "Cliente não informado",
+          knownName: resolvedCustomer?.knownName ?? null,
+          document: resolvedCustomer?.document ?? null,
           total: 0,
           daysSum: 0,
           count: 0,
@@ -350,23 +371,44 @@ export async function reportsRoutes(app: FastifyInstance) {
         },
       });
 
+      // Batch lookup para títulos sem customerId mas com customerExternalId
+      const missingExtIdsDetail = [
+        ...new Set(
+          titles
+            .filter((t) => !t.customer && t.customerExternalId)
+            .map((t) => t.customerExternalId as string)
+        ),
+      ];
+      const extCustomerMapDetail = new Map<string, { id: string; externalId: string | null; name: string; knownName: string | null; document: string | null; email: string | null; phone: string | null; city: string | null; state: string | null; route: string | null }>();
+      if (missingExtIdsDetail.length > 0) {
+        const extCustomers = await prisma.customer.findMany({
+          where: { companyId, externalId: { in: missingExtIdsDetail } },
+          select: { id: true, externalId: true, name: true, knownName: true, document: true, email: true, phone: true, city: true, state: true, route: true },
+        });
+        for (const c of extCustomers) {
+          if (c.externalId) extCustomerMapDetail.set(c.externalId, c);
+        }
+      }
+
       const now = new Date();
       const items = titles.map((t) => {
+        const resolvedCustomer = t.customer ?? (t.customerExternalId ? extCustomerMapDetail.get(t.customerExternalId) ?? null : null);
         const days = Math.floor((now.getTime() - t.dueDate.getTime()) / 86400000);
         return {
           id: t.id,
           externalId: t.externalId ?? null,
           externalSeq: t.externalSeq ?? null,
-          customerId: t.customerId,
-          customerExternalId: t.customer?.externalId ?? null,
-          customerName: t.customer?.name ?? "Cliente não informado",
-          knownName: t.customer?.knownName ?? null,
-          document: t.customer?.document ?? null,
-          email: t.customer?.email ?? null,
-          phone: t.customer?.phone ?? null,
-          city: t.customer?.city ?? null,
-          state: t.customer?.state ?? null,
-          route: t.customer?.route ?? null,
+          customerId: t.customerId ?? resolvedCustomer?.id ?? null,
+          customerExternalId: resolvedCustomer?.externalId ?? t.customerExternalId ?? null,
+          saleExternalId: t.saleExternalId ?? null,
+          customerName: resolvedCustomer?.name ?? "Cliente não informado",
+          knownName: resolvedCustomer?.knownName ?? null,
+          document: resolvedCustomer?.document ?? null,
+          email: resolvedCustomer?.email ?? null,
+          phone: resolvedCustomer?.phone ?? null,
+          city: resolvedCustomer?.city ?? null,
+          state: resolvedCustomer?.state ?? null,
+          route: resolvedCustomer?.route ?? null,
           issueDate: t.issueDate,
           dueDate: t.dueDate,
           paymentDate: t.paymentDate,
