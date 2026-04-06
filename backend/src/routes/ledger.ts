@@ -42,6 +42,7 @@ const validDate = z.string().refine(
 const ListQuery = z.object({
   dateFrom: validDate,
   dateTo: validDate,
+  dateField: z.enum(["issueDate", "paymentDate"]).optional().default("issueDate"),
   accountId: z.string().optional(),
   operation: z.nativeEnum(LedgerOperation).optional(),
   confirmed: QueryBoolean.optional(),
@@ -63,7 +64,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
         companyId,
         ...(q.dateFrom || q.dateTo
           ? {
-              issueDate: {
+              [q.dateField]: {
                 ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
                 ...(q.dateTo ? { lte: new Date(q.dateTo) } : {}),
               },
@@ -284,6 +285,100 @@ export async function ledgerRoutes(app: FastifyInstance) {
       });
 
       return updated;
+    }
+  );
+
+  // ── Import endpoint: accepts external codes (accountCode / costCenterCode)
+  // and performs idempotent upsert using externalId as documentNumber key.
+  app.post(
+    "/import",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request, reply) => {
+      const companyId = await resolveCompanyId(request);
+
+      const ImportSchema = z.object({
+        accountCode:    z.string().min(1),
+        costCenterCode: z.string().nullable().optional(),
+        externalId:     z.string().min(1),
+        issueDate:      z.string(),
+        paymentDate:    z.string().nullable().optional(),
+        amount:         z.number(),
+        operation:      z.nativeEnum(LedgerOperation),
+        history:        z.string().nullable().optional(),
+      });
+
+      const data = parseBody(ImportSchema, request.body);
+
+      // Idempotency: if an entry with this externalId already exists, skip silently
+      const existing = await prisma.bankLedgerEntry.findFirst({
+        where: { companyId, documentNumber: data.externalId },
+      });
+      if (existing) {
+        reply.status(200);
+        return existing;
+      }
+
+      // Resolve account by externalCode (set during SyncAccounts)
+      const account = await prisma.account.findFirst({
+        where: { companyId, externalCode: data.accountCode },
+      });
+      if (!account) {
+        throw Object.assign(
+          new Error(`ACCOUNT_NOT_FOUND: externalCode=${data.accountCode}`),
+          { statusCode: 422 }
+        );
+      }
+
+      // Resolve cost center (optional) – store reference in history if found
+      let historyStr = data.history ?? null;
+      if (data.costCenterCode) {
+        const cc = await prisma.costCenter.findFirst({
+          where: { companyId, externalCode: data.costCenterCode },
+        });
+        const label = cc ? cc.code : data.costCenterCode;
+        historyStr = `[CC:${label}] ${historyStr ?? ""}`.trim();
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        const lastCode = await tx.bankLedgerEntry.aggregate({
+          where: { companyId },
+          _max: { code: true },
+        });
+        const nextCode = (lastCode._max.code ?? 0) + 1;
+
+        const entry = await tx.bankLedgerEntry.create({
+          data: {
+            companyId,
+            code:           nextCode,
+            issueDate:      new Date(data.issueDate),
+            paymentDate:    data.paymentDate ? new Date(data.paymentDate) : null,
+            accountId:      account.id,
+            documentNumber: data.externalId,
+            amount:         data.amount,
+            operation:      data.operation,
+            history:        historyStr,
+            confirmed:      false,
+          },
+        });
+
+        const user = await tx.user.findUnique({ where: { id: request.user.sub } });
+        await tx.auditLog.create({
+          data: {
+            companyId,
+            userId:   user ? request.user.sub : null,
+            entity:   "LEDGER_ENTRY",
+            entityId: entry.id,
+            action:   AuditAction.CREATE,
+            oldJson:  null,
+            newJson:  JSON.stringify(entry),
+          },
+        });
+
+        return entry;
+      });
+
+      reply.status(201);
+      return created;
     }
   );
 

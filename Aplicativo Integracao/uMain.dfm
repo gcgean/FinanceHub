@@ -114,7 +114,8 @@ object frmMain: TfrmMain
       '13. Classifica'#195#167#195#181'es de clientes'
       '14. Formas de Pagamento'
       '15. Vendedores'
-      '16. Caixas')
+      '16. Caixas'
+      '17. Lan'#195#167'amentos Conta Corrente')
     TabOrder = 7
   end
   object clbEmpresas: TCheckListBox

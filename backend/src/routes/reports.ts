@@ -31,7 +31,7 @@ const SalesReportQuery = z.object({
 const AccountsReceivableQuery = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  dateField: z.enum(["issue", "due"]).optional().default("due"),
+  dateField: z.enum(["issue", "due", "payment"]).optional().default("due"),
   status: z.nativeEnum(TitleStatus).optional(),
   customerId: z.string().optional(),
   sellerId: z.string().optional(),
@@ -142,7 +142,7 @@ export async function reportsRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const q = parseQuery(AccountsReceivableQuery, request.query);
-      const dateFieldKey = q.dateField === "issue" ? "issueDate" : "dueDate";
+      const dateFieldKey = q.dateField === "issue" ? "issueDate" : q.dateField === "payment" ? "paymentDate" : "dueDate";
       const dateFilter = q.dateFrom || q.dateTo
         ? {
             ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
@@ -308,7 +308,7 @@ export async function reportsRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = await resolveCompanyId(request);
       const q = parseQuery(AccountsReceivableQuery, request.query);
-      const dateFieldKey = q.dateField === "issue" ? "issueDate" : "dueDate";
+      const dateFieldKey = q.dateField === "issue" ? "issueDate" : q.dateField === "payment" ? "paymentDate" : "dueDate";
       const dateFilter = q.dateFrom || q.dateTo
         ? {
             ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),

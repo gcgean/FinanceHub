@@ -43,7 +43,8 @@ type
     function SyncCashier(ACashier: TJSONObject): Boolean;
     function SyncApTitle(AApTitle: TJSONObject): Boolean;
     function SyncArTitle(AArTitle: TJSONObject): Boolean;
-    
+    function SyncLedgerEntry(AEntry: TJSONObject): Boolean;
+
     property Token: string read FToken;
     property CompanyId: string read FCompanyId;
     property LastErrorMessage: string read FLastErrorMessage;
@@ -832,6 +833,14 @@ function TFinanceHubAPI.SyncArTitle(AArTitle: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
   LResp := Post('ar-titles', AArTitle);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncLedgerEntry(AEntry: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('ledger/import', AEntry);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;

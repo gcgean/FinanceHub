@@ -36,13 +36,14 @@ export type LedgerEntry = {
 export async function listLedger(params: {
   dateFrom?: string
   dateTo?: string
+  dateField?: "issueDate" | "paymentDate"
   accountId?: string
   operation?: "DEBITO" | "CREDITO"
   confirmed?: boolean
   deleted?: boolean
   withSplits?: boolean
 } = {}) {
-  return apiFetch<LedgerEntry[]>(`/ledger${toQueryString({ ...params, withSplits: params.withSplits ?? true })}`)
+  return apiFetch<{ items: LedgerEntry[]; total: number; take: number; skip: number }>(`/ledger${toQueryString({ ...params, withSplits: params.withSplits ?? true })}`)
 }
 
 export async function createLedgerEntry(body: {

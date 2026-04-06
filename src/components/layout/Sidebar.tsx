@@ -44,6 +44,7 @@ const navigation = [
     subItems: [
       { id: "salesReports", label: "Vendas" },
       { id: "accountsReceivableReports", label: "Contas a Receber" },
+      { id: "financialReports", label: "Financeiro" },
       { id: "inventoryReports", label: "Estoque" },
       { id: "accountsPayableReports", label: "Contas a Pagar" },
     ]

@@ -43,6 +43,7 @@ type
     function SyncSales(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime): Integer;
     function SyncApTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
     function SyncArTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
+    function SyncLancamentos(ACodEmp: Integer): Integer;
   end;
 
 implementation
@@ -1989,6 +1990,128 @@ begin
     end;
 
     // Reconecta o Firebird para operações futuras
+    FDB.Connected := True;
+
+  finally
+    Q.Free;
+    QCount.Free;
+    LBuffer.Free;
+  end;
+end;
+
+function TSyncService.SyncLancamentos(ACodEmp: Integer): Integer;
+var
+  Q, QCount: TFDQuery;
+  LObj: TJSONObject;
+  LBuffer: TObjectList<TJSONObject>;
+  LTotal, LCurrent: Integer;
+  LOperation: string;
+  LIssueDate, LPayDate: string;
+  LCodCC: string;
+begin
+  Result := 0;
+  Q := TFDQuery.Create(nil);
+  QCount := TFDQuery.Create(nil);
+  LBuffer := TObjectList<TJSONObject>.Create(True);
+  try
+    Q.Connection := FDB;
+    QCount.Connection := FDB;
+
+    // Contagem para barra de progresso
+    QCount.SQL.Text :=
+      'SELECT COUNT(*) AS TOTAL ' +
+      'FROM LANCAMENTOS_CONTAS_CORRENTE lc ' +
+      'WHERE lc.COD_EMP = :COD_EMP';
+    QCount.ParamByName('COD_EMP').AsInteger := ACodEmp;
+    QCount.Open;
+    LTotal := QCount.FieldByName('TOTAL').AsInteger;
+    QCount.Close;
+    Log(Format('Lan'#231'amentos encontrados: %d', [LTotal]));
+
+    // FASE 1: Carrega registros do Firebird para mem'#243'ria
+    Q.SQL.Text :=
+      'SELECT lc.COD_LAN, lc.COD_CONTA, lc.DATAEMI_LAN, lc.DATAVENC_LAN, ' +
+      '       lc.VALOR_LAN, lc.HISTORICO_LAN, lc.DC_LAN, lc.COD_CENTRAL_CUSTOS ' +
+      'FROM LANCAMENTOS_CONTAS_CORRENTE lc ' +
+      'WHERE lc.COD_EMP = :COD_EMP ' +
+      'ORDER BY lc.COD_LAN';
+    Q.ParamByName('COD_EMP').AsInteger := ACodEmp;
+    Q.Open;
+
+    LCurrent := 0;
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Carregando lan'#231'amentos...', LCurrent, LTotal);
+
+      // Mapeia DC_LAN: 0 = DEBITO (saída), 1 = CREDITO (entrada)
+      if Q.FieldByName('DC_LAN').AsInteger = 0 then
+        LOperation := 'DEBITO'
+      else
+        LOperation := 'CREDITO';
+
+      // Formata data de emiss'#227'o
+      LIssueDate := FormatDateTime('yyyy-mm-dd', Q.FieldByName('DATAEMI_LAN').AsDateTime);
+
+      // Formata data de vencimento (pode ser nula)
+      if Q.FieldByName('DATAVENC_LAN').IsNull then
+        LPayDate := ''
+      else
+        LPayDate := FormatDateTime('yyyy-mm-dd', Q.FieldByName('DATAVENC_LAN').AsDateTime);
+
+      // Centro de custo (pode ser nulo)
+      if Q.FieldByName('COD_CENTRAL_CUSTOS').IsNull then
+        LCodCC := ''
+      else
+        LCodCC := Trim(Q.FieldByName('COD_CENTRAL_CUSTOS').AsString);
+
+      LObj := TJSONObject.Create;
+
+      LObj.AddPair('externalId',   IntToStr(ACodEmp) + '-' + Q.FieldByName('COD_LAN').AsString);
+      LObj.AddPair('accountCode',  Trim(Q.FieldByName('COD_CONTA').AsString));
+      LObj.AddPair('issueDate',    LIssueDate);
+      LObj.AddPair('amount',       TJSONNumber.Create(Q.FieldByName('VALOR_LAN').AsFloat));
+      LObj.AddPair('operation',    LOperation);
+
+      if LPayDate <> '' then
+        LObj.AddPair('paymentDate', LPayDate)
+      else
+        LObj.AddPair('paymentDate', TJSONNull.Create);
+
+      if Q.FieldByName('HISTORICO_LAN').IsNull then
+        LObj.AddPair('history', TJSONNull.Create)
+      else
+        LObj.AddPair('history', Trim(Q.FieldByName('HISTORICO_LAN').AsString));
+
+      if LCodCC <> '' then
+        LObj.AddPair('costCenterCode', LCodCC)
+      else
+        LObj.AddPair('costCenterCode', TJSONNull.Create);
+
+      LBuffer.Add(LObj);
+      Q.Next;
+    end;
+
+    // Fecha o Firebird ANTES dos POSTs HTTP para evitar timeout de conex'#227'o ociosa
+    Q.Close;
+    QCount.Close;
+    FDB.Connected := False;
+    Log(Format('Registros carregados: %d. Iniciando envio para API...', [LBuffer.Count]));
+
+    // FASE 2: Envia para a API (sem conex'#227'o Firebird ativa)
+    LTotal := LBuffer.Count;
+    LCurrent := 0;
+    for LObj in LBuffer do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando lan'#231'amentos...', LCurrent, LTotal);
+      if FAPI.SyncLedgerEntry(LObj) then
+        Inc(Result)
+      else
+        Log('Erro ao sincronizar lan'#231'amento: ' + FAPI.LastErrorMessage);
+    end;
+
+    // Reconecta o Firebird para opera'#231#245'es futuras
     FDB.Connected := True;
 
   finally

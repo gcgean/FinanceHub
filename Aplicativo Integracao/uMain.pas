@@ -416,6 +416,10 @@ begin
           if FSync.SyncCashiers(LCodEmp) > 0 then
             Log('Caixas sincronizados.');
 
+        if clbEntidades.Checked[16] then
+          if FSync.SyncLancamentos(LCodEmp) > 0 then
+            Log('Lan'#231'amentos conta corrente sincronizados.');
+
         Application.ProcessMessages;
       end;
     end;

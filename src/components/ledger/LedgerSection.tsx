@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Pencil, Plus, Trash2, CheckCircle } from "lucide-react"
+import { Pencil, Plus, Trash2, CheckCircle, Search } from "lucide-react"
 import { LedgerEntryDialog } from "@/components/ledger/LedgerEntryDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
@@ -42,12 +42,16 @@ export function LedgerSection() {
   const companyId = useAuthStore((s) => s.companyId)
   const hydrated = useAuthStore((s) => s.hydrated)
   const canQuery = hydrated && (role !== "ADMIN" || Boolean(companyId))
-  const [filters, setFilters] = useState({
+  const defaultFilters = {
     dateFrom: toDateInput(startOfMonth(new Date())),
     dateTo: toDateInput(endOfMonth(new Date())),
+    dateField: "issueDate" as "issueDate" | "paymentDate",
     confirmed: "all" as "all" | "true" | "false",
     accountId: "all" as "all" | string,
-  })
+  }
+  const [filters, setFilters] = useState(defaultFilters)
+  // appliedFilters drives the actual query — only updated when user clicks "Buscar"
+  const [appliedFilters, setAppliedFilters] = useState(defaultFilters)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<LedgerEntry | null>(null)
 
@@ -60,14 +64,16 @@ export function LedgerSection() {
   const costCenters = useQuery({ queryKey: ["finance", "costCenters", companyId], enabled: canQuery, queryFn: listCostCenters })
 
   const ledger = useQuery({
-    queryKey: ["ledger", companyId, filters],
+    queryKey: ["ledger", companyId, appliedFilters],
     enabled: canQuery,
+    retry: 1,
     queryFn: () =>
       listLedger({
-        dateFrom: filters.dateFrom || undefined,
-        dateTo: filters.dateTo || undefined,
-        accountId: filters.accountId === "all" ? undefined : filters.accountId,
-        confirmed: filters.confirmed === "all" ? undefined : filters.confirmed === "true",
+        dateFrom: appliedFilters.dateFrom || undefined,
+        dateTo: appliedFilters.dateTo ? `${appliedFilters.dateTo}T23:59:59` : undefined,
+        dateField: appliedFilters.dateField,
+        accountId: appliedFilters.accountId === "all" ? undefined : appliedFilters.accountId,
+        confirmed: appliedFilters.confirmed === "all" ? undefined : appliedFilters.confirmed === "true",
         withSplits: true,
         deleted: false,
       }),
@@ -112,7 +118,7 @@ export function LedgerSection() {
     onError: (e: unknown) => toast({ title: "Erro ao remover", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
   })
 
-  const rows = useMemo(() => ledger.data ?? [], [ledger.data])
+  const rows = useMemo(() => ledger.data?.items ?? [], [ledger.data])
   const totals = useMemo(() => {
     return rows.reduce(
       (acc, entry) => {
@@ -139,7 +145,17 @@ export function LedgerSection() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3 items-end">
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Tipo de data</div>
+            <Select value={filters.dateField} onValueChange={(v) => setFilters((p) => ({ ...p, dateField: v as "issueDate" | "paymentDate" }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="issueDate">Emissão</SelectItem>
+                <SelectItem value="paymentDate">Vencimento</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">De</div>
             <DatePicker value={filters.dateFrom} onChange={(v) => setFilters((p) => ({ ...p, dateFrom: v }))} />
@@ -172,6 +188,12 @@ export function LedgerSection() {
             </Select>
           </div>
         </div>
+        <div className="flex justify-end">
+          <Button onClick={() => setAppliedFilters(filters)} disabled={!canQuery || ledger.isFetching}>
+            <Search className="w-4 h-4 mr-2" />
+            {ledger.isFetching ? "Buscando..." : "Buscar"}
+          </Button>
+        </div>
 
         <div className="rounded-md border">
           <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
@@ -201,7 +223,7 @@ export function LedgerSection() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-28">Data</TableHead>
+                <TableHead className="w-28">{appliedFilters.dateField === "paymentDate" ? "Vencimento" : "Emissão"}</TableHead>
                 <TableHead>Histórico</TableHead>
                 <TableHead className="w-44">Conta</TableHead>
                 <TableHead className="w-52">Plano</TableHead>
@@ -228,7 +250,11 @@ export function LedgerSection() {
                   const amount = isCredit ? e.amount : -e.amount
                   return (
                     <TableRow key={e.id}>
-                      <TableCell className="text-muted-foreground">{formatDate(e.issueDate)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {appliedFilters.dateField === "paymentDate"
+                          ? (e.paymentDate ? formatDate(e.paymentDate) : "—")
+                          : formatDate(e.issueDate)}
+                      </TableCell>
                       <TableCell>{e.history ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{acc}</TableCell>
                       <TableCell className="text-muted-foreground">{plan}</TableCell>

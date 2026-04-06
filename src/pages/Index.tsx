@@ -11,6 +11,7 @@ import Pendencies from "@/pages/Pendencies";
 import Reports from "@/pages/Reports";
 import SalesReports from "@/pages/SalesReports";
 import AccountsReceivableReports from "@/pages/AccountsReceivableReports";
+import FinancialReports from "@/pages/FinancialReports";
 import Companies from "@/pages/Companies";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
@@ -31,6 +32,7 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   reports: { title: "Relatórios", subtitle: "DRE, Fluxo de Caixa e mais" },
   salesReports: { title: "Relatórios de Vendas", subtitle: "Acompanhamento de vendas" },
   accountsReceivableReports: { title: "Relatórios de Contas a Receber", subtitle: "Títulos a receber e inadimplência" },
+  financialReports: { title: "Relatórios Financeiros", subtitle: "Aging, DSO, inadimplência, forecast, churn e cohort" },
   inventoryReports: { title: "Relatórios de Estoque", subtitle: "Controle e movimentação de estoque" },
   accountsPayableReports: { title: "Contas a Pagar", subtitle: "Títulos a pagar e obrigações" },
   imports: { title: "Importações", subtitle: "Upload de extratos" },
@@ -72,6 +74,8 @@ const Index = () => {
         return <SalesReports />;
       case "accountsReceivableReports":
         return <AccountsReceivableReports />;
+      case "financialReports":
+        return <FinancialReports />;
       case "companies":
         return <Companies />;
       case "users":

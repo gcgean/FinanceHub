@@ -22,6 +22,7 @@ import { chartAccountsRoutes } from "./routes/chart-accounts";
 import { ledgerRoutes } from "./routes/ledger";
 import { reportsRoutes } from "./routes/reports";
 import { reportsExportRoutes } from "./routes/reports-export";
+import { financialReportsRoutes } from "./routes/financial-reports";
 import { customersRoutes } from "./routes/canonical/customers";
 import { suppliersRoutes } from "./routes/canonical/suppliers";
 import { productsRoutes } from "./routes/canonical/products";
@@ -139,6 +140,7 @@ export function buildApp() {
   app.register(ledgerRoutes, { prefix: "/ledger" });
   app.register(reportsRoutes, { prefix: "/reports" });
   app.register(reportsExportRoutes, { prefix: "/reports/export" });
+  app.register(financialReportsRoutes, { prefix: "/financial-reports" });
 
   app.register(integrationsSettingsRoutes, { prefix: "/settings/integrations" });
 

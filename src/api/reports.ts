@@ -128,7 +128,7 @@ export type ArDetailResponse = {
 export async function getAccountsReceivableSummary(params: {
   dateFrom?: string
   dateTo?: string
-  dateField?: "issue" | "due"
+  dateField?: "issue" | "due" | "payment"
   status?: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
   customerId?: string
   sellerId?: string
@@ -142,7 +142,7 @@ export async function getAccountsReceivableSummary(params: {
 export async function getAccountsReceivableDetail(params: {
   dateFrom?: string
   dateTo?: string
-  dateField?: "issue" | "due"
+  dateField?: "issue" | "due" | "payment"
   status?: "OPEN" | "PAID" | "OVERDUE" | "CANCELED"
   customerId?: string
   sellerId?: string
