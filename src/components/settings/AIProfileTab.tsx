@@ -17,6 +17,7 @@ export function AIProfileTab() {
   const [tone, setTone] = useState("formal");
   const [level, setLevel] = useState("summary");
   const [segment, setSegment] = useState("GENERIC");
+  const [segmento, setSegmento] = useState("");
   const [aiProvider, setAiProvider] = useState("openai");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
@@ -36,6 +37,7 @@ export function AIProfileTab() {
       setTone(profile.tone);
       setLevel(profile.level);
       setSegment(profile.segment || "GENERIC");
+      setSegmento(profile.segmento || "");
       setAiProvider(profile.aiProvider || "openai");
       setOpenaiApiKey(profile.openaiApiKey || "");
       setAnthropicApiKey(profile.anthropicApiKey || "");
@@ -55,7 +57,7 @@ export function AIProfileTab() {
   });
 
   const handleSave = () => {
-    updateMutation.mutate({ tone, level, segment, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey });
+    updateMutation.mutate({ tone, level, segment, segmento: segmento || null, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey });
   };
 
   const handleTestConnection = async () => {
@@ -151,6 +153,18 @@ export function AIProfileTab() {
           </Select>
           <p className="text-xs text-muted-foreground">
             Ajuda a IA a selecionar as regras de insight mais relevantes para o seu setor.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Segmento da Empresa (Suporte)</Label>
+          <Input
+            placeholder="Ex: Software de Gestão, Contabilidade, Atacado..."
+            value={segmento}
+            onChange={(e) => setSegmento(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Descreva o segmento/ramo da empresa. A IA usará esta informação para tornar as análises de suporte mais específicas e contextualizadas.
           </p>
         </div>
 

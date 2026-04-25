@@ -100,6 +100,12 @@ enum AuditAction {
   CONFIRM
 }
 
+enum RoutineType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
 enum CompanyPlan {
   BASIC
   PROFESSIONAL
@@ -117,6 +123,7 @@ model Company {
   name      String
   cnpj      String?       @unique
   email     String?
+  segmento  String?
   phone     String?
   plan      CompanyPlan   @default(PROFESSIONAL)
   status    CompanyStatus @default(ACTIVE)
@@ -132,7 +139,8 @@ model Company {
   anthropicApiKey String?
   geminiApiKey    String?
 
-  users     User[]
+  users         User[]
+  userCompanies UserCompany[]
   txs       Transaction[]
   pendings  Pendency[]
   imports   ImportJob[]
@@ -188,6 +196,59 @@ model Company {
 
   notificationChannels AINotificationChannel[]
   notificationLogs     AINotificationLog[]
+
+  supportTickets SupportTicket[]
+  departments    Department[]
+  accessGroups   AccessGroup[]
+  routines       Routine[]
+}
+
+model SupportTicket {
+  id                     String    @id @default(cuid())
+  companyId              String
+  company                Company   @relation(fields: [companyId], references: [id])
+  externalId             Int
+  codCli                 Int?
+  obsAtendimento         String?   @db.Text
+  cidRes                 String?
+  dataCadastroCliente    DateTime?
+  solucao                String?   @db.Text
+  dataHoraAtendimento    DateTime?
+  dataHoraFinalizacao    DateTime?
+  nota                   Float?
+  departamento           String?
+  protocolo              String?
+  nomeClienteAtendimento String?
+  tempoAtendimento       String?
+  numeroCliente          String?
+  nomeCli                String?
+  usuLanc                String?
+  usuConfEnc             String?
+  usuAtend               String?
+  nomeDesenvolvedor      String?
+  horaAtendimento        String?
+  pontoRevenda           String?
+  codigosProcedimento    String?
+  nomesProcedimento      String?   @db.Text
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([companyId, externalId])
+  @@index([companyId])
+  @@index([dataHoraAtendimento])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  erpCode   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, erpCode])
+  @@index([companyId])
 }
 
 model Integration {
@@ -217,8 +278,16 @@ model User {
   company      Company? @relation(fields: [companyId], references: [id])
   createdAt    DateTime @default(now())
 
+  accessGroupId String?
+  accessGroup   AccessGroup? @relation(fields: [accessGroupId], references: [id])
+
+  active      Boolean   @default(true)
+  lastLoginAt DateTime?
+  telegramChatId String?
+
   updatedLedgerEntries BankLedgerEntry[] @relation("LedgerUpdatedBy")
   audit                AuditLog[]
+  routines             Routine[]         @relation("RoutineRecipient")
 
   requestedImportJobs ImportJob[]  @relation("UserRequestedJobs")
   importFilesUploaded ImportFile[]
@@ -227,6 +296,73 @@ model User {
   aiInsightRecipients  AIInsightRecipient[]
   aiInsightFeedback    AIInsightFeedback[]
   notificationChannels AINotificationChannel[]
+  userCompanies        UserCompany[]
+}
+
+model UserCompany {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
+  @@index([userId])
+  @@index([companyId])
+}
+
+model AccessGroup {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  description String?
+  permissions String[] // lista de ids de páginas permitidas
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+
+  @@index([companyId])
+}
+
+model PublicReport {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  companyId  String
+  context    String
+  type       String   // "DAILY" | "WEEKLY" | "MONTHLY"
+  title      String
+  content    String
+  periodFrom DateTime
+  periodTo   DateTime
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([token])
+  @@index([companyId])
+}
+
+model Routine {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id])
+  name        String
+  type        RoutineType
+  context     String      // "supportTickets", "financialReports", etc.
+  userId      String
+  user        User        @relation("RoutineRecipient", fields: [userId], references: [id])
+  daysOfWeek  Int[]       // DAILY: [1,2,3,4,5]; WEEKLY: [3] (one day)
+  dayOfMonth  Int?        // MONTHLY: 1-31
+  hour        Int         // 0-23
+  minute      Int         // 0-59
+  active      Boolean     @default(true)
+  lastRunAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([active])
 }
 
 model Transaction {
@@ -292,6 +428,7 @@ model CostCenter {
   createdAt    DateTime @default(now())
 
   ledgerSplits BankLedgerEntrySplit[]
+  ledgerEntries BankLedgerEntry[] @relation("LedgerEntryCostCenter")
 
   @@unique([companyId, code])
   @@unique([companyId, externalCode])
@@ -326,6 +463,7 @@ model ChartAccount {
 
   allocations  ChartAccountAllocation[]
   ledgerSplits BankLedgerEntrySplit[]
+  ledgerEntries BankLedgerEntry[] @relation("LedgerEntryChartAccount")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -364,6 +502,10 @@ model BankLedgerEntry {
   paymentDate    DateTime?
   accountId      String?
   account        Account?        @relation(fields: [accountId], references: [id])
+  chartAccountId String?
+  chartAccount   ChartAccount?   @relation("LedgerEntryChartAccount", fields: [chartAccountId], references: [id])
+  costCenterId   String?
+  costCenter     CostCenter?     @relation("LedgerEntryCostCenter", fields: [costCenterId], references: [id])
   documentType   String?
   documentNumber String?
   checkNumber    String?
@@ -384,6 +526,8 @@ model BankLedgerEntry {
 
   @@index([companyId, issueDate])
   @@index([accountId])
+  @@index([chartAccountId])
+  @@index([costCenterId])
 }
 
 model BankLedgerEntrySplit {
@@ -397,6 +541,7 @@ model BankLedgerEntrySplit {
   splitAmount    Float
   createdAt      DateTime        @default(now())
 
+  @@unique([entryId, chartAccountId])
   @@index([entryId])
   @@index([chartAccountId])
 }

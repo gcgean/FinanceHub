@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "../lib/prisma";
 import type { Integration } from "@prisma/client";
 import axios from "axios";
+import { getCommandPool, fetchLancamentosCentroCusto } from "../lib/commandDb";
 
 async function syncCustomers(integration: Integration) {
   console.log(`[Sync] Fetching customers for ${integration.erp}...`);
@@ -304,6 +305,106 @@ async function syncSalesToCommand(integration: Integration) {
 
 // --- END COMMAND SYSTEM IMPLEMENTATION ---
 
+/**
+ * Migrates lancamentos_centro_custo → BankLedgerEntrySplit
+ *
+ * Mapping:
+ *   cod_lan          → BankLedgerEntry.code  (integer code of the ledger entry)
+ *   cod_centro_custo → ChartAccount.code     (plan of accounts code, e.g. "101001")
+ *   valor            → BankLedgerEntrySplit.splitAmount
+ */
+async function syncLedgerSplitsFromCommand(integration: Integration) {
+  console.log(`[Sync] Syncing lancamentos_centro_custo → splits for company ${integration.companyId}...`);
+
+  let pool;
+  try {
+    pool = await getCommandPool(integration.apiUrl, integration.apiKey);
+  } catch (err) {
+    console.error("[Sync] Could not connect to Command System database:", err instanceof Error ? err.message : err);
+    throw err;
+  }
+
+  const rows = await fetchLancamentosCentroCusto(pool);
+
+  if (!rows.length) {
+    console.log("[Sync] lancamentos_centro_custo: no rows found.");
+    return;
+  }
+
+  console.log(`[Sync] Processing ${rows.length} rows from lancamentos_centro_custo...`);
+
+  let upserted = 0;
+  let skippedEntry = 0;
+  let skippedChart = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      // 1. Resolve BankLedgerEntry by integer code
+      const entry = await prisma.bankLedgerEntry.findFirst({
+        where: { companyId: integration.companyId, code: row.cod_lan },
+        select: { id: true },
+      });
+
+      if (!entry) {
+        console.warn(`[Sync] BankLedgerEntry code=${row.cod_lan} not found. Skipping.`);
+        skippedEntry++;
+        continue;
+      }
+
+      // 2. Resolve ChartAccount by code (company-specific first, then global)
+      const chartAccount = await prisma.chartAccount.findFirst({
+        where: {
+          OR: [
+            { companyId: integration.companyId, code: String(row.cod_centro_custo) },
+            { companyId: null, code: String(row.cod_centro_custo) },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!chartAccount) {
+        console.warn(`[Sync] ChartAccount code=${row.cod_centro_custo} not found. Skipping.`);
+        skippedChart++;
+        continue;
+      }
+
+      // 3. Upsert BankLedgerEntrySplit (unique on entryId + chartAccountId)
+      await prisma.bankLedgerEntrySplit.upsert({
+        where: {
+          entryId_chartAccountId: {
+            entryId: entry.id,
+            chartAccountId: chartAccount.id,
+          },
+        },
+        create: {
+          entryId: entry.id,
+          chartAccountId: chartAccount.id,
+          splitAmount: row.valor,
+        },
+        update: {
+          splitAmount: row.valor,
+        },
+      });
+
+      upserted++;
+    } catch (err) {
+      console.error(
+        `[Sync] Error on cod_lan=${row.cod_lan} / cod_centro_custo=${row.cod_centro_custo}:`,
+        err instanceof Error ? err.message : err
+      );
+      errors++;
+    }
+  }
+
+  console.log(
+    `[Sync] lancamentos_centro_custo done — upserted: ${upserted}, ` +
+    `skipped (entry not found): ${skippedEntry}, ` +
+    `skipped (chart account not found): ${skippedChart}, ` +
+    `errors: ${errors}`
+  );
+}
+
 export async function syncIntegration(integration: Integration) {
   console.log(`Syncing data for company ${integration.companyId} with ${integration.erp}...`);
 
@@ -321,6 +422,7 @@ export async function syncIntegration(integration: Integration) {
       await syncCustomersFromCommand(integration);
       await syncProductsFromCommand(integration);
       await syncSalesToCommand(integration);
+      await syncLedgerSplitsFromCommand(integration);
     } else {
       console.log(`[Sync] ERP "${integration.erp}" not supported yet. Skipping.`);
       // We can consider this a "success" because there was no error, just no action.

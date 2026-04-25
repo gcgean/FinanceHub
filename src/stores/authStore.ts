@@ -6,6 +6,7 @@ export type AuthUser = {
   name: string
   role: "ADMIN" | "OPERATOR" | "CLIENT"
   companyId: string | null
+  permissions?: string[]
 }
 
 type AuthState = {

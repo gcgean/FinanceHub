@@ -9,6 +9,7 @@ const CompanyBody = z.object({
   name: z.string().min(1),
   cnpj: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
+  segmento: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   plan: z.enum(["BASIC", "PROFESSIONAL", "ENTERPRISE"]).optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "PENDING"]).optional(),
@@ -75,7 +76,7 @@ export async function companiesRoutes(app: FastifyInstance) {
     "/",
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN])] },
     async (request) => {
-      const { name, cnpj, email, phone, plan, status } = parseBody(CompanyBody, request.body);
+      const { name, cnpj, email, segmento, phone, plan, status } = parseBody(CompanyBody, request.body);
 
       // Normaliza CNPJ para somente dígitos
       const cnpjNorm = cnpj ? cnpj.replace(/\D/g, "") : null;
@@ -93,13 +94,13 @@ export async function companiesRoutes(app: FastifyInstance) {
         if (existing) {
           return prisma.company.update({
             where: { id: existing.id },
-            data: { name, cnpj: cnpjNorm, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined },
+            data: { name, cnpj: cnpjNorm, email: email ?? null, segmento: segmento ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined },
           });
         }
       }
 
       return prisma.company.create({
-        data: { name, cnpj: cnpjNorm, email: email ?? null, phone: phone ?? null, plan: plan ?? "PROFESSIONAL", status: status ?? "ACTIVE" },
+        data: { name, cnpj: cnpjNorm, email: email ?? null, segmento: segmento ?? null, phone: phone ?? null, plan: plan ?? "PROFESSIONAL", status: status ?? "ACTIVE" },
       });
     }
   );
@@ -109,10 +110,10 @@ export async function companiesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN])] },
     async (request) => {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
-      const { name, cnpj, email, phone, plan, status, openaiApiKey } = parseBody(CompanyBody, request.body);
+      const { name, cnpj, email, segmento, phone, plan, status, openaiApiKey } = parseBody(CompanyBody, request.body);
       return prisma.company.update({
         where: { id: params.id },
-        data: { name, cnpj: cnpj ?? null, email: email ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined, openaiApiKey: openaiApiKey ?? null },
+        data: { name, cnpj: cnpj ?? null, email: email ?? null, segmento: segmento ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined, openaiApiKey: openaiApiKey ?? null },
       });
     }
   );
@@ -125,6 +126,7 @@ export async function companiesRoutes(app: FastifyInstance) {
     openaiApiKey: z.string().optional().nullable(),
     anthropicApiKey: z.string().optional().nullable(),
     geminiApiKey: z.string().optional().nullable(),
+    segmento: z.string().optional().nullable(),
   });
 
   app.patch(
@@ -133,11 +135,11 @@ export async function companiesRoutes(app: FastifyInstance) {
     async (request) => {
       const companyId = request.user.companyId;
       if (!companyId) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
-      
-      const { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey } = parseBody(AiProfileBody, request.body);
+
+      const { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento } = parseBody(AiProfileBody, request.body);
       return prisma.company.update({
         where: { id: companyId },
-        data: { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey },
+        data: { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento },
       });
     }
   );

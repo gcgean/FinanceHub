@@ -80,6 +80,7 @@ export interface AIProfile {
   tone: string;
   level: string;
   segment?: string;
+  segmento?: string | null;
   aiProvider?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;

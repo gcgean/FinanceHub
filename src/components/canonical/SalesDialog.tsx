@@ -4,6 +4,7 @@ import { z } from "zod"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateInputPicker } from "@/components/ui/DateInputPicker"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useEffect, useState } from "react"
@@ -141,7 +142,10 @@ export function SalesDialog({ open, onOpenChange, value, onSubmit, loading }: Pr
                   <FormItem>
                     <FormLabel>Data</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <DateInputPicker
+                        value={field.value ?? ""}
+                        onChange={(v) => field.onChange(v)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

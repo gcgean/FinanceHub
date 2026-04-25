@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { 
-  Settings as SettingsIcon, Building2, Bell, Lock, Palette, 
-  Database, CreditCard, Users, Check, ChevronRight, Brain
+import {
+  Settings as SettingsIcon, Building2, Bell, Lock, Palette,
+  Database, CreditCard, Users, Check, ChevronRight, Brain, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationsTab } from "@/components/settings/NotificationsTab";
 import { AIProfileTab } from "@/components/settings/AIProfileTab";
+import { TelegramTab } from "@/components/settings/TelegramTab";
 
 interface SettingSection {
   id: string;
@@ -31,6 +32,7 @@ const sections: SettingSection[] = [
   { id: 'company', icon: Building2, title: 'Dados da Empresa', description: 'Informações do escritório de BPO' },
   { id: 'ai_profile', icon: Brain, title: 'Comportamento da IA', description: 'Personalizar tom e análise' },
   { id: 'notifications', icon: Bell, title: 'Notificações', description: 'Configurar alertas e e-mails' },
+  { id: 'telegram', icon: MessageCircle, title: 'Telegram', description: 'Notificações via Telegram' },
   { id: 'security', icon: Lock, title: 'Segurança', description: 'Senhas e autenticação' },
   { id: 'appearance', icon: Palette, title: 'Aparência', description: 'Tema e personalização' },
   { id: 'integrations', icon: Database, title: 'Integrações', description: 'APIs e conexões externas' },
@@ -116,6 +118,10 @@ export default function Settings() {
 
           {activeSection === 'notifications' && (
             <NotificationsTab />
+          )}
+
+          {activeSection === 'telegram' && (
+            <TelegramTab />
           )}
 
           {activeSection === 'security' && (

@@ -1,10 +1,10 @@
-import { 
-  LayoutDashboard, 
-  ArrowUpDown, 
-  AlertCircle, 
-  FileText, 
-  Upload, 
-  Settings, 
+import {
+  LayoutDashboard,
+  ArrowUpDown,
+  AlertCircle,
+  FileText,
+  Upload,
+  Settings,
   Building2,
   LogOut,
   ChevronDown,
@@ -13,10 +13,13 @@ import {
   BookOpen,
   Folders,
   LineChart,
-  Sliders
+  Sliders,
+  Tag,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { hasPermission } from "@/lib/permissions";
 import { useCompaniesList, useCompanyMe } from "@/hooks/useBackendQueries";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -34,6 +37,7 @@ const navigation = [
   { id: "executiveDashboard", label: "Painel Executivo", icon: LineChart },
   { id: "aiInsights", label: "Inteligência IA", icon: Brain },
   { id: "financialRegistrations", label: "Cadastros", icon: Folders },
+  { id: "departments", label: "Departamentos", icon: Tag },
   { id: "ledger", label: "Livro-caixa", icon: BookOpen },
   { id: "transactions", label: "Transações", icon: ArrowUpDown },
   { id: "pendencies", label: "Pendências", icon: AlertCircle },
@@ -47,6 +51,7 @@ const navigation = [
       { id: "financialReports", label: "Financeiro" },
       { id: "inventoryReports", label: "Estoque" },
       { id: "accountsPayableReports", label: "Contas a Pagar" },
+      { id: "supportTicketsReports", label: "Atendimentos" },
     ]
   },
   { id: "imports", label: "Importações", icon: Upload },
@@ -57,6 +62,7 @@ const adminNavigation = [
   { id: "aiAdmin", label: "Admin IA", icon: Sliders },
   { id: "companies", label: "Empresas", icon: Building2 },
   { id: "users", label: "Usuários", icon: Users },
+  { id: "accessGroups", label: "Grupos de Acesso", icon: ShieldCheck },
   { id: "integrations", label: "Integrações", icon: ArrowUpDown },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
@@ -68,6 +74,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const logout = useAuthStore((s) => s.logout)
 
   const isAdmin = user?.role === "ADMIN"
+  const userPermissions = user?.permissions
   const meCompany = useCompanyMe()
   const companies = useCompaniesList(Boolean(isAdmin))
 
@@ -201,7 +208,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mb-3">
             Principal
           </p>
-          {navigation.map((item) => (
+          {navigation.filter(item => hasPermission(user?.role ?? "", userPermissions, item.id)).map((item) => (
             <div key={item.id}>
               {item.subItems ? (
                 <>
@@ -220,7 +227,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                   </button>
                   {(currentPage === item.id || item.subItems.some(sub => currentPage === sub.id) || currentPage.startsWith(item.id)) && (
                     <div className="ml-9 mt-1 space-y-1">
-                      {item.subItems.map((sub) => (
+                      {item.subItems.filter(sub => hasPermission(user?.role ?? "", userPermissions, sub.id)).map((sub) => (
                         <button
                           key={sub.id}
                           onClick={() => onPageChange(sub.id)}
@@ -250,26 +257,32 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
             </div>
           ))}
 
-          {isAdmin && (
-            <>
-              <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
-                Administração
-              </p>
-              {adminNavigation.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onPageChange(item.id)}
-                  className={cn(
-                    "sidebar-item w-full",
-                    currentPage === item.id && "sidebar-item-active"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </>
-          )}
+          {(() => {
+            const visibleAdmin = adminNavigation.filter(item =>
+              hasPermission(user?.role ?? "", userPermissions, item.id)
+            );
+            if (!visibleAdmin.length) return null;
+            return (
+              <>
+                <p className="text-sidebar-muted text-xs font-medium uppercase tracking-wider px-3 mt-6 mb-3">
+                  Administração
+                </p>
+                {visibleAdmin.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => onPageChange(item.id)}
+                    className={cn(
+                      "sidebar-item w-full",
+                      currentPage === item.id && "sidebar-item-active"
+                    )}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </>
+            );
+          })()}
         </nav>
       </ScrollArea>
 

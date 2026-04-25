@@ -46,7 +46,10 @@ export async function authRoutes(app: FastifyInstance) {
       throw Object.assign(new Error("INVALID_PAYLOAD"), { statusCode: 400 });
     }
     const { email, password } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { accessGroup: { select: { permissions: true } } },
+    });
     if (!user) throw Object.assign(new Error("INVALID_CREDENTIALS"), { statusCode: 401 });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw Object.assign(new Error("INVALID_CREDENTIALS"), { statusCode: 401 });
@@ -54,10 +57,15 @@ export async function authRoutes(app: FastifyInstance) {
     // Clear rate limit on successful login
     loginAttempts.delete(ip);
 
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+    const permissions = user.accessGroup?.permissions ?? [];
+
     const token = await app.jwt.sign({
       sub: user.id,
       role: user.role,
       companyId: user.companyId,
+      ...(permissions.length > 0 && { permissions }),
     }, { expiresIn: "30d" });
 
     return {
@@ -68,12 +76,16 @@ export async function authRoutes(app: FastifyInstance) {
         name: user.name,
         role: user.role,
         companyId: user.companyId,
+        permissions,
       },
     };
   });
 
   app.get("/me", { preHandler: [requireAuth(app)] }, async (request: FastifyRequest) => {
-    const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+    const user = await prisma.user.findUnique({
+      where: { id: request.user.sub },
+      include: { accessGroup: { select: { id: true, name: true, permissions: true } } },
+    });
     if (!user) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
     return {
       id: user.id,
@@ -81,6 +93,7 @@ export async function authRoutes(app: FastifyInstance) {
       name: user.name,
       role: user.role,
       companyId: user.companyId,
+      accessGroup: user.accessGroup ?? null,
     };
   });
 

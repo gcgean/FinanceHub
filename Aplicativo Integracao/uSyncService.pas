@@ -44,6 +44,8 @@ type
     function SyncApTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
     function SyncArTitles(ACodEmp: Integer; ADateFrom, ADateTo: TDateTime; ADateKind: Integer): Integer;
     function SyncLancamentos(ACodEmp: Integer): Integer;
+    function SyncLancamentosCentroCusto(ACodEmp: Integer): Integer;
+    function SyncAtendimentos(ACodEmp: Integer; AMySQLDB: TFDConnection; ADateFrom, ADateTo: TDateTime): Integer;
   end;
 
 implementation
@@ -2117,6 +2119,223 @@ begin
   finally
     Q.Free;
     QCount.Free;
+    LBuffer.Free;
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// SyncLancamentosCentroCusto
+// Migra LANCAMENTOS_CENTRO_CUSTO → BankLedgerEntrySplit via POST /ledger/import-split
+// Deve ser chamado logo após SyncLancamentos para que os lançamentos já existam.
+// Mapeamento:
+//   COD_LAN   → externalId  (mesmo formato: "{codEmp}-{codLan}")
+//   C.CONTA   → chartAccountCode (código do plano de contas exibido na tela)
+//   VALOR     → splitAmount
+// -----------------------------------------------------------------------------
+function TSyncService.SyncLancamentosCentroCusto(ACodEmp: Integer): Integer;
+var
+  Q: TFDQuery;
+  LObj: TJSONObject;
+  LBuffer: TObjectList<TJSONObject>;
+  LTotal, LCurrent: Integer;
+begin
+  Result := 0;
+  Q := TFDQuery.Create(nil);
+  LBuffer := TObjectList<TJSONObject>.Create(True);
+  try
+    Q.Connection := FDB;
+
+    // FASE 1: Carrega do banco para memória
+    // Usa C.CONTA como código do plano de contas, conforme exibido na tela do ERP.
+    Q.SQL.Text :=
+      'SELECT lcc.COD_LAN, lcc.COD_CENTRO_CUSTO, c.CONTA, lcc.VALOR ' +
+      'FROM LANCAMENTOS_CENTRO_CUSTO lcc ' +
+      'INNER JOIN LANCAMENTOS_CONTAS_CORRENTE lc ON lc.COD_LAN = lcc.COD_LAN ' +
+      'INNER JOIN CENTRO_CUSTO c ON c.CODIGO = lcc.COD_CENTRO_CUSTO ' +
+      'WHERE lc.COD_EMP = :COD_EMP ' +
+      'ORDER BY lcc.COD_LAN';
+    Q.ParamByName('COD_EMP').AsInteger := ACodEmp;
+    Q.Open;
+
+    LTotal := Q.RecordCount;
+    Log(Format('Lan'#231'amentos centro custo encontrados: %d', [LTotal]));
+
+    LCurrent := 0;
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Carregando centro custos...', LCurrent, LTotal);
+
+      LObj := TJSONObject.Create;
+      // externalId: mesmo padrão usado em SyncLancamentos
+      LObj.AddPair('externalId',       IntToStr(ACodEmp) + '-' + Q.FieldByName('COD_LAN').AsString);
+      LObj.AddPair('chartAccountCode', Trim(Q.FieldByName('CONTA').AsString));
+      LObj.AddPair('splitAmount',      TJSONNumber.Create(Q.FieldByName('VALOR').AsFloat));
+
+      LBuffer.Add(LObj);
+      Q.Next;
+    end;
+
+    Q.Close;
+    FDB.Connected := False;
+    Log(Format('Registros carregados: %d. Enviando para API...', [LBuffer.Count]));
+
+    // FASE 2: Envia para a API
+    LTotal := LBuffer.Count;
+    LCurrent := 0;
+    for LObj in LBuffer do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando plano de contas...', LCurrent, LTotal);
+      if FAPI.SyncLedgerSplit(LObj) then
+        Inc(Result)
+      else
+        Log('Erro ao sincronizar centro custo: ' + FAPI.LastErrorMessage);
+    end;
+
+    FDB.Connected := True;
+
+  finally
+    Q.Free;
+    LBuffer.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// SyncAtendimentos
+// Lê atendimentos finalizados do MySQL (analitcs.ciloscloud.com.br/suporte)
+// e importa para o FinanceHub via POST /support-tickets/import
+// ---------------------------------------------------------------------------
+function TSyncService.SyncAtendimentos(ACodEmp: Integer; AMySQLDB: TFDConnection; ADateFrom, ADateTo: TDateTime): Integer;
+const
+  SQL_ATENDIMENTOS =
+    'SELECT ' +
+    '  a.id_Atend, a.cod_cli, a.Obs_Atendimento, c.CIDRES_CLI, c.DATACADASTRO_CLI, ' +
+    '  a.solucao, a.Data_hora_atendimento, a.Data_hora_finalizacao, a.nota, ' +
+    '  a.departamento, a.protocolo, a.nome_cliente_atendimento, a.Tempo_atendimento, ' +
+    '  a.Numero_cliente, c.NOME_CLI, c.NOMFAN_CLI, ' +
+    '  (SELECT us.NOME_USU FROM usuario us WHERE us.COD_USU = a.cod_usu_lanc) AS USU_lanc, ' +
+    '  (SELECT ucon.NOME_USU FROM usuario ucon WHERE ucon.COD_USU = a.cod_usu_conf_encerramento) AS USU_Conf_Enc, ' +
+    '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_tecnico) AS Uso_Atend, ' +
+    '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_desenvolvedor) AS nome_Desenvolvedor, ' +
+    '  CAST(a.Data_hora_atendimento AS TIME) AS horat, ' +
+    '  p.descricao, ' +
+    '  (SELECT GROUP_CONCAT(pa.cod_procedimento ORDER BY pa.cod_procedimento SEPARATOR '', '') ' +
+    '   FROM procedimentos_atendimentos pa WHERE pa.cod_atendimento = a.id_Atend) AS codigos_procedimento, ' +
+    '  (SELECT GROUP_CONCAT(pr.descricao ORDER BY pr.descricao SEPARATOR '', '') ' +
+    '   FROM procedimentos_atendimentos pa ' +
+    '   INNER JOIN procedimentos pr ON pr.cod_procedimento = pa.cod_procedimento ' +
+    '   WHERE pa.cod_atendimento = a.id_Atend) AS nomes_procedimento ' +
+    'FROM atendimentos a ' +
+    'INNER JOIN cliente c ON c.cod_cli = a.cod_cli ' +
+    'INNER JOIN ponto_revenda p ON p.cod_ponto = c.cod_ponto_revenda ' +
+    'WHERE a.Status_Atendimento = 7 ' +
+    '  AND a.Data_hora_finalizacao >= :pDateFrom ' +
+    '  AND a.Data_hora_finalizacao <= :pDateTo ' +
+    'ORDER BY a.Data_hora_finalizacao';
+var
+  Q: TFDQuery;
+  LObj: TJSONObject;
+  LBuffer: TObjectList<TJSONObject>;
+  LTotal, LCurrent: Integer;
+begin
+  Result := 0;
+  EnsureCompanyContext(ACodEmp);
+
+  Q := TFDQuery.Create(nil);
+  LBuffer := TObjectList<TJSONObject>.Create(True);
+  try
+    Q.Connection := AMySQLDB;
+    Q.SQL.Text := SQL_ATENDIMENTOS;
+    // Usa o início do dia de ADateFrom e o fim do dia de ADateTo
+    Q.ParamByName('pDateFrom').AsDateTime := Int(ADateFrom);          // 00:00:00
+    Q.ParamByName('pDateTo').AsDateTime   := Int(ADateTo) + 0.99999; // 23:59:59
+
+    Log(Format('Filtro de finalização: %s até %s',
+      [FormatDateTime('dd/mm/yyyy', ADateFrom),
+       FormatDateTime('dd/mm/yyyy', ADateTo)]));
+
+    // FASE 1: Carrega para memória
+    Q.Open;
+    LTotal := Q.RecordCount;
+    Log(Format('Atendimentos encontrados: %d', [LTotal]));
+
+    LCurrent := 0;
+    while not Q.Eof do
+    begin
+      Inc(LCurrent);
+      Progress('Carregando atendimentos...', LCurrent, LTotal);
+
+      LObj := TJSONObject.Create;
+      LObj.AddPair('externalId',             TJSONNumber.Create(Q.FieldByName('id_Atend').AsInteger));
+      LObj.AddPair('codCli',                 TJSONNumber.Create(Q.FieldByName('cod_cli').AsInteger));
+      LObj.AddPair('obsAtendimento',         Q.FieldByName('Obs_Atendimento').AsString);
+      LObj.AddPair('cidRes',                 Q.FieldByName('CIDRES_CLI').AsString);
+      // Datas em formato ISO para parsing correto no backend
+      if Q.FieldByName('DATACADASTRO_CLI').IsNull then
+        LObj.AddPair('dataCadastroCliente', '')
+      else
+        LObj.AddPair('dataCadastroCliente',
+          FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Q.FieldByName('DATACADASTRO_CLI').AsDateTime));
+      LObj.AddPair('solucao',                Q.FieldByName('solucao').AsString);
+      if Q.FieldByName('Data_hora_atendimento').IsNull then
+        LObj.AddPair('dataHoraAtendimento', '')
+      else
+        LObj.AddPair('dataHoraAtendimento',
+          FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Q.FieldByName('Data_hora_atendimento').AsDateTime));
+      if Q.FieldByName('Data_hora_finalizacao').IsNull then
+        LObj.AddPair('dataHoraFinalizacao', '')
+      else
+        LObj.AddPair('dataHoraFinalizacao',
+          FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Q.FieldByName('Data_hora_finalizacao').AsDateTime));
+      if not Q.FieldByName('nota').IsNull then
+        LObj.AddPair('nota', TJSONNumber.Create(Q.FieldByName('nota').AsFloat));
+      // Se não houver código de departamento, vincula ao DESENVOLVIMENTO (erpCode=10)
+      if Q.FieldByName('departamento').IsNull or (Trim(Q.FieldByName('departamento').AsString) = '') then
+        LObj.AddPair('departamento', '10')
+      else
+        LObj.AddPair('departamento', Q.FieldByName('departamento').AsString);
+      LObj.AddPair('protocolo',              Q.FieldByName('protocolo').AsString);
+      LObj.AddPair('nomeClienteAtendimento', Q.FieldByName('nome_cliente_atendimento').AsString);
+      LObj.AddPair('tempoAtendimento',       Q.FieldByName('Tempo_atendimento').AsString);
+      LObj.AddPair('numeroCliente',          Q.FieldByName('Numero_cliente').AsString);
+      // Usa nome fantasia se disponível; caso contrário usa razão social
+      if (not Q.FieldByName('NOMFAN_CLI').IsNull) and (Trim(Q.FieldByName('NOMFAN_CLI').AsString) <> '') then
+        LObj.AddPair('nomeCli', Q.FieldByName('NOMFAN_CLI').AsString)
+      else
+        LObj.AddPair('nomeCli', Q.FieldByName('NOME_CLI').AsString);
+      LObj.AddPair('usuLanc',                Q.FieldByName('USU_lanc').AsString);
+      LObj.AddPair('usuConfEnc',             Q.FieldByName('USU_Conf_Enc').AsString);
+      LObj.AddPair('usuAtend',               Q.FieldByName('Uso_Atend').AsString);
+      LObj.AddPair('nomeDesenvolvedor',      Q.FieldByName('nome_Desenvolvedor').AsString);
+      LObj.AddPair('horaAtendimento',        Q.FieldByName('horat').AsString);
+      LObj.AddPair('pontoRevenda',           Q.FieldByName('descricao').AsString);
+      LObj.AddPair('codigosProcedimento',    Q.FieldByName('codigos_procedimento').AsString);
+      LObj.AddPair('nomesProcedimento',      Q.FieldByName('nomes_procedimento').AsString);
+      LObj.AddPair('obsAtendimento',         Q.FieldByName('Obs_Atendimento').AsString);
+
+      LBuffer.Add(LObj);
+      Q.Next;
+    end;
+
+    Q.Close;
+    Log(Format('Registros carregados: %d. Enviando para API...', [LBuffer.Count]));
+
+    // FASE 2: Envia para a API
+    LTotal := LBuffer.Count;
+    LCurrent := 0;
+    for LObj in LBuffer do
+    begin
+      Inc(LCurrent);
+      Progress('Sincronizando atendimentos...', LCurrent, LTotal);
+      if FAPI.SyncSupportTicket(LObj) then
+        Inc(Result)
+      else
+        Log('Erro ao sincronizar atendimento: ' + FAPI.LastErrorMessage);
+    end;
+
+  finally
+    Q.Free;
     LBuffer.Free;
   end;
 end;

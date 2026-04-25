@@ -1064,7 +1064,7 @@ export async function financialReportsRoutes(app: FastifyInstance) {
       for (const t of titles) {
         if (!t.customerId || !t.customer) continue;
         const key = t.customerId;
-        const entry = byCustomer.get(key) ?? {
+        const entry: CustomerRaw = byCustomer.get(key) ?? {
           customerId: t.customerId,
           customerName: t.customer.name,
           knownName: t.customer.knownName ?? null,

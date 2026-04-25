@@ -10,6 +10,7 @@ import { ArTitlesSection } from "@/components/canonical/ArTitlesSection"
 import { InventorySection } from "@/components/canonical/InventorySection"
 import { SalesSection } from "@/components/canonical/SalesSection"
 import { LedgerSection } from "@/components/ledger/LedgerSection"
+import { LedgerSplitsSection } from "@/components/ledger/LedgerSplitsSection"
 
 export default function FinancialRegistrations() {
   return (
@@ -27,6 +28,7 @@ export default function FinancialRegistrations() {
           <TabsTrigger value="apTitles">Contas a Pagar</TabsTrigger>
           <TabsTrigger value="arTitles">Contas a Receber</TabsTrigger>
           <TabsTrigger value="ledger">Lançamentos</TabsTrigger>
+          <TabsTrigger value="ledgerSplits">Lançamentos C.C.</TabsTrigger>
         </TabsList>
 
         <TabsContent value="accounts">
@@ -70,6 +72,10 @@ export default function FinancialRegistrations() {
 
         <TabsContent value="ledger">
           <LedgerSection />
+        </TabsContent>
+
+        <TabsContent value="ledgerSplits">
+          <LedgerSplitsSection />
         </TabsContent>
       </Tabs>
     </div>

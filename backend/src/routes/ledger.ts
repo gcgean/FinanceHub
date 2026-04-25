@@ -84,6 +84,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
           skip: q.skip,
           include: {
             account: true,
+            chartAccount: true,
+            costCenter: true,
             splits: q.withSplits
               ? { include: { chartAccount: true, costCenter: true } }
               : false,
@@ -115,6 +117,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
           _max: { code: true },
         });
         const nextCode = (lastCode._max.code ?? 0) + 1;
+        const firstSplit = data.splits[0];
 
         const entry = await tx.bankLedgerEntry.create({
           data: {
@@ -123,6 +126,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
             issueDate: typeof data.issueDate === "string" ? new Date(data.issueDate) : data.issueDate,
             paymentDate: data.paymentDate ? (typeof data.paymentDate === "string" ? new Date(data.paymentDate) : data.paymentDate) : null,
             accountId: data.accountId,
+            chartAccountId: firstSplit?.chartAccountId ?? null,
+            costCenterId: firstSplit?.costCenterId ?? null,
             documentType: data.documentType ?? null,
             documentNumber: data.documentNumber ?? null,
             checkNumber: data.checkNumber ?? null,
@@ -195,6 +200,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
         const entry = await tx.bankLedgerEntry.update({
           where: { id: params.id },
           data: {
+            chartAccountId: data.splits[0]?.chartAccountId ?? null,
+            costCenterId: data.splits[0]?.costCenterId ?? null,
             issueDate: typeof data.issueDate === "string" ? new Date(data.issueDate) : data.issueDate,
             paymentDate: data.paymentDate ? (typeof data.paymentDate === "string" ? new Date(data.paymentDate) : data.paymentDate) : null,
             accountId: data.accountId,
@@ -331,10 +338,12 @@ export async function ledgerRoutes(app: FastifyInstance) {
 
       // Resolve cost center (optional) – store reference in history if found
       let historyStr = data.history ?? null;
+      let resolvedCostCenterId: string | null = null;
       if (data.costCenterCode) {
         const cc = await prisma.costCenter.findFirst({
           where: { companyId, externalCode: data.costCenterCode },
         });
+        resolvedCostCenterId = cc?.id ?? null;
         const label = cc ? cc.code : data.costCenterCode;
         historyStr = `[CC:${label}] ${historyStr ?? ""}`.trim();
       }
@@ -353,6 +362,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
             issueDate:      new Date(data.issueDate),
             paymentDate:    data.paymentDate ? new Date(data.paymentDate) : null,
             accountId:      account.id,
+            costCenterId:   resolvedCostCenterId,
             documentNumber: data.externalId,
             amount:         data.amount,
             operation:      data.operation,
@@ -379,6 +389,151 @@ export async function ledgerRoutes(app: FastifyInstance) {
 
       reply.status(201);
       return created;
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /ledger/import-split
+  // Recebe o rateio de um lançamento (lancamentos_centro_custo) e cria/atualiza
+  // o BankLedgerEntrySplit correspondente.
+  // Payload: { externalId, chartAccountCode, splitAmount }
+  // -------------------------------------------------------------------------
+  app.post(
+    "/import-split",
+    { preHandler: [requireAuth(app), requireRole([UserRole.ADMIN, UserRole.OPERATOR]), requireCompanyScope()] },
+    async (request, reply) => {
+      const companyId = await resolveCompanyId(request);
+
+      const ImportSplitSchema = z.object({
+        externalId:       z.string().min(1),
+        chartAccountCode: z.string().min(1),
+        splitAmount:      z.number(),
+      });
+
+      const data = parseBody(ImportSplitSchema, request.body);
+      const normalizedChartAccountCode = data.chartAccountCode.trim();
+
+      // Localiza o lançamento pelo externalId (salvo como documentNumber no import)
+      const entry = await prisma.bankLedgerEntry.findFirst({
+        where: { companyId, documentNumber: data.externalId },
+        select: { id: true },
+      });
+      if (!entry) {
+        throw Object.assign(
+          new Error(`ENTRY_NOT_FOUND: externalId=${data.externalId}`),
+          { statusCode: 422 }
+        );
+      }
+
+      // Localiza o plano de contas pelo código (empresa ou global)
+      const chartAccount = await prisma.chartAccount.findFirst({
+        where: {
+          OR: [
+            { companyId, code: normalizedChartAccountCode },
+            { companyId: null, code: normalizedChartAccountCode },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!chartAccount) {
+        throw Object.assign(
+          new Error(`CHART_ACCOUNT_NOT_FOUND: code=${normalizedChartAccountCode}`),
+          { statusCode: 422 }
+        );
+      }
+
+      // Upsert: cria ou atualiza o split (chave: entryId + chartAccountId)
+      const split = await prisma.bankLedgerEntrySplit.upsert({
+        where: {
+          entryId_chartAccountId: {
+            entryId:        entry.id,
+            chartAccountId: chartAccount.id,
+          },
+        },
+        create: {
+          entryId:        entry.id,
+          chartAccountId: chartAccount.id,
+          splitAmount:    data.splitAmount,
+        },
+        update: {
+          splitAmount: data.splitAmount,
+        },
+      });
+
+      await prisma.bankLedgerEntry.update({
+        where: { id: entry.id },
+        data: {
+          chartAccountId: chartAccount.id,
+        },
+      });
+
+      reply.status(200);
+      return split;
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /ledger/splits — lançamentos do centro de custos (splits)
+  // -------------------------------------------------------------------------
+  app.get(
+    "/splits",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request) => {
+      const companyId = await resolveCompanyId(request);
+
+      const SplitsQuery = z.object({
+        dateFrom:       validDate,
+        dateTo:         validDate,
+        dateField:      z.enum(["issueDate", "paymentDate"]).optional().default("issueDate"),
+        accountId:      z.string().optional(),
+        chartAccountId: z.string().optional(),
+        take: z.coerce.number().int().min(1).max(500).optional().default(200),
+        skip: z.coerce.number().int().min(0).optional().default(0),
+      });
+
+      const q = parseQuery(SplitsQuery, request.query);
+
+      const entryWhere: Prisma.BankLedgerEntryWhereInput = {
+        companyId,
+        deletedAt: null,
+        ...(q.dateFrom || q.dateTo
+          ? {
+              [q.dateField]: {
+                ...(q.dateFrom ? { gte: new Date(q.dateFrom) } : {}),
+                ...(q.dateTo   ? { lte: new Date(q.dateTo)   } : {}),
+              },
+            }
+          : {}),
+        ...(q.accountId ? { accountId: q.accountId } : {}),
+      };
+
+      const splitWhere: Prisma.BankLedgerEntrySplitWhereInput = {
+        entry: entryWhere,
+        ...(q.chartAccountId ? { chartAccountId: q.chartAccountId } : {}),
+      };
+
+      const [items, total] = await Promise.all([
+        prisma.bankLedgerEntrySplit.findMany({
+          where: splitWhere,
+          orderBy: [{ entry: { [q.dateField]: "desc" } }, { entry: { createdAt: "desc" } }],
+          take: q.take,
+          skip: q.skip,
+          include: {
+            chartAccount: { select: { id: true, code: true, description: true } },
+            costCenter:   { select: { id: true, code: true, description: true } },
+            entry: {
+              select: {
+                id: true, code: true, issueDate: true, paymentDate: true,
+                history: true, operation: true, confirmed: true, amount: true,
+                account: { select: { id: true, code: true, description: true } },
+              },
+            },
+          },
+        }),
+        prisma.bankLedgerEntrySplit.count({ where: splitWhere }),
+      ]);
+
+      return { items, total, take: q.take, skip: q.skip };
     }
   );
 

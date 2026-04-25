@@ -39,6 +39,7 @@ import {
 } from "@/api/financialReports";
 import { downloadCsv } from "@/utils/csv";
 import { downloadXlsx } from "@/utils/xlsx";
+import { DateInputPicker } from "@/components/ui/DateInputPicker";
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -808,11 +809,11 @@ function DsoTab() {
           <div className="flex gap-3 items-end flex-wrap">
             <div className="space-y-1">
               <label className="text-xs font-medium">De</label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateFrom} onChange={setDateFrom} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Até</label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateTo} onChange={setDateTo} />
             </div>
             <Button onClick={handleSearch}><Search className="w-4 h-4 mr-2" />Buscar</Button>
           </div>
@@ -951,11 +952,11 @@ function BilledVsReceivedTab() {
           <div className="flex gap-3 items-end flex-wrap">
             <div className="space-y-1">
               <label className="text-xs font-medium">De</label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateFrom} onChange={setDateFrom} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Até</label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateTo} onChange={setDateTo} />
             </div>
             <Button onClick={handleSearch}><Search className="w-4 h-4 mr-2" />Buscar</Button>
           </div>
@@ -1354,11 +1355,11 @@ function ChurnTab() {
           <div className="flex gap-3 items-end flex-wrap">
             <div className="space-y-1">
               <label className="text-xs font-medium">De</label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateFrom} onChange={setDateFrom} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Até</label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateTo} onChange={setDateTo} />
             </div>
             <Button onClick={handleSearch}><Search className="w-4 h-4 mr-2" />Buscar</Button>
           </div>
@@ -1495,11 +1496,11 @@ function CohortTab() {
           <div className="flex gap-3 items-end flex-wrap">
             <div className="space-y-1">
               <label className="text-xs font-medium">Clientes cadastrados de</label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateFrom} onChange={setDateFrom} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">até</label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+              <DateInputPicker value={dateTo} onChange={setDateTo} />
             </div>
             <Button onClick={handleSearch}><Search className="w-4 h-4 mr-2" />Gerar Cohort</Button>
           </div>

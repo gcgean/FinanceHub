@@ -172,6 +172,24 @@ object frmMain: TfrmMain
     TabOrder = 2
     OnClick = btnSyncClick
   end
+  object btnConnectMySQL: TButton
+    Left = 490
+    Top = 398
+    Width = 168
+    Height = 28
+    Caption = '4. Conectar Analytics'
+    TabOrder = 15
+    OnClick = btnConnectMySQLClick
+  end
+  object btnSyncAnalytics: TButton
+    Left = 666
+    Top = 398
+    Width = 138
+    Height = 28
+    Caption = '5. Sync Analytics'
+    TabOrder = 16
+    OnClick = btnSyncAnalyticsClick
+  end
   object dtpFrom: TDateTimePicker
     Left = 16
     Top = 456

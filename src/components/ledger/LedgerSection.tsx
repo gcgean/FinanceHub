@@ -45,7 +45,7 @@ export function LedgerSection() {
   const defaultFilters = {
     dateFrom: toDateInput(startOfMonth(new Date())),
     dateTo: toDateInput(endOfMonth(new Date())),
-    dateField: "issueDate" as "issueDate" | "paymentDate",
+    dateField: "paymentDate" as "issueDate" | "paymentDate",
     confirmed: "all" as "all" | "true" | "false",
     accountId: "all" as "all" | string,
   }
@@ -243,8 +243,10 @@ export function LedgerSection() {
               ) : rows.length ? (
                 rows.map((e) => {
                   const split = e.splits?.[0]
-                  const plan = split?.chartAccount ? `${split.chartAccount.code} — ${split.chartAccount.description}` : "—"
-                  const cc = split?.costCenter ? `${split.costCenter.code} — ${split.costCenter.description}` : "—"
+                  const planRef = split?.chartAccount ?? e.chartAccount
+                  const costCenterRef = split?.costCenter ?? e.costCenter
+                  const plan = planRef ? `${planRef.code} — ${planRef.description}` : "—"
+                  const cc = costCenterRef ? `${costCenterRef.code} — ${costCenterRef.description}` : "—"
                   const acc = e.account ? `${e.account.code} — ${e.account.description}` : "—"
                   const isCredit = e.operation === "CREDITO"
                   const amount = isCredit ? e.amount : -e.amount

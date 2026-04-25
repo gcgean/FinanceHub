@@ -47,7 +47,25 @@
       "Bash(npx tsc:*)",
       "Bash(curl -s http://localhost:4000/health)",
       "Bash(curl -s \"http://localhost:4000/financial-reports/aging\" -H \"Authorization: Bearer teste\")",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(npx serve:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5500/)",
+      "Bash(xargs -r taskkill /PID /F)",
+      "Bash(taskkill /PID 34220 /F)",
+      "Bash(cmd /c \"taskkill /PID 34220 /F\")",
+      "Bash(cmd /c \"netstat -ano | findstr :5500\")",
+      "Bash(cmd /c \"for %i in \\(\\\\\"C:\\\\Projetos Web\\\\qrcode\\\\\"\\) do echo %~si\")",
+      "Bash(powershell -Command \"\\(New-Object -ComObject Scripting.FileSystemObject\\).GetFolder\\('C:\\\\Projetos Web\\\\qrcode'\\).ShortPath\")",
+      "Bash(curl -L \"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js\" -o \"C:/Projetos Web/qrcode/js/qrcode.min.js\")",
+      "Bash(curl -L \"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js\" -v)",
+      "Bash(curl -s \"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/\")",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/package.json\")",
+      "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); print\\('main:', p.get\\('main'\\), 'browser:', p.get\\('browser'\\)\\)\")",
+      "Bash(curl -L \"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/lib/browser.js\" -o \"C:/Projetos Web/qrcode/js/qrcode.min.js\")",
+      "Bash(npm pack:*)",
+      "Bash(tar -tzf qrcode-1.5.3.tgz)",
+      "Bash(npm install:*)",
+      "Bash(npx esbuild:*)"
     ]
   }
 }

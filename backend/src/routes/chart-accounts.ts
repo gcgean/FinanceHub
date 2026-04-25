@@ -227,6 +227,9 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       const nextCompanyId = wantsGlobal === undefined ? existing.companyId : request.user.role === UserRole.ADMIN && wantsGlobal ? null : companyId;
       const payload: Record<string, unknown> = { ...data };
       delete payload.isGlobal;
+      if (typeof payload.code === "string") payload.code = payload.code.trim();
+      if (typeof payload.description === "string") payload.description = payload.description.trim();
+      if (typeof payload.accountingCode === "string") payload.accountingCode = payload.accountingCode.trim();
 
       if (wantsGlobal !== undefined && request.user.role !== UserRole.ADMIN) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });

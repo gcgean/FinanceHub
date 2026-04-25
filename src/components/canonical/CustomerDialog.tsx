@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateInputPicker } from "@/components/ui/DateInputPicker"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import type { Customer } from "@/api/canonical"
@@ -143,7 +144,10 @@ export function CustomerDialog(props: {
             </div>
             <div className="space-y-2">
               <Label>Data de Nascimento</Label>
-              <Input type="date" {...form.register("birthDate")} />
+              <DateInputPicker
+                value={form.watch("birthDate") ?? ""}
+                onChange={(v) => form.setValue("birthDate", v)}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -12,6 +12,7 @@ import { listCustomers, listSellers, reconcileArTitleCustomers } from "@/api/can
 import { downloadCsv } from "@/utils/csv";
 import { downloadXlsx } from "@/utils/xlsx";
 import { CheckCircle2, CreditCard, Download, FileText, Filter, List, RefreshCw, Search } from "lucide-react";
+import { DateInputPicker } from "@/components/ui/DateInputPicker";
 
 const formatCurrency = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -286,41 +287,11 @@ export default function AccountsReceivableReports() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Inicial</label>
-              <Input
-                type="text"
-                placeholder="DD/MM/AAAA"
-                maxLength={10}
-                value={formatForDisplay(dateFromInput)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const clean = val.replace(/\D/g, "");
-                  if (clean.length === 8) {
-                    setDateFromInput(formatForValue(val));
-                  } else {
-                    setDateFromInput(val);
-                  }
-                }}
-                className="w-32"
-              />
+              <DateInputPicker value={dateFromInput} onChange={setDateFromInput} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Final</label>
-              <Input
-                type="text"
-                placeholder="DD/MM/AAAA"
-                maxLength={10}
-                value={formatForDisplay(dateToInput)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const clean = val.replace(/\D/g, "");
-                  if (clean.length === 8) {
-                    setDateToInput(formatForValue(val));
-                  } else {
-                    setDateToInput(val);
-                  }
-                }}
-                className="w-32"
-              />
+              <DateInputPicker value={dateToInput} onChange={setDateToInput} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Campo de Data</label>

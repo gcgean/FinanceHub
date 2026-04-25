@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Filter, FileText, Search, CreditCard, List } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { DateInputPicker } from "@/components/ui/DateInputPicker";
 
 type SalesReportResponse = {
   items: Array<{
@@ -160,41 +161,11 @@ export default function SalesReports() {
           <div className="flex flex-wrap gap-4 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Inicial</label>
-              <Input 
-                type="text" 
-                placeholder="DD/MM/YYYY"
-                maxLength={10}
-                value={formatForDisplay(dateFromInput)} 
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const clean = val.replace(/\D/g, "");
-                  if (clean.length === 8) {
-                    setDateFromInput(formatForValue(val));
-                  } else {
-                    setDateFromInput(val); 
-                  }
-                }} 
-                className="w-32"
-              />
+              <DateInputPicker value={dateFromInput} onChange={setDateFromInput} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Data Final</label>
-              <Input 
-                type="text" 
-                placeholder="DD/MM/YYYY"
-                maxLength={10}
-                value={formatForDisplay(dateToInput)} 
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const clean = val.replace(/\D/g, "");
-                  if (clean.length === 8) {
-                    setDateToInput(formatForValue(val));
-                  } else {
-                    setDateToInput(val); 
-                  }
-                }} 
-                className="w-32"
-              />
+              <DateInputPicker value={dateToInput} onChange={setDateToInput} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Status</label>

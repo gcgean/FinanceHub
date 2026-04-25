@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import { env } from "./lib/env";
 import { authRoutes } from "./routes/auth";
+import { accessGroupsRoutes } from "./routes/access-groups";
 import { companiesRoutes } from "./routes/companies";
 import { usersRoutes } from "./routes/users";
 import { transactionsRoutes } from "./routes/transactions";
@@ -20,6 +21,8 @@ import { accountsRoutes } from "./routes/accounts";
 import { costCentersRoutes } from "./routes/cost-centers";
 import { chartAccountsRoutes } from "./routes/chart-accounts";
 import { ledgerRoutes } from "./routes/ledger";
+import { supportTicketsRoutes } from "./routes/support-tickets";
+import { departmentsRoutes } from "./routes/departments";
 import { reportsRoutes } from "./routes/reports";
 import { reportsExportRoutes } from "./routes/reports-export";
 import { financialReportsRoutes } from "./routes/financial-reports";
@@ -38,6 +41,11 @@ import { geoRoutes } from "./routes/geo";
 import { startSyncService } from "./services/sync";
 import { insightsService } from "./modules/ai/services/insights.service";
 import { queueService } from "./modules/ai/services/queue.service";
+import { telegramRoutes } from "./routes/telegram";
+import { startPolling } from "./services/telegram.service";
+import { routinesRoutes } from "./routes/routines";
+import { publicReportsRoutes } from "./routes/public-reports";
+import { startRoutineScheduler } from "./services/routine-scheduler";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +83,8 @@ export function buildApp() {
       if (!origin) return cb(null, true);
       const allowed = new Set([
         env.FRONTEND_ORIGIN,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8080",
@@ -138,13 +148,21 @@ export function buildApp() {
   app.register(costCentersRoutes, { prefix: "/cost-centers" });
   app.register(chartAccountsRoutes, { prefix: "/chart-accounts" });
   app.register(ledgerRoutes, { prefix: "/ledger" });
+  app.register(supportTicketsRoutes, { prefix: "/support-tickets" });
+  app.register(departmentsRoutes, { prefix: "/departments" });
   app.register(reportsRoutes, { prefix: "/reports" });
   app.register(reportsExportRoutes, { prefix: "/reports/export" });
   app.register(financialReportsRoutes, { prefix: "/financial-reports" });
 
   app.register(integrationsSettingsRoutes, { prefix: "/settings/integrations" });
+  app.register(accessGroupsRoutes, { prefix: "/access-groups" });
+  app.register(telegramRoutes, { prefix: "/telegram" });
+  app.register(routinesRoutes, { prefix: "/routines" });
+  app.register(publicReportsRoutes, { prefix: "/public-reports" });
 
   startSyncService();
+  startPolling();
+  startRoutineScheduler();
 
   // Register Queue Handlers
   queueService.registerHandler("INSIGHTS_GENERATION", async (job) => {

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: financehub
       POSTGRES_PASSWORD: financehub
     ports:
-      - "5434:5432"
+      - "5435:5432"
     volumes:
       - financehub_db:/var/lib/postgresql/data
 

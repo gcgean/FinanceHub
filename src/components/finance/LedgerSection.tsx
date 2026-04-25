@@ -11,6 +11,7 @@ import {
 import { listAccounts, listChartAccounts, listCostCenters } from "@/api/finance"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { DateInputPicker } from "@/components/ui/DateInputPicker"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -169,19 +170,9 @@ export function LedgerSection() {
         <CardTitle>Lançamentos</CardTitle>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1">
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-36"
-            />
+            <DateInputPicker value={dateFrom} onChange={setDateFrom} />
             <span className="text-muted-foreground text-sm">até</span>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-36"
-            />
+            <DateInputPicker value={dateTo} onChange={setDateTo} />
           </div>
           <Select value={accountFilter} onValueChange={setAccountFilter}>
             <SelectTrigger className="w-48">

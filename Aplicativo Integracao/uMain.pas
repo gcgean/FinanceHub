@@ -16,6 +16,8 @@ type
     btnMarcarTodos: TButton;
     btnDesmarcarTodos: TButton;
     btnConfigDB: TButton;
+    btnConnectMySQL: TButton;
+    btnSyncAnalytics: TButton;
     ProgressBar1: TProgressBar;
     lblProgress: TLabel;
     MemoLog: TMemo;
@@ -46,6 +48,8 @@ type
     procedure btnMarcarTodosClick(Sender: TObject);
     procedure btnDesmarcarTodosClick(Sender: TObject);
     procedure btnConfigDBClick(Sender: TObject);
+    procedure btnConnectMySQLClick(Sender: TObject);
+    procedure btnSyncAnalyticsClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure mnuConfigBancoClick(Sender: TObject);
@@ -251,6 +255,76 @@ begin
   end;
 end;
 
+procedure TfrmMain.btnConnectMySQLClick(Sender: TObject);
+begin
+  try
+    DM.ConfigurarConexaoMySQL;
+    DM.fdConMySQL.Connected := True;
+    Log('Conectado ao MySQL Analytics com sucesso!');
+  except
+    on E: Exception do
+      Log('Erro ao conectar MySQL Analytics: ' + E.Message);
+  end;
+end;
+
+procedure TfrmMain.btnSyncAnalyticsClick(Sender: TObject);
+var
+  LCodEmp: Integer;
+  I, LCount, LSynced: Integer;
+begin
+  if not DM.fdConMySQL.Connected then
+  begin
+    Log('Conecte ao MySQL Analytics primeiro (botão 4).');
+    Exit;
+  end;
+
+  if not DM.fdConCommand.Connected then
+  begin
+    Log('Conecte ao banco Firebird primeiro (botão 1).');
+    Exit;
+  end;
+
+  if FAPI.Token = '' then
+  begin
+    Log('Faça login na API primeiro (botão 2).');
+    Exit;
+  end;
+
+  LCount := 0;
+  for I := 0 to clbEmpresas.Count - 1 do
+    if clbEmpresas.Checked[I] then
+      Inc(LCount);
+
+  if LCount = 0 then
+  begin
+    Log('Selecione ao menos uma empresa para sincronizar.');
+    Exit;
+  end;
+
+  Log('Iniciando sincronização de atendimentos...');
+
+  try
+    for I := 0 to clbEmpresas.Count - 1 do
+    begin
+      if clbEmpresas.Checked[I] then
+      begin
+        LCodEmp := Integer(clbEmpresas.Items.Objects[I]);
+        Log(Format('Sincronizando atendimentos para empresa cód: %d...', [LCodEmp]));
+        LSynced := FSync.SyncAtendimentos(LCodEmp, DM.fdConMySQL, dtpFrom.Date, dtpTo.Date);
+        if LSynced > 0 then
+          Log(Format('Atendimentos sincronizados: %d', [LSynced]))
+        else
+          Log('Nenhum atendimento sincronizado.');
+      end;
+    end;
+  except
+    on E: Exception do
+      Log('Erro fatal na sincronização de atendimentos: ' + E.Message);
+  end;
+
+  Log('Sincronização de atendimentos finalizada.');
+end;
+
 procedure TfrmMain.btnConfigDBClick(Sender: TObject);
 var
   F: TfrmConfig;
@@ -417,8 +491,13 @@ begin
             Log('Caixas sincronizados.');
 
         if clbEntidades.Checked[16] then
+        begin
           if FSync.SyncLancamentos(LCodEmp) > 0 then
             Log('Lan'#231'amentos conta corrente sincronizados.');
+          // Migra o plano de contas dos lançamentos logo em seguida
+          if FSync.SyncLancamentosCentroCusto(LCodEmp) > 0 then
+            Log('Plano de contas dos lan'#231'amentos sincronizado.');
+        end;
 
         Application.ProcessMessages;
       end;

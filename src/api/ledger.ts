@@ -31,6 +31,10 @@ export type LedgerEntry = {
   deletedAt: string | null
   splits?: LedgerSplit[]
   account?: { id: string; code: string; description: string }
+  chartAccountId?: string | null
+  chartAccount?: { id: string; code: string; description: string } | null
+  costCenterId?: string | null
+  costCenter?: { id: string; code: string; description: string } | null
 }
 
 export async function listLedger(params: {
@@ -83,3 +87,29 @@ export async function deleteLedgerEntry(id: string) {
   })
 }
 
+export type LedgerSplitRow = {
+  id: string
+  splitAmount: number
+  chartAccount: { id: string; code: string; description: string }
+  costCenter:   { id: string; code: string; description: string } | null
+  entry: {
+    id: string; code: number; issueDate: string; paymentDate: string | null
+    history: string | null; operation: "DEBITO" | "CREDITO"
+    confirmed: boolean; amount: number
+    account: { id: string; code: string; description: string } | null
+  }
+}
+
+export async function listLedgerSplits(params: {
+  dateFrom?: string
+  dateTo?: string
+  dateField?: "issueDate" | "paymentDate"
+  accountId?: string
+  chartAccountId?: string
+  take?: number
+  skip?: number
+} = {}) {
+  return apiFetch<{ items: LedgerSplitRow[]; total: number; take: number; skip: number }>(
+    `/ledger/splits${toQueryString(params)}`
+  )
+}

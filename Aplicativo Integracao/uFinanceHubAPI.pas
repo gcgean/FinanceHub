@@ -44,6 +44,8 @@ type
     function SyncApTitle(AApTitle: TJSONObject): Boolean;
     function SyncArTitle(AArTitle: TJSONObject): Boolean;
     function SyncLedgerEntry(AEntry: TJSONObject): Boolean;
+    function SyncLedgerSplit(ASplit: TJSONObject): Boolean;
+    function SyncSupportTicket(ATicket: TJSONObject): Boolean;
 
     property Token: string read FToken;
     property CompanyId: string read FCompanyId;
@@ -841,6 +843,22 @@ function TFinanceHubAPI.SyncLedgerEntry(AEntry: TJSONObject): Boolean;
 var LResp: TJSONValue;
 begin
   LResp := Post('ledger/import', AEntry);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncLedgerSplit(ASplit: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('ledger/import-split', ASplit);
+  Result := (Assigned(LResp)) and (FLastErrorMessage = '');
+  if Assigned(LResp) then LResp.Free;
+end;
+
+function TFinanceHubAPI.SyncSupportTicket(ATicket: TJSONObject): Boolean;
+var LResp: TJSONValue;
+begin
+  LResp := Post('support-tickets/import', ATicket);
   Result := (Assigned(LResp)) and (FLastErrorMessage = '');
   if Assigned(LResp) then LResp.Free;
 end;

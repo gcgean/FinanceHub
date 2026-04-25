@@ -77,8 +77,8 @@ export function LedgerEntryDialog(props: {
         amount: props.value.amount,
         history: props.value.history ?? "",
         confirmed: props.value.confirmed,
-        chartAccountId: split?.chartAccountId ?? "",
-        costCenterId: split?.costCenterId ?? "__none__",
+        chartAccountId: split?.chartAccountId ?? props.value.chartAccountId ?? "",
+        costCenterId: split?.costCenterId ?? props.value.costCenterId ?? "__none__",
       })
     } else {
       form.reset(defaultValues)

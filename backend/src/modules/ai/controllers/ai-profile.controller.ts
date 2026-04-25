@@ -14,6 +14,7 @@ const UpdateProfileSchema = z.object({
   openaiApiKey: z.string().optional().nullable(),
   anthropicApiKey: z.string().optional().nullable(),
   geminiApiKey: z.string().optional().nullable(),
+  segmento: z.string().optional().nullable(),
 });
 
 export class AIProfileController {
@@ -33,7 +34,7 @@ export class AIProfileController {
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { aiProvider: true, openaiApiKey: true, anthropicApiKey: true, geminiApiKey: true }
+      select: { aiProvider: true, openaiApiKey: true, anthropicApiKey: true, geminiApiKey: true, segmento: true }
     });
 
     return reply.send({
@@ -42,6 +43,7 @@ export class AIProfileController {
       openaiApiKey: company?.openaiApiKey,
       anthropicApiKey: company?.anthropicApiKey,
       geminiApiKey: company?.geminiApiKey,
+      segmento: company?.segmento ?? null,
     });
   }
 
@@ -49,7 +51,7 @@ export class AIProfileController {
     const user = request.user as { companyId?: string; role?: string };
     const companyId = await resolveCompanyId(request);
 
-    const { aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, ...body } = UpdateProfileSchema.parse(request.body as unknown);
+    const { aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento, ...body } = UpdateProfileSchema.parse(request.body as unknown);
 
     const profile = await prisma.aIProfile.upsert({
       where: { companyId },
@@ -68,7 +70,8 @@ export class AIProfileController {
         aiProvider,
         openaiApiKey,
         anthropicApiKey,
-        geminiApiKey
+        geminiApiKey,
+        segmento,
       }
     });
 
@@ -77,7 +80,8 @@ export class AIProfileController {
       aiProvider,
       openaiApiKey,
       anthropicApiKey,
-      geminiApiKey
+      geminiApiKey,
+      segmento,
     });
   }
 

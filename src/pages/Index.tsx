@@ -19,6 +19,9 @@ import FinancialRegistrations from "@/pages/FinancialRegistrations";
 import Ledger from "@/pages/Ledger";
 import AIAdmin from "@/pages/AIAdmin";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
+import SupportTicketsReports from "@/pages/SupportTicketsReports";
+import DepartmentsPage from "@/pages/DepartmentsPage";
+import AccessGroupsPage from "@/pages/AccessGroupsPage";
 
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: "Dashboard", subtitle: "Visão geral financeira" },
@@ -35,9 +38,12 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   financialReports: { title: "Relatórios Financeiros", subtitle: "Aging, DSO, inadimplência, forecast, churn e cohort" },
   inventoryReports: { title: "Relatórios de Estoque", subtitle: "Controle e movimentação de estoque" },
   accountsPayableReports: { title: "Contas a Pagar", subtitle: "Títulos a pagar e obrigações" },
+  supportTicketsReports: { title: "Relatório de Atendimentos", subtitle: "Atendimentos finalizados importados do Analytics" },
+  departments: { title: "Departamentos", subtitle: "Cadastro e vinculação de departamentos do ERP Analytics" },
   imports: { title: "Importações", subtitle: "Upload de extratos" },
   companies: { title: "Empresas", subtitle: "Gerenciar clientes" },
   users: { title: "Usuários", subtitle: "Gerenciar acessos" },
+  accessGroups: { title: "Grupos de Acesso", subtitle: "Definir permissões por grupo de usuários" },
   settings: { title: "Configurações", subtitle: "Preferências do sistema" },
 };
 
@@ -76,10 +82,16 @@ const Index = () => {
         return <AccountsReceivableReports />;
       case "financialReports":
         return <FinancialReports />;
+      case "supportTicketsReports":
+        return <SupportTicketsReports />;
+      case "departments":
+        return <DepartmentsPage />;
       case "companies":
         return <Companies />;
       case "users":
         return <Users />;
+      case "accessGroups":
+        return <AccessGroupsPage />;
       case "settings":
         return <Settings />;
       default:

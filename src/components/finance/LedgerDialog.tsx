@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateInputPicker } from "@/components/ui/DateInputPicker"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -110,19 +111,16 @@ export function LedgerDialog(props: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Data de emissão</Label>
-              <Input
-                type="date"
+              <DateInputPicker
                 value={form.issueDate}
-                onChange={(e) => setField("issueDate", e.target.value)}
-                required
+                onChange={(v) => setField("issueDate", v)}
               />
             </div>
             <div className="space-y-2">
               <Label>Data de pagamento</Label>
-              <Input
-                type="date"
+              <DateInputPicker
                 value={form.paymentDate}
-                onChange={(e) => setField("paymentDate", e.target.value)}
+                onChange={(v) => setField("paymentDate", v)}
               />
             </div>
           </div>

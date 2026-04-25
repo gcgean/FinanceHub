@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
 });
 
 export const env = EnvSchema.parse({
@@ -23,5 +24,6 @@ export const env = EnvSchema.parse({
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
 });
 
