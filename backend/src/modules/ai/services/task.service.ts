@@ -1,7 +1,7 @@
-import { prisma } from "../../../lib/prisma";
-import { CreateTaskDTO, TaskResult } from "../types";
+import { prisma } from "../../../lib/prisma.js";
+import { CreateTaskDTO, TaskResult } from "../types.js";
 import { TransactionType } from "@prisma/client";
-import { queueService } from "./queue.service";
+import { queueService } from "./queue.service.js";
 
 export class TaskService {
   /**

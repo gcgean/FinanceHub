@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
-import { parseBody, parseQuery } from "../lib/validation";
-import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
+import { prisma } from "../lib/prisma.js";
+import { parseBody, parseQuery } from "../lib/validation.js";
+import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
 import { ChartPlanType, CostExpense, DebitCredit, FixedVariable, RevenueExpense, UserRole } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 

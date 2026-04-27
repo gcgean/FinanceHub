@@ -1,6 +1,6 @@
 import { startOfDay, subDays } from "date-fns";
-import { prisma } from "../../../../../lib/prisma";
-import { InsightAnalyzer } from "../../types";
+import { prisma } from "../../../../../lib/prisma.js";
+import { InsightAnalyzer } from "../../types.js";
 import { AIInsightRule } from "@prisma/client";
 
 export const expenseSpikeAnalyzer: InsightAnalyzer = {

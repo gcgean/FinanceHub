@@ -1,5 +1,5 @@
-import { prisma } from "../../../lib/prisma";
-import { memoryService } from "./memory.service";
+import { prisma } from "../../../lib/prisma.js";
+import { memoryService } from "./memory.service.js";
 
 export class IndexingService {
   /**

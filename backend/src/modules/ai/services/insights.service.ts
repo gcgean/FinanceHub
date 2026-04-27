@@ -1,6 +1,6 @@
-import { prisma } from "../../../lib/prisma";
-import { notificationService } from "./notification.service";
-import { insightEngineRegistry } from "../engine/registry";
+import { prisma } from "../../../lib/prisma.js";
+import { notificationService } from "./notification.service.js";
+import { insightEngineRegistry } from "../engine/registry.js";
 import { 
   TransactionType, 
   AIInsightSeverity, 

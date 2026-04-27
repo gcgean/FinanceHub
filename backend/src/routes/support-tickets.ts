@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
-import { requireAuth, requireCompanyScope } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
-import { chatService } from "../modules/ai/services/chat.service";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, requireCompanyScope } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
+import { chatService } from "../modules/ai/services/chat.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers de métricas para relatório IA — formato estruturado

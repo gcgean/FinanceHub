@@ -1,18 +1,18 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { prisma } from "../../../lib/prisma";
-import { parseQuery } from "../../../lib/validation";
-import { requireAuth, requireCompanyScope } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma.js";
+import { parseQuery } from "../../../lib/validation.js";
+import { requireAuth, requireCompanyScope } from "../../../lib/auth.js";
 import { PendencyStatus, TransactionType, UserRole } from "@prisma/client";
-import { memoryController } from "../controllers/memory.controller";
-import { indexingService } from "../services/indexing.service";
-import { chatController } from "../controllers/chat.controller";
-import { insightsController } from "../controllers/insights.controller";
-import { taskController } from "../controllers/task.controller";
-import { reportController } from "../controllers/report.controller";
-import { notificationController } from "../controllers/notification.controller";
-import { adminController } from "../controllers/admin.controller";
-import { aiProfileController } from "../controllers/ai-profile.controller";
+import { memoryController } from "../controllers/memory.controller.js";
+import { indexingService } from "../services/indexing.service.js";
+import { chatController } from "../controllers/chat.controller.js";
+import { insightsController } from "../controllers/insights.controller.js";
+import { taskController } from "../controllers/task.controller.js";
+import { reportController } from "../controllers/report.controller.js";
+import { notificationController } from "../controllers/notification.controller.js";
+import { adminController } from "../controllers/admin.controller.js";
+import { aiProfileController } from "../controllers/ai-profile.controller.js";
 
 const HorizonQuery = z.object({
   horizon: z.enum(["30d", "90d", "12m"]).optional().default("30d"),

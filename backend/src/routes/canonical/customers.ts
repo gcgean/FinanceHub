@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "../../lib/prisma";
-import { parseBody, parseQuery } from "../../lib/validation";
-import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth";
+import { prisma } from "../../lib/prisma.js";
+import { parseBody, parseQuery } from "../../lib/validation.js";
+import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth.js";
 import { UserRole, Prisma } from "@prisma/client";
-import { resolveCompanyId } from "../../lib/company";
+import { resolveCompanyId } from "../../lib/company.js";
 
 const ListQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional().default(50),

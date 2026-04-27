@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import * as XLSX from "xlsx";
-import { prisma } from "../lib/prisma";
-import { requireAuth, requireRole, requireCompanyScope } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, requireRole, requireCompanyScope } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
 import { UserRole } from "@prisma/client";
 
 export async function reportsExportRoutes(app: FastifyInstance) {

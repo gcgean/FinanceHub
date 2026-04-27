@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface";
-import { env } from "../../../lib/env";
+import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface.js";
+import { env } from "../../../lib/env.js";
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;

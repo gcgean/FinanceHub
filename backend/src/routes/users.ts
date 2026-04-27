@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { prisma } from "../lib/prisma";
-import { parseBody, parseQuery } from "../lib/validation";
-import { requireAuth, requireRole } from "../lib/auth";
+import { prisma } from "../lib/prisma.js";
+import { parseBody, parseQuery } from "../lib/validation.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
 import { UserRole } from "@prisma/client";
 
 const userSelect = {

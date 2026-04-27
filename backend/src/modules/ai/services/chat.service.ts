@@ -1,12 +1,12 @@
-import { prisma } from "../../../lib/prisma";
-import { LLMMessage, LLMProvider } from "../providers/llm.interface";
-import { OpenAIProvider } from "../providers/openai.provider";
-import { AnthropicProvider } from "../providers/anthropic.provider";
-import { GeminiProvider } from "../providers/gemini.provider";
-import { memoryService } from "./memory.service";
-import { insightsService } from "./insights.service";
-import { taskService } from "./task.service";
-import { env } from "../../../lib/env";
+import { prisma } from "../../../lib/prisma.js";
+import { LLMMessage, LLMProvider } from "../providers/llm.interface.js";
+import { OpenAIProvider } from "../providers/openai.provider.js";
+import { AnthropicProvider } from "../providers/anthropic.provider.js";
+import { GeminiProvider } from "../providers/gemini.provider.js";
+import { memoryService } from "./memory.service.js";
+import { insightsService } from "./insights.service.js";
+import { taskService } from "./task.service.js";
+import { env } from "../../../lib/env.js";
 
 class FallbackProvider implements LLMProvider {
   async generateResponse(messages: LLMMessage[]) {

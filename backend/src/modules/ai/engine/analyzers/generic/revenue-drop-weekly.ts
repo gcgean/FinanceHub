@@ -1,6 +1,6 @@
 import { startOfDay, startOfWeek, subWeeks, subDays } from "date-fns";
-import { prisma } from "../../../../../lib/prisma";
-import { InsightAnalyzer } from "../../types";
+import { prisma } from "../../../../../lib/prisma.js";
+import { InsightAnalyzer } from "../../types.js";
 import { AIInsightRule, AIInsightSeverity } from "@prisma/client";
 
 export const revenueDropWeeklyAnalyzer: InsightAnalyzer = {

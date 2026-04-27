@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
-import { requireAuth, requireCompanyScope } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, requireCompanyScope } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
 
 export async function departmentsRoutes(app: FastifyInstance) {
   // GET / — list all departments for the company

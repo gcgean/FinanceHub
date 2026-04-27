@@ -3,8 +3,8 @@
  * Extraído de support-tickets.ts para ser reutilizável pelo scheduler de rotinas.
  */
 
-import { prisma } from "../lib/prisma";
-import { chatService } from "../modules/ai/services/chat.service";
+import { prisma } from "../lib/prisma.js";
+import { chatService } from "../modules/ai/services/chat.service.js";
 
 // ── tipos ─────────────────────────────────────────────────────────────────────
 

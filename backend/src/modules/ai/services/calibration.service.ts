@@ -1,4 +1,4 @@
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../lib/prisma.js";
 import { subDays } from "date-fns";
 import { AIInsightRule } from "@prisma/client";
 

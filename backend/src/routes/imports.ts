@@ -4,10 +4,10 @@ import path from "path";
 import fs from "fs/promises";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
-import { prisma } from "../lib/prisma";
-import { parseBody, parseQuery } from "../lib/validation";
-import { ensureDir, safeJoin } from "../lib/files";
-import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
+import { prisma } from "../lib/prisma.js";
+import { parseBody, parseQuery } from "../lib/validation.js";
+import { ensureDir, safeJoin } from "../lib/files.js";
+import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth.js";
 import { ImportSource, ImportStatus, Prisma, UserRole } from "@prisma/client";
 import crypto from "crypto";
 

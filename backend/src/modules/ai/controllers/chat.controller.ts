@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { chatService } from "../services/chat.service";
-import { resolveCompanyId } from "../../../lib/company";
+import { chatService } from "../services/chat.service.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 const CreateChatSchema = z.object({
   title: z.string().max(200).optional(),

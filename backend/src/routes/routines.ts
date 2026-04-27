@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { prisma } from "../lib/prisma";
-import { requireAuth } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
 import { RoutineType } from "@prisma/client";
-import { sendToUser } from "../services/telegram.service";
-import { generateSupportTicketsAIReport } from "../services/support-tickets-report.service";
-import { env } from "../lib/env";
+import { sendToUser } from "../services/telegram.service.js";
+import { generateSupportTicketsAIReport } from "../services/support-tickets-report.service.js";
+import { env } from "../lib/env.js";
 
 // ── schemas ───────────────────────────────────────────────────────────────────
 

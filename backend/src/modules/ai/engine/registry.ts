@@ -1,7 +1,7 @@
-import { InsightAnalyzer } from "./types";
-import { revenueDropWeeklyAnalyzer } from "./analyzers/generic/revenue-drop-weekly";
-import { expenseSpikeAnalyzer } from "./analyzers/generic/expense-spike";
-import { churnRiskAnalyzer } from "./analyzers/software/churn-risk";
+import { InsightAnalyzer } from "./types.js";
+import { revenueDropWeeklyAnalyzer } from "./analyzers/generic/revenue-drop-weekly.js";
+import { expenseSpikeAnalyzer } from "./analyzers/generic/expense-spike.js";
+import { churnRiskAnalyzer } from "./analyzers/software/churn-risk.js";
 
 export class InsightEngineRegistry {
   private analyzers: Map<string, InsightAnalyzer> = new Map();

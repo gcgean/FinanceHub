@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { env } from "../../../lib/env";
+import { env } from "../../../lib/env.js";
 
 export class EmbeddingService {
   private openai: OpenAI | null = null;

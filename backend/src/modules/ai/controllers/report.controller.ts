@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { reportService } from "../services/report.service";
-import { insightsService } from "../services/insights.service";
-import { ChatService } from "../services/chat.service";
-import { resolveCompanyId } from "../../../lib/company";
+import { reportService } from "../services/report.service.js";
+import { insightsService } from "../services/insights.service.js";
+import { ChatService } from "../services/chat.service.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 const chatService = new ChatService();
 

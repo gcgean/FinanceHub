@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "../lib/prisma";
-import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth";
-import { resolveCompanyId } from "../lib/company";
+import { prisma } from "../lib/prisma.js";
+import { requireAuth, requireCompanyScope, requireRole } from "../lib/auth.js";
+import { resolveCompanyId } from "../lib/company.js";
 import { UserRole } from "@prisma/client";
 
 const Body = z.object({

@@ -1,23 +1,31 @@
 services:
-  db:
+  postgres:
     image: pgvector/pgvector:pg16
+    container_name: financehub_postgres
+    restart: always
     environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: financehub
-      POSTGRES_USER: financehub
-      POSTGRES_PASSWORD: financehub
     ports:
-      - "5435:5432"
+      - "5432:5432"
     volumes:
-      - financehub_db:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
-  adminer:
-    image: adminer:4
-    restart: unless-stopped
+  backend:
+    build: ./backend
+    container_name: financehub_backend
+    restart: always
     ports:
-      - "8080:8080"
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/financehub
+      JWT_SECRET: dev_financehub_secret_123
+      NODE_ENV: development
+      PORT: "3000"
+      HOST: 0.0.0.0
     depends_on:
-      - db
+      - postgres
 
 volumes:
-  financehub_db:
-
+  postgres_data:

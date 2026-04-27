@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { memoryService } from "../services/memory.service";
-import { CreateMemoryDTO } from "../types";
-import { resolveCompanyId } from "../../../lib/company";
+import { memoryService } from "../services/memory.service.js";
+import { CreateMemoryDTO } from "../types.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 // Schema validation
 const createMemorySchema = z.object({

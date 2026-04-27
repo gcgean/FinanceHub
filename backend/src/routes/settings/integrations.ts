@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { prisma } from "../../lib/prisma";
-import { parseBody } from "../../lib/validation";
-import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth";
+import { prisma } from "../../lib/prisma.js";
+import { parseBody } from "../../lib/validation.js";
+import { requireAuth, requireCompanyScope, requireRole } from "../../lib/auth.js";
 import { UserRole } from "@prisma/client";
-import { resolveCompanyId } from "../../lib/company";
-import { syncIntegration } from "../../services/sync";
+import { resolveCompanyId } from "../../lib/company.js";
+import { syncIntegration } from "../../services/sync.js";
 
 const Body = z.object({
   erp: z.string().min(1),

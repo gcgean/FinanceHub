@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 
 export async function publicReportsRoutes(app: FastifyInstance) {
   // GET /public-reports/:token — sem autenticação, acesso público

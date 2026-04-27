@@ -1,10 +1,10 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../lib/prisma.js";
 import { z } from "zod";
-import { OpenAIProvider } from "../providers/openai.provider";
-import { AnthropicProvider } from "../providers/anthropic.provider";
-import { GeminiProvider } from "../providers/gemini.provider";
-import { resolveCompanyId } from "../../../lib/company";
+import { OpenAIProvider } from "../providers/openai.provider.js";
+import { AnthropicProvider } from "../providers/anthropic.provider.js";
+import { GeminiProvider } from "../providers/gemini.provider.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 const UpdateProfileSchema = z.object({
   tone: z.enum(["formal", "casual", "technical"]).optional(),

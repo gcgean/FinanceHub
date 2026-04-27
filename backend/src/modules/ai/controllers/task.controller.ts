@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { taskService } from "../services/task.service";
-import { resolveCompanyId } from "../../../lib/company";
+import { taskService } from "../services/task.service.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 const CreateTaskSchema = z.object({
   type: z.string().min(1),

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { UserRole } from "@prisma/client";
-import { prisma } from "./prisma";
+import { prisma } from "./prisma.js";
 
 export async function resolveCompanyId(request: FastifyRequest): Promise<string> {
   const headerCompanyId = String(request.headers["x-company-id"] ?? "").trim();

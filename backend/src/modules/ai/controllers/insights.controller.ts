@@ -1,10 +1,10 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { insightsService } from "../services/insights.service";
-import { prisma } from "../../../lib/prisma";
+import { insightsService } from "../services/insights.service.js";
+import { prisma } from "../../../lib/prisma.js";
 import { AIInsightStatus } from "@prisma/client";
-import { queueService } from "../services/queue.service";
-import { resolveCompanyId } from "../../../lib/company";
+import { queueService } from "../services/queue.service.js";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 const GenerateSnapshotSchema = z.object({
   date: z.string().datetime().optional(), // ISO String

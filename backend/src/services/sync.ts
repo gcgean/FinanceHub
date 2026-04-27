@@ -1,8 +1,8 @@
 import cron from "node-cron";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 import type { Integration } from "@prisma/client";
 import axios from "axios";
-import { getCommandPool, fetchLancamentosCentroCusto } from "../lib/commandDb";
+import { getCommandPool, fetchLancamentosCentroCusto } from "../lib/commandDb.js";
 
 async function syncCustomers(integration: Integration) {
   console.log(`[Sync] Fetching customers for ${integration.erp}...`);

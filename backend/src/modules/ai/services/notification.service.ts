@@ -1,4 +1,4 @@
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../lib/prisma.js";
 import { AIChannelType, AIInsightDeliveryStatus, Prisma } from "@prisma/client";
 
 type EventWithRecipients = Prisma.AIInsightEventGetPayload<{

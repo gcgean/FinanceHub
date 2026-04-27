@@ -1,7 +1,7 @@
-import { env } from "./lib/env";
-import { buildApp } from "./index";
-import { queueService } from "./modules/ai/services/queue.service";
-import { taskService } from "./modules/ai/services/task.service";
+import { env } from "./lib/env.js";
+import { buildApp } from "./index.js";
+import { queueService } from "./modules/ai/services/queue.service.js";
+import { taskService } from "./modules/ai/services/task.service.js";
 
 const app = buildApp();
 

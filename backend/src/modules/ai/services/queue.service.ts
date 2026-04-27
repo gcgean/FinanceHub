@@ -1,5 +1,5 @@
 
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../lib/prisma.js";
 import { JobStatus, BackgroundJob } from "@prisma/client";
 
 type JobHandler = (job: BackgroundJob) => Promise<void>;
@@ -93,7 +93,7 @@ export class QueueService {
       // 3. Recarregar o job atualizado para ter os dados corretos (attempts, etc)
       const job = await prisma.backgroundJob.findUnique({ where: { id: candidate.id } });
       if (!job) throw new Error("Job desapareceu após reserva");
-      
+
       currentJob = job;
 
       const handler = this.handlers.get(job.queue);
@@ -103,7 +103,7 @@ export class QueueService {
       }
 
       console.log(`[QueueService] Processando job ${job.id} (${job.queue})... Tentativa ${job.attempts}/${job.maxAttempts}`);
-      
+
       // 4. Executar handler
       await handler(job);
 
@@ -115,12 +115,12 @@ export class QueueService {
           finishedAt: new Date(),
         },
       });
-      
+
       console.log(`[QueueService] Job ${job.id} concluído com sucesso.`);
 
     } catch (error: unknown) {
       console.error(`[QueueService] Erro ao processar job:`, error);
-      
+
       if (currentJob) {
         await this.handleJobFailure(currentJob, error);
       }
@@ -133,12 +133,12 @@ export class QueueService {
   async handleJobFailure(job: BackgroundJob, error: unknown) {
      const errorMessage = error instanceof Error ? error.message : String(error);
      const nextAttempt = job.attempts; // Já foi incrementado no início do processamento
-     
+
      if (nextAttempt < job.maxAttempts) {
        // Retry: Calcular backoff (ex: 1min, 2min, 4min, 8min...)
-       const delayMinutes = Math.pow(2, nextAttempt - 1); 
+       const delayMinutes = Math.pow(2, nextAttempt - 1);
        const nextRunAt = new Date(Date.now() + delayMinutes * 60 * 1000);
-       
+
        console.log(`[QueueService] Job ${job.id} falhou. Reagendando para ${nextRunAt.toISOString()} (Tentativa ${nextAttempt + 1})`);
 
        await prisma.backgroundJob.update({
@@ -152,7 +152,7 @@ export class QueueService {
      } else {
        // DLQ: Falha definitiva
        console.error(`[QueueService] Job ${job.id} falhou definitivamente após ${job.attempts} tentativas.`);
-       
+
        await prisma.backgroundJob.update({
          where: { id: job.id },
          data: {

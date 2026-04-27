@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface";
-import { env } from "../../../lib/env";
+import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface.js";
+import { env } from "../../../lib/env.js";
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;

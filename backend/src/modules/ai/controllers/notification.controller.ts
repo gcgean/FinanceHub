@@ -1,8 +1,8 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { prisma } from "../../../lib/prisma";
+import { prisma } from "../../../lib/prisma.js";
 import { AIChannelType } from "@prisma/client";
-import { resolveCompanyId } from "../../../lib/company";
+import { resolveCompanyId } from "../../../lib/company.js";
 
 type AuthUser = { sub: string; companyId?: string; role?: string };
 

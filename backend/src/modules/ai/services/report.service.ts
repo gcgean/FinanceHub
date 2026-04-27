@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
-import { prisma } from "../../../lib/prisma";
-import { insightsService } from "./insights.service";
+import { prisma } from "../../../lib/prisma.js";
+import { insightsService } from "./insights.service.js";
 
 export class ReportService {
   /**

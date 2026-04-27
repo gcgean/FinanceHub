@@ -1,9 +1,9 @@
 import cron from "node-cron";
 import { nanoid } from "nanoid";
-import { prisma } from "../lib/prisma";
-import { sendToUser } from "./telegram.service";
-import { generateSupportTicketsAIReport } from "./support-tickets-report.service";
-import { env } from "../lib/env";
+import { prisma } from "../lib/prisma.js";
+import { sendToUser } from "./telegram.service.js";
+import { generateSupportTicketsAIReport } from "./support-tickets-report.service.js";
+import { env } from "../lib/env.js";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

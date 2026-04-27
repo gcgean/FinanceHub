@@ -1,5 +1,5 @@
-import { prisma } from "../../../lib/prisma";
-import { CreateMemoryDTO, SearchMemoryParams, UpdateMemoryDTO } from "../types";
+import { prisma } from "../../../lib/prisma.js";
+import { CreateMemoryDTO, SearchMemoryParams, UpdateMemoryDTO } from "../types.js";
 import { Prisma } from "@prisma/client";
 
 export class MemoryService {
