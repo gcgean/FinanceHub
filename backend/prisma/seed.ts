@@ -143,6 +143,20 @@ async function main() {
     });
   }
 
+  const categories = [
+    { name: "Receitas de Vendas", type: TransactionType.REVENUE, color: "#22c55e" },
+    { name: "Despesas com Energia", type: TransactionType.EXPENSE, color: "#ef4444" },
+    { name: "Tecnologia", type: TransactionType.EXPENSE, color: "#60a5fa" },
+  ];
+
+  for (const c of categories) {
+    await prisma.financeCategory.upsert({
+      where: { companyId_name_type: { companyId: company.id, name: c.name, type: c.type } },
+      update: { color: c.color, active: true },
+      create: { companyId: company.id, name: c.name, type: c.type, color: c.color, active: true },
+    });
+  }
+
   await prisma.pendency.upsert({
     where: { id: "p1" },
     update: {

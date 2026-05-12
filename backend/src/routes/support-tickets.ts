@@ -475,7 +475,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       const segmentoEmpresa = company?.segmento ?? null;
 
       // 3. Nome do usuário autenticado
-      const userName = (((request as any).user?.name ?? "Gestor") as string)
+      const userName = String((request.user as unknown as { name?: string }).name ?? "Gestor")
         .split(" ")[0]
         .toUpperCase();
 

@@ -46,6 +46,8 @@ import { startPolling } from "./services/telegram.service.js";
 import { routinesRoutes } from "./routes/routines.js";
 import { publicReportsRoutes } from "./routes/public-reports.js";
 import { startRoutineScheduler } from "./services/routine-scheduler.js";
+import { categoriesRoutes } from "./routes/categories.js";
+import { financeHubRoutes } from "./routes/financehub.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,27 +81,18 @@ export function buildApp() {
   });
 
   app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      const allowed = new Set([
-        env.FRONTEND_ORIGIN,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://localhost:8081",
-        "http://127.0.0.1:8081",
-        "http://localhost:8082",
-        "http://127.0.0.1:8082",
-        "http://localhost:8083",
-        "http://127.0.0.1:8083",
-        "http://localhost:8084",
-        "http://127.0.0.1:8084",
-      ]);
-      cb(null, allowed.has(origin));
-    },
+    origin:
+      env.NODE_ENV !== "production"
+        ? true
+        : (origin, cb) => {
+            if (!origin) return cb(null, true);
+            const allowed = new Set([
+              env.FRONTEND_ORIGIN,
+              "http://localhost:3000",
+              "http://127.0.0.1:3000",
+            ]);
+            cb(null, allowed.has(origin));
+          },
     credentials: true,
   });
 
@@ -148,6 +141,8 @@ export function buildApp() {
   app.register(costCentersRoutes, { prefix: "/cost-centers" });
   app.register(chartAccountsRoutes, { prefix: "/chart-accounts" });
   app.register(ledgerRoutes, { prefix: "/ledger" });
+  app.register(categoriesRoutes, { prefix: "/categories" });
+  app.register(financeHubRoutes, { prefix: "/financehub" });
   app.register(supportTicketsRoutes, { prefix: "/support-tickets" });
   app.register(departmentsRoutes, { prefix: "/departments" });
   app.register(reportsRoutes, { prefix: "/reports" });

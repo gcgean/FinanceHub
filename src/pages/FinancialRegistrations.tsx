@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AccountsSection } from "@/components/finance/AccountsSection"
+import { CategoriesSection } from "@/components/finance/CategoriesSection"
 import { CostCentersSection } from "@/components/finance/CostCentersSection"
 import { ChartAccountsSection } from "@/components/finance/ChartAccountsSection"
 import { CustomersSection } from "@/components/canonical/CustomersSection"
@@ -18,6 +19,7 @@ export default function FinancialRegistrations() {
       <Tabs defaultValue="accounts" className="space-y-4">
         <TabsList>
           <TabsTrigger value="accounts">Contas</TabsTrigger>
+          <TabsTrigger value="categories">Categorias</TabsTrigger>
           <TabsTrigger value="costCenters">Centros de custo</TabsTrigger>
           <TabsTrigger value="chartAccounts">Plano de contas</TabsTrigger>
           <TabsTrigger value="customers">Clientes</TabsTrigger>
@@ -33,6 +35,10 @@ export default function FinancialRegistrations() {
 
         <TabsContent value="accounts">
           <AccountsSection />
+        </TabsContent>
+
+        <TabsContent value="categories">
+          <CategoriesSection />
         </TabsContent>
 
         <TabsContent value="costCenters">

@@ -2,14 +2,14 @@
 
 ## Objetivo
 
-O backend do FinanceHub fornece uma API REST com autenticação JWT e persistência em banco (SQLite via Prisma), suportando as entidades usadas pela UI: empresas, usuários, transações, pendências e importações.
+O backend do FinanceHub fornece uma API REST com autenticação JWT e persistência em banco (Postgres via Prisma), suportando as entidades usadas pela UI: empresas, usuários, transações, pendências e importações.
 
 O código fica em `backend/`.
 
 ## Stack
 
 - Fastify
-- Prisma + SQLite
+- Prisma + Postgres
 - JWT (`@fastify/jwt`)
 - Upload multipart (`@fastify/multipart`) + static (`@fastify/static`)
 - Zod (validação)
@@ -18,18 +18,19 @@ O código fica em `backend/`.
 
 ### Banco (Postgres via Docker)
 
+Pré-requisito: Docker Desktop/daemon rodando (senão o `docker compose` falha e o Postgres não sobe).
+
 No diretório raiz do projeto:
 
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
-
-Adminer (opcional): `http://127.0.0.1:8080`.
 
 1) Criar o arquivo `.env` a partir do exemplo:
 
 ```bash
-cp backend/.env.example backend/.env
+# no Windows (PowerShell)
+Copy-Item backend/.env.example backend/.env
 ```
 
 2) Ajustar `JWT_SECRET` (mínimo 16 caracteres) e, se quiser, `PORT`.
@@ -50,7 +51,9 @@ npm run seed
 npm run dev
 ```
 
-Por padrão: `http://127.0.0.1:4000`.
+Por padrão: `http://127.0.0.1:3000`.
+
+Se o front estiver em outra porta (ex.: `5174`), em desenvolvimento o CORS já permite automaticamente. Em produção, ajuste `FRONTEND_ORIGIN`.
 
 ## Endpoints principais
 

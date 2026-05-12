@@ -1,3 +1,8 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { endOfMonth, startOfMonth } from "date-fns";
 import { TrendingUp, TrendingDown, Wallet, AlertCircle, BookOpen, FileText, Folders } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
@@ -6,15 +11,39 @@ import { CashFlowChart } from "@/components/dashboard/CashFlowChart";
 import { ClosingStatus } from "@/components/dashboard/ClosingStatus";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getFinanceHubSummary } from "@/api/finance";
 
 export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void }) {
+  const period = useMemo(() => {
+    const now = new Date()
+    const from = startOfMonth(now)
+    const to = endOfMonth(now)
+    return {
+      label: format(now, "MMMM yyyy", { locale: ptBR }),
+      from: from.toISOString(),
+      to: to.toISOString(),
+    }
+  }, [])
+
+  const summary = useQuery({
+    queryKey: ["financehub", "summary", { from: period.from, to: period.to }],
+    queryFn: () => getFinanceHubSummary({ from: period.from, to: period.to }),
+  })
+
+  const revenue = summary.data?.revenue
+  const expense = summary.data?.expense
+  const net = summary.data?.net
+
+  const currency = (v: number | undefined) =>
+    v === undefined ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+
   return (
     <div className="p-6 space-y-6">
       {/* Period selector */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-muted-foreground text-sm">Período selecionado</p>
-          <p className="font-semibold text-foreground">Janeiro 2026</p>
+          <p className="font-semibold text-foreground capitalize">{period.label}</p>
         </div>
       </div>
 
@@ -22,27 +51,21 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Receita Total"
-          value="R$ 261.000,00"
-          change={12.5}
-          changeLabel="vs. mês anterior"
+          value={currency(revenue)}
           icon={TrendingUp}
           variant="positive"
         />
         <StatCard
           title="Despesas Total"
-          value="R$ 186.000,00"
-          change={-8.3}
-          changeLabel="vs. mês anterior"
+          value={currency(expense)}
           icon={TrendingDown}
           variant="negative"
         />
         <StatCard
           title="Resultado"
-          value="R$ 75.000,00"
-          change={28.4}
-          changeLabel="Margem: 28,7%"
+          value={currency(net)}
           icon={Wallet}
-          variant="positive"
+          variant={net !== undefined && net < 0 ? "negative" : "positive"}
         />
         <StatCard
           title="Pendências"
@@ -58,7 +81,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: string) 
         {/* Left Column - Chart and Transactions */}
         <div className="lg:col-span-2 space-y-6">
           <CashFlowChart />
-          <RecentTransactions />
+          <RecentTransactions onNavigate={onNavigate} from={period.from} to={period.to} />
         </div>
 
         {/* Right Column - Pendencies and Closing */}

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert } from "@/components/ui/alert"
-import { apiFetch } from "@/utils/api"
+import { ApiResponseError, apiFetch, getApiBaseUrl } from "@/utils/api"
 import { useAuthStore, type AuthUser } from "@/stores/authStore"
 
 const LoginSchema = z.object({
@@ -44,6 +44,25 @@ export default function Login() {
       })
       setAuth({ token: res.token, user: res.user })
     } catch (e: unknown) {
+      if (e instanceof ApiResponseError && e.status === 0) {
+        setError(
+          `Não foi possível conectar ao backend (${getApiBaseUrl()}). Inicie o backend e o Postgres, ou ajuste VITE_API_URL.`
+        )
+        return
+      }
+      if (e instanceof ApiResponseError && e.status >= 500) {
+        const code = String(e.code ?? "")
+        const looksLikeDbDown =
+          code.includes("Can't reach database server") ||
+          code.includes("ECONNREFUSED") ||
+          code.includes("P1001")
+        if (looksLikeDbDown) {
+          setError(
+            "Backend respondeu, mas o banco não está acessível. Inicie o Postgres (Docker Desktop/daemon precisa estar rodando) e rode as migrations/seed."
+          )
+          return
+        }
+      }
       const msg = e instanceof Error ? e.message : "Falha ao entrar"
       setError(msg)
     } finally {

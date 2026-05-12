@@ -18,7 +18,11 @@ export class ApiResponseError extends Error {
 
 function getBaseUrl() {
   const url = import.meta.env.VITE_API_URL as string | undefined
-  return url?.trim() ? url.trim().replace(/\/$/, "") : "http://127.0.0.1:4000"
+  return url?.trim() ? url.trim().replace(/\/$/, "") : "http://127.0.0.1:3000"
+}
+
+export function getApiBaseUrl() {
+  return getBaseUrl()
 }
 
 export type ApiFetchInit = RequestInit & { responseType?: "blob" }

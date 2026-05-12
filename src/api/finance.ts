@@ -175,3 +175,124 @@ export async function deleteAllChartAccounts() {
     method: "DELETE",
   })
 }
+
+export type FinanceCategory = {
+  id: string
+  companyId: string
+  name: string
+  type: "REVENUE" | "EXPENSE"
+  color: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listCategories(params?: { type?: FinanceCategory["type"]; active?: boolean; search?: string }) {
+  return apiFetch<FinanceCategory[]>(`/categories${toQueryString(params ?? {})}`)
+}
+
+export async function createCategory(body: { name: string; type: FinanceCategory["type"]; color?: string | null; active?: boolean }) {
+  return apiFetch<FinanceCategory>("/categories", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateCategory(id: string, body: Partial<Parameters<typeof createCategory>[0]>) {
+  return apiFetch<FinanceCategory>(`/categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteCategory(id: string) {
+  return apiFetch<{ ok: true }>(`/categories/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export type Transaction = {
+  id: string
+  companyId: string
+  date: string
+  description: string
+  value: number
+  type: "REVENUE" | "EXPENSE"
+  category: string
+  categoryConfidence: number | null
+  account: string
+  status: "NEW" | "SUGGESTED" | "PENDING" | "APPROVED" | "REVIEWED" | "LOCKED"
+  costCenter: string | null
+  attachmentUrl: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type TransactionsListResponse = {
+  items: Transaction[]
+  total: number
+  take: number
+  skip: number
+}
+
+export async function listTransactions(params?: {
+  take?: number
+  skip?: number
+  status?: Transaction["status"]
+  type?: Transaction["type"]
+  dateFrom?: string
+  dateTo?: string
+}) {
+  return apiFetch<TransactionsListResponse>(`/transactions${toQueryString(params ?? {})}`)
+}
+
+export async function createTransaction(body: {
+  date: string
+  description: string
+  value: number
+  type: Transaction["type"]
+  category: string
+  categoryConfidence?: number | null
+  account: string
+  status: Transaction["status"]
+  costCenter?: string | null
+  attachmentUrl?: string | null
+  notes?: string | null
+  companyId?: string | null
+}) {
+  return apiFetch<Transaction>("/transactions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateTransaction(id: string, body: Partial<Parameters<typeof createTransaction>[0]>) {
+  return apiFetch<Transaction>(`/transactions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteTransaction(id: string) {
+  return apiFetch<{ ok: true }>(`/transactions/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export type FinanceHubSummary = {
+  from: string | null
+  to: string | null
+  revenue: number
+  expense: number
+  net: number
+  counts: { revenue: number; expense: number }
+}
+
+export async function getFinanceHubSummary(params?: { from?: string; to?: string }) {
+  return apiFetch<FinanceHubSummary>(`/financehub/summary${toQueryString(params ?? {})}`)
+}
+
+export async function getFinanceHubRecent(params?: { take?: number; from?: string; to?: string }) {
+  return apiFetch<{ items: Transaction[] }>(`/financehub/recent${toQueryString(params ?? {})}`)
+}
