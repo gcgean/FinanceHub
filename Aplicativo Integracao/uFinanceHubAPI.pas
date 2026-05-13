@@ -60,8 +60,7 @@ begin
   // Garante que DM existe antes de acessar
   if Assigned(DM) and Assigned(DM.RESTClient1) then
   begin
-    if DM.RESTClient1.BaseURL = '' then
-      DM.RESTClient1.BaseURL := ABaseURL;
+    DM.RESTClient1.BaseURL := ABaseURL;
   end;
 end;
 

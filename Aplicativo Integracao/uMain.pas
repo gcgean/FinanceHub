@@ -58,6 +58,7 @@ type
   private
     FAPI: TFinanceHubAPI;
     FSync: TSyncService;
+    FApiBaseUrl: string;
     procedure Log(const AMsg: string);
     procedure CarregarEmpresas;
     procedure SetProgress(const AMsg: string; ACurrent, ATotal: Integer);
@@ -90,6 +91,7 @@ begin
   Ini := TIniFile.Create(IniFilePath);
   try
     edtEmail.Text := Ini.ReadString('Credentials', 'Email', edtEmail.Text);
+    FApiBaseUrl := Ini.ReadString('API', 'BaseURL', FApiBaseUrl);
     for I := 0 to clbEntidades.Count - 1 do
       clbEntidades.Checked[I] := Ini.ReadBool('Entities', 'Entity_' + IntToStr(I), True);
   finally
@@ -105,6 +107,8 @@ begin
   Ini := TIniFile.Create(IniFilePath);
   try
     Ini.WriteString('Credentials', 'Email', edtEmail.Text);
+    if Trim(FApiBaseUrl) <> '' then
+      Ini.WriteString('API', 'BaseURL', Trim(FApiBaseUrl));
     for I := 0 to clbEntidades.Count - 1 do
       Ini.WriteBool('Entities', 'Entity_' + IntToStr(I), clbEntidades.Checked[I]);
   finally
@@ -116,7 +120,10 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
   I: Integer;
 begin
-  FAPI := TFinanceHubAPI.Create('http://127.0.0.1:4000');
+  FApiBaseUrl := 'https://api.gestorfacil.ia.br';
+  LoadSettings;
+
+  FAPI := TFinanceHubAPI.Create(FApiBaseUrl);
   FSync := TSyncService.Create(FAPI, DM.fdConCommand);
   FSync.OnLog := procedure(AMsg: string)
     begin
@@ -128,7 +135,7 @@ begin
     end;
 
   if Assigned(MemoLog) then
-    Log('Sistema inicializado. Conectando em: http://127.0.0.1:4000 (Localhost)');
+    Log('Sistema inicializado. Conectando em: ' + FApiBaseUrl);
 
   // Defaults: marcar todas as entidades
   if Assigned(clbEntidades) then
@@ -148,8 +155,6 @@ begin
     cbTitleDate.ItemIndex := 0;
   end;
 
-  // Sobrescreve defaults com o que estava salvo
-  LoadSettings;
 end;
 
 procedure TfrmMain.FormDestroy(Sender: TObject);
