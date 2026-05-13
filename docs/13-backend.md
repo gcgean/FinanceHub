@@ -20,6 +20,10 @@ O código fica em `backend/`.
 
 Pré-requisito: Docker Desktop/daemon rodando (senão o `docker compose` falha e o Postgres não sobe).
 
+### Banco oficial
+
+Para apontar o backend para o banco oficial, ajuste `backend/.env` (variável `DATABASE_URL`). Em ambientes compartilhados, prefira usar `backend/.env.local` (também é ignorado pelo Git).
+
 No diretório raiz do projeto:
 
 ```bash
@@ -41,7 +45,7 @@ Copy-Item backend/.env.example backend/.env
 cd backend
 npm install
 npm run prisma:generate
-npm run prisma:migrate
+npm run prisma:deploy
 npm run seed
 ```
 
