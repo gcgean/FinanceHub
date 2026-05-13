@@ -8,7 +8,7 @@ uses
   Vcl.StdCtrls, System.IniFiles;
 
 const
-  DB_DEFAULT_HOST     = '26.241.132.21';
+  DB_DEFAULT_HOST     = 'commandsystem.commandcloud.com.br';
   DB_DEFAULT_PORT     = '3050';
   DB_DEFAULT_USER     = 'SYSDBA';
   DB_DEFAULT_PASSWORD = 'csqwe123';

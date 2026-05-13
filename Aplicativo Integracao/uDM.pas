@@ -1,4 +1,4 @@
-﻿unit uDM;
+unit uDM;
 
 interface
 
@@ -49,16 +49,18 @@ end;
 procedure TDM.ConfigurarConexaoCommand;
 var
   Ini: TIniFile;
-  LHost, LPort, LUser, LPassword, LDatabase: string;
+  LHost, LPort, LUser, LPassword, LDatabase, LProtocol, LCharset: string;
 begin
   Ini := TIniFile.Create(ChangeFileExt(ParamStr(0), '.ini'));
   try
-    LHost     := Ini.ReadString('Database', 'Host',     '26.241.132.21');
+    LHost     := Ini.ReadString('Database', 'Host',     'commandsystem.commandcloud.com.br');
     LPort     := Ini.ReadString('Database', 'Port',     '3050');
     LUser     := Ini.ReadString('Database', 'User',     'SYSDBA');
     LPassword := Ini.ReadString('Database', 'Password', 'csqwe123');
     LDatabase := Ini.ReadString('Database', 'Database',
       'C:\Windows\DataCloud\Connection - Command System\data\data.fdb');
+    LProtocol := Ini.ReadString('Database', 'Protocol', 'TCPIP');
+    LCharset  := Ini.ReadString('Database', 'Charset',  'WIN1252');
   finally
     Ini.Free;
   end;
@@ -72,8 +74,8 @@ begin
   fdConCommand.Params.Add('Database=' + LDatabase);
   fdConCommand.Params.Add('User_Name=' + LUser);
   fdConCommand.Params.Add('Password=' + LPassword);
-  fdConCommand.Params.Add('Protocol=TCPIP');
-  fdConCommand.Params.Add('CharacterSet=WIN1252');
+  fdConCommand.Params.Add('Protocol=' + LProtocol);
+  fdConCommand.Params.Add('CharacterSet=' + LCharset);
 end;
 
 procedure TDM.ConfigurarConexaoMySQL;
