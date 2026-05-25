@@ -337,67 +337,85 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         nomesProcedimento: (d.nomesProcedimento as string) || null,
       };
 
+      const SELECT_FIELDS = {
+        id: true, externalId: true, codCli: true, obsAtendimento: true,
+        cidRes: true, dataCadastroCliente: true, solucao: true,
+        dataHoraAtendimento: true, dataHoraFinalizacao: true, nota: true,
+        departamento: true, protocolo: true, nomeClienteAtendimento: true,
+        tempoAtendimento: true, numeroCliente: true, nomeCli: true,
+        usuLanc: true, usuConfEnc: true, usuAtend: true, nomeDesenvolvedor: true,
+        horaAtendimento: true, pontoRevenda: true, codigosProcedimento: true,
+        nomesProcedimento: true,
+      } as const;
+
+      type ExistingTicket = {
+        id: string; externalId: number; codCli: number | null;
+        obsAtendimento: string | null; cidRes: string | null;
+        dataCadastroCliente: Date | null; solucao: string | null;
+        dataHoraAtendimento: Date | null; dataHoraFinalizacao: Date | null;
+        nota: number | null; departamento: string | null; protocolo: string | null;
+        nomeClienteAtendimento: string | null; tempoAtendimento: string | null;
+        numeroCliente: string | null; nomeCli: string | null; usuLanc: string | null;
+        usuConfEnc: string | null; usuAtend: string | null; nomeDesenvolvedor: string | null;
+        horaAtendimento: string | null; pontoRevenda: string | null;
+        codigosProcedimento: string | null; nomesProcedimento: string | null;
+      };
+
+      const isSame = (e: ExistingTicket) =>
+        e.codCli === next.codCli &&
+        e.obsAtendimento === next.obsAtendimento &&
+        e.cidRes === next.cidRes &&
+        (e.dataCadastroCliente?.toISOString() ?? null) === (next.dataCadastroCliente?.toISOString() ?? null) &&
+        e.solucao === next.solucao &&
+        (e.dataHoraAtendimento?.toISOString() ?? null) === (next.dataHoraAtendimento?.toISOString() ?? null) &&
+        (e.dataHoraFinalizacao?.toISOString() ?? null) === (next.dataHoraFinalizacao?.toISOString() ?? null) &&
+        (e.nota ?? null) === (next.nota ?? null) &&
+        e.departamento === next.departamento &&
+        e.protocolo === next.protocolo &&
+        e.nomeClienteAtendimento === next.nomeClienteAtendimento &&
+        e.tempoAtendimento === next.tempoAtendimento &&
+        e.numeroCliente === next.numeroCliente &&
+        e.nomeCli === next.nomeCli &&
+        e.usuLanc === next.usuLanc &&
+        e.usuConfEnc === next.usuConfEnc &&
+        e.usuAtend === next.usuAtend &&
+        e.nomeDesenvolvedor === next.nomeDesenvolvedor &&
+        e.horaAtendimento === next.horaAtendimento &&
+        e.pontoRevenda === next.pontoRevenda &&
+        e.codigosProcedimento === next.codigosProcedimento &&
+        e.nomesProcedimento === next.nomesProcedimento;
+
+      // 1. Se tem protocolo, ele é a chave de dedup principal (evita duplicatas quando o
+      //    sistema de origem reutiliza o mesmo UUID em múltiplos id_Atend).
+      if (next.protocolo) {
+        const byProtocolo = await prisma.supportTicket.findFirst({
+          where: { companyId, protocolo: next.protocolo },
+          select: SELECT_FIELDS,
+        });
+        if (byProtocolo) {
+          if (isSame(byProtocolo)) {
+            return reply.status(200).send({ id: byProtocolo.id, changed: false });
+          }
+          // Atualiza o registro existente (inclusive externalId se mudou)
+          const updated = await prisma.supportTicket.update({
+            where: { id: byProtocolo.id },
+            data: { externalId, ...next },
+            select: { id: true },
+          });
+          return reply.status(200).send({ id: updated.id, changed: true });
+        }
+      }
+
+      // 2. Fallback: dedup por externalId (tickets sem protocolo ou protocolo novo)
       const existing = await prisma.supportTicket.findUnique({
         where: { companyId_externalId: { companyId, externalId } },
-        select: {
-          id: true,
-          codCli: true,
-          obsAtendimento: true,
-          cidRes: true,
-          dataCadastroCliente: true,
-          solucao: true,
-          dataHoraAtendimento: true,
-          dataHoraFinalizacao: true,
-          nota: true,
-          departamento: true,
-          protocolo: true,
-          nomeClienteAtendimento: true,
-          tempoAtendimento: true,
-          numeroCliente: true,
-          nomeCli: true,
-          usuLanc: true,
-          usuConfEnc: true,
-          usuAtend: true,
-          nomeDesenvolvedor: true,
-          horaAtendimento: true,
-          pontoRevenda: true,
-          codigosProcedimento: true,
-          nomesProcedimento: true,
-        },
+        select: SELECT_FIELDS,
       });
 
       if (existing) {
-        const same =
-          existing.codCli === next.codCli &&
-          existing.obsAtendimento === next.obsAtendimento &&
-          existing.cidRes === next.cidRes &&
-          (existing.dataCadastroCliente ? existing.dataCadastroCliente.toISOString() : null) ===
-            (next.dataCadastroCliente ? next.dataCadastroCliente.toISOString() : null) &&
-          existing.solucao === next.solucao &&
-          (existing.dataHoraAtendimento ? existing.dataHoraAtendimento.toISOString() : null) ===
-            (next.dataHoraAtendimento ? next.dataHoraAtendimento.toISOString() : null) &&
-          (existing.dataHoraFinalizacao ? existing.dataHoraFinalizacao.toISOString() : null) ===
-            (next.dataHoraFinalizacao ? next.dataHoraFinalizacao.toISOString() : null) &&
-          (existing.nota ?? null) === (next.nota ?? null) &&
-          existing.departamento === next.departamento &&
-          existing.protocolo === next.protocolo &&
-          existing.nomeClienteAtendimento === next.nomeClienteAtendimento &&
-          existing.tempoAtendimento === next.tempoAtendimento &&
-          existing.numeroCliente === next.numeroCliente &&
-          existing.nomeCli === next.nomeCli &&
-          existing.usuLanc === next.usuLanc &&
-          existing.usuConfEnc === next.usuConfEnc &&
-          existing.usuAtend === next.usuAtend &&
-          existing.nomeDesenvolvedor === next.nomeDesenvolvedor &&
-          existing.horaAtendimento === next.horaAtendimento &&
-          existing.pontoRevenda === next.pontoRevenda &&
-          existing.codigosProcedimento === next.codigosProcedimento &&
-          existing.nomesProcedimento === next.nomesProcedimento;
-
-        if (same) {
+        if (isSame(existing)) {
           return reply.status(200).send({ id: existing.id, changed: false });
         }
-
         const updated = await prisma.supportTicket.update({
           where: { id: existing.id },
           data: next,
