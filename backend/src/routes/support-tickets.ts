@@ -438,7 +438,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           where.departamento = { in: depts };
         }
       }
-      if (q.usuAtend)     where.usuAtend = q.usuAtend;
+      if (q.usuAtend)     where.usuAtend = { contains: q.usuAtend, mode: "insensitive" };
 
       const take = Number(q.take ?? 50);
       const skip = Number(q.skip ?? 0);
@@ -489,7 +489,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           : { in: departamentos };
       }
       if (usuAtend && usuAtend.trim()) {
-        aiWhere.usuAtend = usuAtend.trim();
+        aiWhere.usuAtend = { contains: usuAtend.trim(), mode: "insensitive" };
       }
 
       const tickets = await prisma.supportTicket.findMany({
