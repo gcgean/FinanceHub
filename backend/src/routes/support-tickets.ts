@@ -611,8 +611,10 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           { role: "user",   content: resumoMetricas },
         ]);
         analiseIA = aiResponse.content ?? "";
-      } catch {
-        analiseIA = "(Análise IA indisponível no momento)";
+      } catch (aiErr) {
+        const msg = aiErr instanceof Error ? aiErr.message : String(aiErr);
+        console.error("[ai-report] Falha ao chamar IA:", msg);
+        analiseIA = `(Análise IA indisponível no momento — ${msg})`;
       }
 
       const relatorioFinal = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
