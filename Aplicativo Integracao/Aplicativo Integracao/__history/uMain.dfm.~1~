@@ -1,0 +1,82 @@
+object frmMain: TfrmMain
+  Left = 0
+  Top = 0
+  Caption = 'FinanceHub Integrator - Command System'
+  ClientHeight = 442
+  ClientWidth = 628
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -12
+  Font.Name = 'Segoe UI'
+  Font.Style = []
+  TextHeight = 15
+  object Label1: TLabel
+    Left = 24
+    Top = 24
+    Width = 32
+    Height = 15
+    Caption = 'Email:'
+  end
+  object Label2: TLabel
+    Left = 24
+    Top = 56
+    Width = 35
+    Height = 15
+    Caption = 'Senha:'
+  end
+  object btnConnectDB: TButton
+    Left = 24
+    Top = 104
+    Width = 129
+    Height = 25
+    Caption = '1. Conectar BD'
+    TabOrder = 0
+    OnClick = btnConnectDBClick
+  end
+  object btnLoginAPI: TButton
+    Left = 168
+    Top = 104
+    Width = 129
+    Height = 25
+    Caption = '2. Login API'
+    TabOrder = 1
+    OnClick = btnLoginAPIClick
+  end
+  object btnSync: TButton
+    Left = 312
+    Top = 104
+    Width = 129
+    Height = 25
+    Caption = '3. Sincronizar Tudo'
+    TabOrder = 2
+    OnClick = btnSyncClick
+  end
+  object MemoLog: TMemo
+    Left = 24
+    Top = 152
+    Width = 577
+    Height = 265
+    Lines.Strings = (
+      'Logs do sistema...')
+    ScrollBars = ssVertical
+    TabOrder = 3
+  end
+  object edtEmail: TEdit
+    Left = 80
+    Top = 21
+    Width = 217
+    Height = 23
+    Text = 'admin@financehub.local'
+    TabOrder = 4
+  end
+  object edtPass: TEdit
+    Left = 80
+    Top = 53
+    Width = 217
+    Height = 23
+    PasswordChar = '*'
+    Text = 'admin123'
+    TabOrder = 5
+  end
+end

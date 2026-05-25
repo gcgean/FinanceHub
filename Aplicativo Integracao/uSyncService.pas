@@ -3,7 +3,7 @@ unit uSyncService;
 interface
 
 uses
-  System.SysUtils, System.JSON, System.Variants, FireDAC.Comp.Client, uFinanceHubAPI, uDM, FireDAC.DApt,
+  System.SysUtils, System.Classes, System.JSON, System.Variants, FireDAC.Comp.Client, uFinanceHubAPI, uDM, FireDAC.DApt,
   System.Generics.Collections, Data.DB, FireDAC.Stan.Option;
 
 type
@@ -2006,15 +2006,25 @@ var
   Q, QCount: TFDQuery;
   LObj: TJSONObject;
   LBuffer: TObjectList<TJSONObject>;
+  LByExternalId: TDictionary<string, TJSONObject>;
+  LFailedExternalIds: TStringList;
   LTotal, LCurrent: Integer;
   LOperation: string;
   LIssueDate, LPayDate: string;
   LCodCC: string;
+  LExternalId: string;
+  LRetryExt: string;
+  LRetryObj: TJSONObject;
+  LAttempt: Integer;
 begin
   Result := 0;
   Q := TFDQuery.Create(nil);
   QCount := TFDQuery.Create(nil);
   LBuffer := TObjectList<TJSONObject>.Create(True);
+  LByExternalId := TDictionary<string, TJSONObject>.Create;
+  LFailedExternalIds := TStringList.Create;
+  LFailedExternalIds.Sorted := True;
+  LFailedExternalIds.Duplicates := dupIgnore;
   try
     Q.Connection := FDB;
     QCount.Connection := FDB;
@@ -2069,7 +2079,8 @@ begin
 
       LObj := TJSONObject.Create;
 
-      LObj.AddPair('externalId',   IntToStr(ACodEmp) + '-' + Q.FieldByName('COD_LAN').AsString);
+      LExternalId := IntToStr(ACodEmp) + '-' + Q.FieldByName('COD_LAN').AsString;
+      LObj.AddPair('externalId',   LExternalId);
       LObj.AddPair('accountCode',  Trim(Q.FieldByName('COD_CONTA').AsString));
       LObj.AddPair('issueDate',    LIssueDate);
       LObj.AddPair('amount',       TJSONNumber.Create(Q.FieldByName('VALOR_LAN').AsFloat));
@@ -2091,6 +2102,7 @@ begin
         LObj.AddPair('costCenterCode', TJSONNull.Create);
 
       LBuffer.Add(LObj);
+      LByExternalId.AddOrSetValue(LExternalId, LObj);
       Q.Next;
     end;
 
@@ -2110,7 +2122,42 @@ begin
       if FAPI.SyncLedgerEntry(LObj) then
         Inc(Result)
       else
-        Log('Erro ao sincronizar lan'#231'amento: ' + FAPI.LastErrorMessage);
+      begin
+        LExternalId := '';
+        if Assigned(LObj) and (LObj.GetValue('externalId') <> nil) then
+          LExternalId := LObj.GetValue('externalId').Value;
+        if LExternalId <> '' then
+          LFailedExternalIds.Add(LExternalId);
+        if (Pos('(12002)', FAPI.LastErrorMessage) > 0) or (Pos('tempo limite', LowerCase(FAPI.LastErrorMessage)) > 0) then
+        begin
+          Sleep(2000);
+          if FAPI.SyncLedgerEntry(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar lan'#231'amento: ' + FAPI.LastErrorMessage);
+        end
+        else
+          Log('Erro ao sincronizar lan'#231'amento: ' + FAPI.LastErrorMessage);
+      end;
+    end;
+
+    if LFailedExternalIds.Count > 0 then
+    begin
+      Log(Format('Reprocessando %d lan'#231'amento(s) que falharam...', [LFailedExternalIds.Count]));
+      for LRetryExt in LFailedExternalIds do
+      begin
+        if not LByExternalId.TryGetValue(LRetryExt, LRetryObj) then
+          Continue;
+        for LAttempt := 1 to 3 do
+        begin
+          if FAPI.SyncLedgerEntry(LRetryObj) then
+          begin
+            Inc(Result);
+            Break;
+          end;
+          Sleep(1500 * LAttempt);
+        end;
+      end;
     end;
 
     // Reconecta o Firebird para opera'#231#245'es futuras
@@ -2120,6 +2167,8 @@ begin
     Q.Free;
     QCount.Free;
     LBuffer.Free;
+    LByExternalId.Free;
+    LFailedExternalIds.Free;
   end;
 end;
 
@@ -2137,13 +2186,34 @@ var
   Q: TFDQuery;
   LObj: TJSONObject;
   LBuffer: TObjectList<TJSONObject>;
+  LMissingEntries: TStringList;
+  LImportedEntries: TStringList;
+  LImportPayloads: TObjectList<TJSONObject>;
+  QLan: TFDQuery;
   LTotal, LCurrent: Integer;
+  LExternalId: string;
+  LCodLan: string;
+  LOperation: string;
+  LIssueDate, LPayDate: string;
+  LCodCC: string;
+  LAttempt: Integer;
+  LEntryObj: TJSONObject;
+  LRetrySplitObj: TJSONObject;
 begin
   Result := 0;
   Q := TFDQuery.Create(nil);
   LBuffer := TObjectList<TJSONObject>.Create(True);
+  LMissingEntries := TStringList.Create;
+  LMissingEntries.Sorted := True;
+  LMissingEntries.Duplicates := dupIgnore;
+  LImportedEntries := TStringList.Create;
+  LImportedEntries.Sorted := True;
+  LImportedEntries.Duplicates := dupIgnore;
+  LImportPayloads := TObjectList<TJSONObject>.Create(True);
+  QLan := TFDQuery.Create(nil);
   try
     Q.Connection := FDB;
+    QLan.Connection := FDB;
 
     // FASE 1: Carrega do banco para memória
     // Usa C.CONTA como código do plano de contas, conforme exibido na tela do ERP.
@@ -2190,7 +2260,133 @@ begin
       if FAPI.SyncLedgerSplit(LObj) then
         Inc(Result)
       else
-        Log('Erro ao sincronizar centro custo: ' + FAPI.LastErrorMessage);
+      begin
+        LExternalId := '';
+        if Assigned(LObj) and (LObj.GetValue('externalId') <> nil) then
+          LExternalId := LObj.GetValue('externalId').Value;
+        if (LExternalId <> '') and (Pos('ENTRY_NOT_FOUND', FAPI.LastErrorMessage) > 0) then
+        begin
+          LMissingEntries.Add(LExternalId);
+          Continue;
+        end;
+        if (Pos('(12002)', FAPI.LastErrorMessage) > 0) or (Pos('tempo limite', LowerCase(FAPI.LastErrorMessage)) > 0) then
+        begin
+          Sleep(2000);
+          if FAPI.SyncLedgerSplit(LObj) then
+            Inc(Result)
+          else
+            Log('Erro ao sincronizar centro custo: ' + FAPI.LastErrorMessage);
+        end
+        else
+          Log('Erro ao sincronizar centro custo: ' + FAPI.LastErrorMessage);
+      end;
+    end;
+
+    if LMissingEntries.Count > 0 then
+    begin
+      Log(Format('Encontrados %d rateio(s) sem lan'#231'amento na API. Reimportando lan'#231'amentos ausentes...', [LMissingEntries.Count]));
+
+      FDB.Connected := True;
+      for LExternalId in LMissingEntries do
+      begin
+        LCodLan := '';
+        if Pos('-', LExternalId) > 0 then
+          LCodLan := Copy(LExternalId, Pos('-', LExternalId) + 1, MaxInt);
+        if LCodLan = '' then
+          Continue;
+
+        QLan.Close;
+        QLan.SQL.Text :=
+          'SELECT lc.COD_LAN, lc.COD_CONTA, lc.DATAEMI_LAN, lc.DATAVENC_LAN, ' +
+          '       lc.VALOR_LAN, lc.HISTORICO_LAN, lc.DC_LAN, lc.COD_CENTRAL_CUSTOS ' +
+          'FROM LANCAMENTOS_CONTAS_CORRENTE lc ' +
+          'WHERE lc.COD_EMP = :COD_EMP AND lc.COD_LAN = :COD_LAN';
+        QLan.ParamByName('COD_EMP').AsInteger := ACodEmp;
+        QLan.ParamByName('COD_LAN').AsString := LCodLan;
+        QLan.Open;
+        if QLan.Eof then
+        begin
+          QLan.Close;
+          Continue;
+        end;
+
+        if QLan.FieldByName('DC_LAN').AsInteger = 0 then
+          LOperation := 'DEBITO'
+        else
+          LOperation := 'CREDITO';
+
+        LIssueDate := FormatDateTime('yyyy-mm-dd', QLan.FieldByName('DATAEMI_LAN').AsDateTime);
+
+        if QLan.FieldByName('DATAVENC_LAN').IsNull then
+          LPayDate := ''
+        else
+          LPayDate := FormatDateTime('yyyy-mm-dd', QLan.FieldByName('DATAVENC_LAN').AsDateTime);
+
+        if QLan.FieldByName('COD_CENTRAL_CUSTOS').IsNull then
+          LCodCC := ''
+        else
+          LCodCC := Trim(QLan.FieldByName('COD_CENTRAL_CUSTOS').AsString);
+
+        LEntryObj := TJSONObject.Create;
+        LEntryObj.AddPair('externalId', LExternalId);
+        LEntryObj.AddPair('accountCode', Trim(QLan.FieldByName('COD_CONTA').AsString));
+        LEntryObj.AddPair('issueDate', LIssueDate);
+        LEntryObj.AddPair('amount', TJSONNumber.Create(QLan.FieldByName('VALOR_LAN').AsFloat));
+        LEntryObj.AddPair('operation', LOperation);
+        if LPayDate <> '' then
+          LEntryObj.AddPair('paymentDate', LPayDate)
+        else
+          LEntryObj.AddPair('paymentDate', TJSONNull.Create);
+        if QLan.FieldByName('HISTORICO_LAN').IsNull then
+          LEntryObj.AddPair('history', TJSONNull.Create)
+        else
+          LEntryObj.AddPair('history', Trim(QLan.FieldByName('HISTORICO_LAN').AsString));
+        if LCodCC <> '' then
+          LEntryObj.AddPair('costCenterCode', LCodCC)
+        else
+          LEntryObj.AddPair('costCenterCode', TJSONNull.Create);
+
+        LImportPayloads.Add(LEntryObj);
+        QLan.Close;
+      end;
+      FDB.Connected := False;
+
+      for LEntryObj in LImportPayloads do
+      begin
+        for LAttempt := 1 to 3 do
+        begin
+          if FAPI.SyncLedgerEntry(LEntryObj) then
+          begin
+            if (LEntryObj.GetValue('externalId') <> nil) then
+              LImportedEntries.Add(LEntryObj.GetValue('externalId').Value);
+            Break;
+          end;
+          Sleep(1500 * LAttempt);
+        end;
+      end;
+
+      if LImportedEntries.Count > 0 then
+      begin
+        Log(Format('Lan'#231'amentos reimportados: %d. Reprocessando rateios...', [LImportedEntries.Count]));
+        for LRetrySplitObj in LBuffer do
+        begin
+          if (LRetrySplitObj.GetValue('externalId') = nil) then
+            Continue;
+          LExternalId := LRetrySplitObj.GetValue('externalId').Value;
+          if LImportedEntries.IndexOf(LExternalId) < 0 then
+            Continue;
+
+          for LAttempt := 1 to 3 do
+          begin
+            if FAPI.SyncLedgerSplit(LRetrySplitObj) then
+            begin
+              Inc(Result);
+              Break;
+            end;
+            Sleep(1500 * LAttempt);
+          end;
+        end;
+      end;
     end;
 
     FDB.Connected := True;
@@ -2198,6 +2394,10 @@ begin
   finally
     Q.Free;
     LBuffer.Free;
+    LMissingEntries.Free;
+    LImportedEntries.Free;
+    LImportPayloads.Free;
+    QLan.Free;
   end;
 end;
 
@@ -2207,46 +2407,90 @@ end;
 // e importa para o FinanceHub via POST /support-tickets/import
 // ---------------------------------------------------------------------------
 function TSyncService.SyncAtendimentos(ACodEmp: Integer; AMySQLDB: TFDConnection; ADateFrom, ADateTo: TDateTime): Integer;
-const
-  SQL_ATENDIMENTOS =
-    'SELECT ' +
-    '  a.id_Atend, a.cod_cli, a.Obs_Atendimento, c.CIDRES_CLI, c.DATACADASTRO_CLI, ' +
-    '  a.solucao, a.Data_hora_atendimento, a.Data_hora_finalizacao, a.nota, ' +
-    '  a.departamento, a.protocolo, a.nome_cliente_atendimento, a.Tempo_atendimento, ' +
-    '  a.Numero_cliente, c.NOME_CLI, c.NOMFAN_CLI, ' +
-    '  (SELECT us.NOME_USU FROM usuario us WHERE us.COD_USU = a.cod_usu_lanc) AS USU_lanc, ' +
-    '  (SELECT ucon.NOME_USU FROM usuario ucon WHERE ucon.COD_USU = a.cod_usu_conf_encerramento) AS USU_Conf_Enc, ' +
-    '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_tecnico) AS Uso_Atend, ' +
-    '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_desenvolvedor) AS nome_Desenvolvedor, ' +
-    '  CAST(a.Data_hora_atendimento AS TIME) AS horat, ' +
-    '  p.descricao, ' +
-    '  (SELECT GROUP_CONCAT(pa.cod_procedimento ORDER BY pa.cod_procedimento SEPARATOR '', '') ' +
-    '   FROM procedimentos_atendimentos pa WHERE pa.cod_atendimento = a.id_Atend) AS codigos_procedimento, ' +
-    '  (SELECT GROUP_CONCAT(pr.descricao ORDER BY pr.descricao SEPARATOR '', '') ' +
-    '   FROM procedimentos_atendimentos pa ' +
-    '   INNER JOIN procedimentos pr ON pr.cod_procedimento = pa.cod_procedimento ' +
-    '   WHERE pa.cod_atendimento = a.id_Atend) AS nomes_procedimento ' +
-    'FROM atendimentos a ' +
-    'INNER JOIN cliente c ON c.cod_cli = a.cod_cli ' +
-    'INNER JOIN ponto_revenda p ON p.cod_ponto = c.cod_ponto_revenda ' +
-    'WHERE a.Status_Atendimento = 7 ' +
-    '  AND a.Data_hora_finalizacao >= :pDateFrom ' +
-    '  AND a.Data_hora_finalizacao <= :pDateTo ' +
-    'ORDER BY a.Data_hora_finalizacao';
 var
   Q: TFDQuery;
+  QMeta: TFDQuery;
   LObj: TJSONObject;
   LBuffer: TObjectList<TJSONObject>;
   LTotal, LCurrent: Integer;
+  LSQL: string;
+  LClienteFantasiaExpr: string;
+  LCol: string;
+
+  function ResolveClienteFantasiaExpr: string;
+  const
+    CANDIDATES: array[0..5] of string = (
+      'NOMFAN_CLI',
+      'NOMEFAN_CLI',
+      'NOME_FANTASIA',
+      'NOMFANCLI',
+      'NOMFANT_CLI',
+      'FANTASIA'
+    );
+  var
+    I: Integer;
+  begin
+    Result := 'NULL';
+    QMeta.SQL.Text :=
+      'SELECT COLUMN_NAME ' +
+      'FROM INFORMATION_SCHEMA.COLUMNS ' +
+      'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ''cliente'' AND COLUMN_NAME = :col ' +
+      'LIMIT 1';
+    for I := Low(CANDIDATES) to High(CANDIDATES) do
+    begin
+      QMeta.Close;
+      QMeta.ParamByName('col').AsString := CANDIDATES[I];
+      QMeta.Open;
+      if not QMeta.Eof then
+      begin
+        LCol := Trim(QMeta.Fields[0].AsString);
+        if LCol <> '' then
+          Exit('c.' + LCol);
+      end;
+    end;
+  end;
+
+  function BuildSQLAtendimentos(const AClienteFantasiaExpr: string): string;
+  begin
+    Result :=
+      'SELECT ' +
+      '  a.id_Atend, a.cod_cli, a.Obs_Atendimento, c.CIDRES_CLI, c.DATACADASTRO_CLI, ' +
+      '  a.solucao, a.Data_hora_atendimento, a.Data_hora_finalizacao, a.nota, ' +
+      '  a.departamento, a.protocolo, a.nome_cliente_atendimento, a.Tempo_atendimento, ' +
+      '  a.Numero_cliente, c.NOME_CLI, ' + AClienteFantasiaExpr + ' AS NOMFAN_CLI, ' +
+      '  (SELECT us.NOME_USU FROM usuario us WHERE us.COD_USU = a.cod_usu_lanc) AS USU_lanc, ' +
+      '  (SELECT ucon.NOME_USU FROM usuario ucon WHERE ucon.COD_USU = a.cod_usu_conf_encerramento) AS USU_Conf_Enc, ' +
+      '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_tecnico) AS Uso_Atend, ' +
+      '  (SELECT ua.NOME_USU FROM usuario ua WHERE ua.COD_USU = a.cod_desenvolvedor) AS nome_Desenvolvedor, ' +
+      '  CAST(a.Data_hora_atendimento AS TIME) AS horat, ' +
+      '  p.descricao, ' +
+      '  (SELECT GROUP_CONCAT(pa.cod_procedimento ORDER BY pa.cod_procedimento SEPARATOR '', '') ' +
+      '   FROM procedimentos_atendimentos pa WHERE pa.cod_atendimento = a.id_Atend) AS codigos_procedimento, ' +
+      '  (SELECT GROUP_CONCAT(pr.descricao ORDER BY pr.descricao SEPARATOR '', '') ' +
+      '   FROM procedimentos_atendimentos pa ' +
+      '   INNER JOIN procedimentos pr ON pr.cod_procedimento = pa.cod_procedimento ' +
+      '   WHERE pa.cod_atendimento = a.id_Atend) AS nomes_procedimento ' +
+      'FROM atendimentos a ' +
+      'INNER JOIN cliente c ON c.cod_cli = a.cod_cli ' +
+      'INNER JOIN ponto_revenda p ON p.cod_ponto = c.cod_ponto_revenda ' +
+      'WHERE a.Status_Atendimento = 7 ' +
+      '  AND a.Data_hora_finalizacao >= :pDateFrom ' +
+      '  AND a.Data_hora_finalizacao <= :pDateTo ' +
+      'ORDER BY a.Data_hora_finalizacao';
+  end;
 begin
   Result := 0;
   EnsureCompanyContext(ACodEmp);
 
   Q := TFDQuery.Create(nil);
+  QMeta := TFDQuery.Create(nil);
   LBuffer := TObjectList<TJSONObject>.Create(True);
   try
     Q.Connection := AMySQLDB;
-    Q.SQL.Text := SQL_ATENDIMENTOS;
+    QMeta.Connection := AMySQLDB;
+    LClienteFantasiaExpr := ResolveClienteFantasiaExpr;
+    LSQL := BuildSQLAtendimentos(LClienteFantasiaExpr);
+    Q.SQL.Text := LSQL;
     // Usa o início do dia de ADateFrom e o fim do dia de ADateTo
     Q.ParamByName('pDateFrom').AsDateTime := Int(ADateFrom);          // 00:00:00
     Q.ParamByName('pDateTo').AsDateTime   := Int(ADateTo) + 0.99999; // 23:59:59
@@ -2336,6 +2580,7 @@ begin
 
   finally
     Q.Free;
+    QMeta.Free;
     LBuffer.Free;
   end;
 end;

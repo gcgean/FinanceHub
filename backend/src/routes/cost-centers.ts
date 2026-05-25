@@ -49,6 +49,20 @@ export async function costCentersRoutes(app: FastifyInstance) {
         ? await prisma.costCenter.findFirst({ where: { companyId, OR: matchConditions } })
         : null;
       if (existing) {
+        const nextDescription = data.description;
+        const nextActive = data.active ?? existing.active;
+        const nextCode = data.code ?? existing.code;
+        const nextExternalCode = data.externalCode !== undefined ? (data.externalCode ?? null) : existing.externalCode;
+
+        if (
+          existing.description === nextDescription &&
+          existing.active === nextActive &&
+          existing.code === nextCode &&
+          existing.externalCode === nextExternalCode
+        ) {
+          return existing;
+        }
+
         const updateData = {
           description: data.description,
           active: data.active ?? existing.active,
@@ -91,6 +105,18 @@ export async function costCentersRoutes(app: FastifyInstance) {
       const existing = await prisma.costCenter.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const nextCode = data.code ?? existing.code;
+      const nextExternalCode = data.externalCode !== undefined ? (data.externalCode ?? null) : existing.externalCode;
+      const nextDescription = data.description ?? existing.description;
+      const nextActive = data.active ?? existing.active;
+      if (
+        existing.code === nextCode &&
+        existing.externalCode === nextExternalCode &&
+        existing.description === nextDescription &&
+        existing.active === nextActive
+      ) {
+        return existing;
+      }
       try {
         return await prisma.costCenter.update({ where: { id: params.id }, data });
       } catch (e: unknown) {

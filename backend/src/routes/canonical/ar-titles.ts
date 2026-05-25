@@ -102,11 +102,46 @@ export async function arTitlesRoutes(app: FastifyInstance) {
       };
 
       if (b.externalId) {
-        return prisma.arTitle.upsert({
+        const existingByExternal = await prisma.arTitle.findUnique({
           where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: data,
-          update: { ...data, companyId: undefined, externalId: undefined },
         });
+        if (existingByExternal) {
+          const existingIssue = existingByExternal.issueDate.toISOString();
+          const existingDue = existingByExternal.dueDate.toISOString();
+          const existingPay = existingByExternal.paymentDate ? existingByExternal.paymentDate.toISOString() : null;
+          const nextIssue = data.issueDate.toISOString();
+          const nextDue = data.dueDate.toISOString();
+          const nextPay = data.paymentDate ? data.paymentDate.toISOString() : null;
+          if (
+            existingByExternal.customerId === data.customerId &&
+            (existingByExternal.customerExternalId ?? null) === (data.customerExternalId ?? null) &&
+            (existingByExternal.saleExternalId ?? null) === (data.saleExternalId ?? null) &&
+            existingIssue === nextIssue &&
+            existingDue === nextDue &&
+            existingPay === nextPay &&
+            existingByExternal.amount === data.amount &&
+            existingByExternal.openAmount === data.openAmount &&
+            (existingByExternal.paidAmount ?? null) === (data.paidAmount ?? null) &&
+            (existingByExternal.discountReceived ?? null) === (data.discountReceived ?? null) &&
+            (existingByExternal.interestReceived ?? null) === (data.interestReceived ?? null) &&
+            (existingByExternal.refundReceived ?? null) === (data.refundReceived ?? null) &&
+            (existingByExternal.externalSeq ?? null) === (data.externalSeq ?? null) &&
+            (existingByExternal.sellerExternalId ?? null) === (data.sellerExternalId ?? null) &&
+            (existingByExternal.sellerName ?? null) === (data.sellerName ?? null) &&
+            existingByExternal.status === data.status &&
+            (existingByExternal.documentNumber ?? null) === (data.documentNumber ?? null) &&
+            (existingByExternal.notes ?? null) === (data.notes ?? null)
+          ) {
+            return existingByExternal;
+          }
+
+          return prisma.arTitle.update({
+            where: { id: existingByExternal.id },
+            data: { ...data, companyId: undefined, externalId: undefined },
+          });
+        }
+
+        return prisma.arTitle.create({ data });
       }
 
       return prisma.arTitle.create({ data });
@@ -123,6 +158,45 @@ export async function arTitlesRoutes(app: FastifyInstance) {
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (request.user.role !== UserRole.ADMIN && existing.companyId !== request.user.companyId) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      const nextCustomerId = b.customerId === undefined ? existing.customerId : b.customerId;
+      const nextIssueIso = b.issueDate === undefined ? existing.issueDate.toISOString() : new Date(b.issueDate).toISOString();
+      const nextDueIso = b.dueDate === undefined ? existing.dueDate.toISOString() : new Date(b.dueDate).toISOString();
+      const nextPaymentIso =
+        b.paymentDate === undefined
+          ? (existing.paymentDate ? existing.paymentDate.toISOString() : null)
+          : (b.paymentDate ? new Date(b.paymentDate).toISOString() : null);
+      const nextAmount = b.amount === undefined ? existing.amount : b.amount;
+      const nextOpenAmount = b.openAmount === undefined ? existing.openAmount : b.openAmount;
+      const nextPaidAmount = b.paidAmount === undefined ? (existing.paidAmount ?? null) : (b.paidAmount ?? null);
+      const nextDiscount = b.discountReceived === undefined ? (existing.discountReceived ?? null) : (b.discountReceived ?? null);
+      const nextInterest = b.interestReceived === undefined ? (existing.interestReceived ?? null) : (b.interestReceived ?? null);
+      const nextRefund = b.refundReceived === undefined ? (existing.refundReceived ?? null) : (b.refundReceived ?? null);
+      const nextExternalSeq = b.externalSeq === undefined ? (existing.externalSeq ?? null) : (b.externalSeq ?? null);
+      const nextSellerExternalId = b.sellerExternalId === undefined ? (existing.sellerExternalId ?? null) : (b.sellerExternalId ?? null);
+      const nextSellerName = b.sellerName === undefined ? (existing.sellerName ?? null) : (b.sellerName ?? null);
+      const nextStatus = b.status === undefined ? existing.status : b.status;
+      const nextDoc = b.documentNumber === undefined ? (existing.documentNumber ?? null) : (b.documentNumber ?? null);
+      const nextNotes = b.notes === undefined ? (existing.notes ?? null) : (b.notes ?? null);
+      if (
+        existing.customerId === nextCustomerId &&
+        existing.issueDate.toISOString() === nextIssueIso &&
+        existing.dueDate.toISOString() === nextDueIso &&
+        (existing.paymentDate ? existing.paymentDate.toISOString() : null) === nextPaymentIso &&
+        existing.amount === nextAmount &&
+        existing.openAmount === nextOpenAmount &&
+        (existing.paidAmount ?? null) === nextPaidAmount &&
+        (existing.discountReceived ?? null) === nextDiscount &&
+        (existing.interestReceived ?? null) === nextInterest &&
+        (existing.refundReceived ?? null) === nextRefund &&
+        (existing.externalSeq ?? null) === nextExternalSeq &&
+        (existing.sellerExternalId ?? null) === nextSellerExternalId &&
+        (existing.sellerName ?? null) === nextSellerName &&
+        existing.status === nextStatus &&
+        (existing.documentNumber ?? null) === nextDoc &&
+        (existing.notes ?? null) === nextNotes
+      ) {
+        return existing;
       }
       return prisma.arTitle.update({
         where: { id: params.id },

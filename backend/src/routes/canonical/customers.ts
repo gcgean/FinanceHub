@@ -143,6 +143,32 @@ export async function customersRoutes(app: FastifyInstance) {
           orderBy: { createdAt: "asc" },
         });
         if (existingByDoc) {
+          const nextClassificationId = classificationId === undefined ? existingByDoc.classificationId : classificationId;
+          const nextExternalId = existingByDoc.externalId ? existingByDoc.externalId : (b.externalId ?? null);
+          const nextBirthDateIso = data.birthDate ? data.birthDate.toISOString().slice(0, 10) : null;
+          const existingBirthDateIso = existingByDoc.birthDate ? existingByDoc.birthDate.toISOString().slice(0, 10) : null;
+
+          if (
+            existingByDoc.name === data.name &&
+            existingByDoc.knownName === (data.knownName ?? null) &&
+            existingByDoc.externalId === nextExternalId &&
+            existingByDoc.email === (data.email ?? null) &&
+            existingByDoc.phone === (data.phone ?? null) &&
+            existingByDoc.phone2 === (data.phone2 ?? null) &&
+            existingBirthDateIso === nextBirthDateIso &&
+            existingByDoc.city === (data.city ?? null) &&
+            existingByDoc.state === (data.state ?? null) &&
+            existingByDoc.route === (data.route ?? null) &&
+            existingByDoc.cityId === (data.cityId ?? null) &&
+            existingByDoc.stateCode === (data.stateCode ?? null) &&
+            existingByDoc.neighborhood === (data.neighborhood ?? null) &&
+            (existingByDoc.value ?? null) === (data.value ?? null) &&
+            existingByDoc.isActive === (data.isActive ?? true) &&
+            existingByDoc.classificationId === nextClassificationId
+          ) {
+            return existingByDoc;
+          }
+
           return prisma.customer.update({
             where: { id: existingByDoc.id },
             data: {
@@ -156,11 +182,42 @@ export async function customersRoutes(app: FastifyInstance) {
       }
 
       if (b.externalId) {
-        return prisma.customer.upsert({
+        const existingByExternal = await prisma.customer.findUnique({
           where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: data,
-          update: { ...data, companyId: undefined, externalId: undefined },
         });
+        if (existingByExternal) {
+          const nextClassificationId = classificationId === undefined ? existingByExternal.classificationId : classificationId;
+          const nextBirthDateIso = data.birthDate ? data.birthDate.toISOString().slice(0, 10) : null;
+          const existingBirthDateIso = existingByExternal.birthDate ? existingByExternal.birthDate.toISOString().slice(0, 10) : null;
+
+          if (
+            existingByExternal.name === data.name &&
+            existingByExternal.knownName === (data.knownName ?? null) &&
+            existingByExternal.document === (data.document ?? null) &&
+            existingByExternal.email === (data.email ?? null) &&
+            existingByExternal.phone === (data.phone ?? null) &&
+            existingByExternal.phone2 === (data.phone2 ?? null) &&
+            existingBirthDateIso === nextBirthDateIso &&
+            existingByExternal.city === (data.city ?? null) &&
+            existingByExternal.state === (data.state ?? null) &&
+            existingByExternal.route === (data.route ?? null) &&
+            existingByExternal.cityId === (data.cityId ?? null) &&
+            existingByExternal.stateCode === (data.stateCode ?? null) &&
+            existingByExternal.neighborhood === (data.neighborhood ?? null) &&
+            (existingByExternal.value ?? null) === (data.value ?? null) &&
+            existingByExternal.isActive === (data.isActive ?? true) &&
+            existingByExternal.classificationId === nextClassificationId
+          ) {
+            return existingByExternal;
+          }
+
+          return prisma.customer.update({
+            where: { id: existingByExternal.id },
+            data: { ...data, companyId: undefined, externalId: undefined },
+          });
+        }
+
+        return prisma.customer.create({ data });
       }
 
       return prisma.customer.create({ data });
@@ -273,25 +330,35 @@ export async function customersRoutes(app: FastifyInstance) {
         active: z.boolean().optional(),
       }).parse(request.body);
       if (b.externalId) {
-        return prisma.customerClassification.upsert({
+        const existingByExternal = await prisma.customerClassification.findUnique({
           where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: {
-            companyId,
-            externalId: b.externalId,
-            name: b.name,
-            description: b.description ?? null,
-            notes: b.notes ?? null,
-            percentShare: b.percentShare ?? null,
-            active: b.active ?? true,
-          },
-          update: {
-            name: b.name,
-            description: b.description ?? null,
-            notes: b.notes ?? null,
-            percentShare: b.percentShare ?? null,
-            active: b.active ?? true,
-          },
         });
+        const next = {
+          companyId,
+          externalId: b.externalId,
+          name: b.name,
+          description: b.description ?? null,
+          notes: b.notes ?? null,
+          percentShare: b.percentShare ?? null,
+          active: b.active ?? true,
+        };
+        if (existingByExternal) {
+          if (
+            existingByExternal.name === next.name &&
+            (existingByExternal.description ?? null) === (next.description ?? null) &&
+            (existingByExternal.notes ?? null) === (next.notes ?? null) &&
+            (existingByExternal.percentShare ?? null) === (next.percentShare ?? null) &&
+            existingByExternal.active === next.active &&
+            existingByExternal.externalId === next.externalId
+          ) {
+            return existingByExternal;
+          }
+          return prisma.customerClassification.update({
+            where: { id: existingByExternal.id },
+            data: { ...next, companyId: undefined, externalId: undefined },
+          });
+        }
+        return prisma.customerClassification.create({ data: next });
       }
       return prisma.customerClassification.create({
         data: {
@@ -324,6 +391,22 @@ export async function customersRoutes(app: FastifyInstance) {
       const existing = await prisma.customerClassification.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const nextName = b.name === undefined ? existing.name : b.name;
+      const nextExternalId = b.externalId === undefined ? existing.externalId : b.externalId;
+      const nextDescription = b.description === undefined ? existing.description : b.description;
+      const nextNotes = b.notes === undefined ? existing.notes : b.notes;
+      const nextPercentShare = b.percentShare === undefined ? existing.percentShare : b.percentShare;
+      const nextActive = b.active === undefined ? existing.active : b.active;
+      if (
+        existing.name === nextName &&
+        (existing.externalId ?? null) === (nextExternalId ?? null) &&
+        (existing.description ?? null) === (nextDescription ?? null) &&
+        (existing.notes ?? null) === (nextNotes ?? null) &&
+        (existing.percentShare ?? null) === (nextPercentShare ?? null) &&
+        existing.active === nextActive
+      ) {
+        return existing;
+      }
       return prisma.customerClassification.update({
         where: { id: params.id },
         data: {
@@ -362,20 +445,43 @@ export async function customersRoutes(app: FastifyInstance) {
         externalId: z.string().optional().nullable(),
         active: z.boolean().optional(),
       }).parse(request.body);
-      const created = await prisma.customerDeactivationReason.upsert({
-        where: b.externalId ? { companyId_externalId: { companyId, externalId: b.externalId } } : { companyId_externalId: { companyId, externalId: "__NA__" } },
-        create: {
+      if (b.externalId) {
+        const existingByExternal = await prisma.customerDeactivationReason.findUnique({
+          where: { companyId_externalId: { companyId, externalId: b.externalId } },
+        });
+        const next = {
           companyId,
           description: b.description,
-          externalId: b.externalId ?? null,
+          externalId: b.externalId,
           active: b.active ?? true,
-        },
-        update: {
-          description: b.description,
-          active: b.active ?? true,
-        },
+        };
+        if (existingByExternal) {
+          if (
+            existingByExternal.description === next.description &&
+            existingByExternal.active === next.active &&
+            existingByExternal.externalId === next.externalId
+          ) {
+            return existingByExternal;
+          }
+          return prisma.customerDeactivationReason.update({
+            where: { id: existingByExternal.id },
+            data: { description: next.description, active: next.active },
+          });
+        }
+        return prisma.customerDeactivationReason.create({
+          data: { companyId, description: next.description, externalId: next.externalId, active: next.active },
+        });
+      }
+
+      const existingByDesc = await prisma.customerDeactivationReason.findFirst({
+        where: { companyId, externalId: null, description: b.description },
       });
-      return created;
+      if (existingByDesc && existingByDesc.active === (b.active ?? true)) {
+        return existingByDesc;
+      }
+      return prisma.customerDeactivationReason.create({
+        data: { companyId, description: b.description, externalId: null, active: b.active ?? true },
+      });
     }
   );
 
@@ -393,6 +499,16 @@ export async function customersRoutes(app: FastifyInstance) {
       const existing = await prisma.customerDeactivationReason.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const nextDescription = b.description === undefined ? existing.description : b.description;
+      const nextExternalId = b.externalId === undefined ? existing.externalId : b.externalId;
+      const nextActive = b.active === undefined ? existing.active : b.active;
+      if (
+        existing.description === nextDescription &&
+        (existing.externalId ?? null) === (nextExternalId ?? null) &&
+        existing.active === nextActive
+      ) {
+        return existing;
+      }
       return prisma.customerDeactivationReason.update({
         where: { id: params.id },
         data: {
@@ -442,16 +558,32 @@ export async function customersRoutes(app: FastifyInstance) {
         if (!rr || rr.companyId !== companyId) throw Object.assign(new Error("INVALID_REASON"), { statusCode: 400 });
         reasonId = rr.id;
       }
-      const deact = await prisma.customerDeactivation.create({
-        data: {
+      const nextDeactivatedAt = body.deactivatedAt ? new Date(body.deactivatedAt) : new Date();
+      const nextValue = body.value ?? existing.value ?? null;
+      const nextReason = body.reason ?? null;
+      const already = await prisma.customerDeactivation.findFirst({
+        where: {
           companyId,
           customerId: existing.id,
-          value: body.value ?? existing.value ?? null,
-          reason: body.reason ?? null,
           reasonId,
-          deactivatedAt: body.deactivatedAt ? new Date(body.deactivatedAt) : new Date(),
+          reason: nextReason,
+          value: nextValue === null ? null : nextValue,
+          deactivatedAt: nextDeactivatedAt,
         },
+        orderBy: { createdAt: "asc" },
       });
+      const deact = already
+        ? already
+        : await prisma.customerDeactivation.create({
+            data: {
+              companyId,
+              customerId: existing.id,
+              value: nextValue,
+              reason: nextReason,
+              reasonId,
+              deactivatedAt: nextDeactivatedAt,
+            },
+          });
       await prisma.customer.update({
         where: { id: existing.id },
         data: { isActive: false, deactivatedAt: deact.deactivatedAt },

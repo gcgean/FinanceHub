@@ -63,6 +63,10 @@ export async function paymentMethodsRoutes(app: FastifyInstance) {
           : await prisma.paymentMethod.findFirst({ where: { companyId, name: data.name } });
 
         if (existing) {
+          const nextEnabled = data.enabled ?? existing.enabled;
+          if (existing.name === data.name && existing.externalId === externalId && existing.enabled === nextEnabled) {
+            return existing;
+          }
           return prisma.paymentMethod.update({
             where: { id: existing.id },
             data: {
@@ -91,6 +95,10 @@ export async function paymentMethodsRoutes(app: FastifyInstance) {
           : await prisma.paymentMethod.findFirst({ where: { companyId, name: data.name } });
 
         if (existing) {
+          const nextEnabled = data.enabled ?? existing.enabled;
+          if (existing.name === data.name && existing.externalId === externalId && existing.enabled === nextEnabled) {
+            continue;
+          }
           await prisma.paymentMethod.update({
             where: { id: existing.id },
             data: {
@@ -128,6 +136,13 @@ export async function paymentMethodsRoutes(app: FastifyInstance) {
       const existing = await prisma.paymentMethod.findUnique({ where: { id: params.id } });
       if (!existing || existing.companyId !== companyId) {
         throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      }
+
+      const nextName = data.name ?? existing.name;
+      const nextExternalId = data.externalId !== undefined ? (data.externalId ?? null) : existing.externalId;
+      const nextEnabled = data.enabled ?? existing.enabled;
+      if (existing.name === nextName && existing.externalId === nextExternalId && existing.enabled === nextEnabled) {
+        return existing;
       }
 
       return prisma.paymentMethod.update({

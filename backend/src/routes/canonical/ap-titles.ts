@@ -91,11 +91,40 @@ export async function apTitlesRoutes(app: FastifyInstance) {
       };
 
       if (b.externalId) {
-        return prisma.apTitle.upsert({
+        const existingByExternal = await prisma.apTitle.findUnique({
           where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: data,
-          update: { ...data, companyId: undefined, externalId: undefined },
         });
+        if (existingByExternal) {
+          const existingIssue = existingByExternal.issueDate.toISOString();
+          const existingDue = existingByExternal.dueDate.toISOString();
+          const existingPay = existingByExternal.paymentDate ? existingByExternal.paymentDate.toISOString() : null;
+          const nextIssue = data.issueDate.toISOString();
+          const nextDue = data.dueDate.toISOString();
+          const nextPay = data.paymentDate ? data.paymentDate.toISOString() : null;
+          if (
+            existingByExternal.supplierId === data.supplierId &&
+            existingIssue === nextIssue &&
+            existingDue === nextDue &&
+            existingPay === nextPay &&
+            existingByExternal.amount === data.amount &&
+            existingByExternal.openAmount === data.openAmount &&
+            (existingByExternal.paidAmount ?? null) === (data.paidAmount ?? null) &&
+            (existingByExternal.discountReceived ?? null) === (data.discountReceived ?? null) &&
+            (existingByExternal.interestReceived ?? null) === (data.interestReceived ?? null) &&
+            existingByExternal.status === data.status &&
+            (existingByExternal.documentNumber ?? null) === (data.documentNumber ?? null) &&
+            (existingByExternal.notes ?? null) === (data.notes ?? null)
+          ) {
+            return existingByExternal;
+          }
+
+          return prisma.apTitle.update({
+            where: { id: existingByExternal.id },
+            data: { ...data, companyId: undefined, externalId: undefined },
+          });
+        }
+
+        return prisma.apTitle.create({ data });
       }
 
       return prisma.apTitle.create({ data });
@@ -112,6 +141,37 @@ export async function apTitlesRoutes(app: FastifyInstance) {
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (request.user.role !== UserRole.ADMIN && existing.companyId !== request.user.companyId) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      const nextSupplierId = b.supplierId === undefined ? existing.supplierId : b.supplierId;
+      const nextIssueIso = b.issueDate === undefined ? existing.issueDate.toISOString() : new Date(b.issueDate).toISOString();
+      const nextDueIso = b.dueDate === undefined ? existing.dueDate.toISOString() : new Date(b.dueDate).toISOString();
+      const nextPaymentIso =
+        b.paymentDate === undefined
+          ? (existing.paymentDate ? existing.paymentDate.toISOString() : null)
+          : (b.paymentDate ? new Date(b.paymentDate).toISOString() : null);
+      const nextAmount = b.amount === undefined ? existing.amount : b.amount;
+      const nextOpenAmount = b.openAmount === undefined ? existing.openAmount : b.openAmount;
+      const nextPaidAmount = b.paidAmount === undefined ? (existing.paidAmount ?? null) : (b.paidAmount ?? null);
+      const nextDiscount = b.discountReceived === undefined ? (existing.discountReceived ?? null) : (b.discountReceived ?? null);
+      const nextInterest = b.interestReceived === undefined ? (existing.interestReceived ?? null) : (b.interestReceived ?? null);
+      const nextStatus = b.status === undefined ? existing.status : b.status;
+      const nextDoc = b.documentNumber === undefined ? (existing.documentNumber ?? null) : (b.documentNumber ?? null);
+      const nextNotes = b.notes === undefined ? (existing.notes ?? null) : (b.notes ?? null);
+      if (
+        existing.supplierId === nextSupplierId &&
+        existing.issueDate.toISOString() === nextIssueIso &&
+        existing.dueDate.toISOString() === nextDueIso &&
+        (existing.paymentDate ? existing.paymentDate.toISOString() : null) === nextPaymentIso &&
+        existing.amount === nextAmount &&
+        existing.openAmount === nextOpenAmount &&
+        (existing.paidAmount ?? null) === nextPaidAmount &&
+        (existing.discountReceived ?? null) === nextDiscount &&
+        (existing.interestReceived ?? null) === nextInterest &&
+        existing.status === nextStatus &&
+        (existing.documentNumber ?? null) === nextDoc &&
+        (existing.notes ?? null) === nextNotes
+      ) {
+        return existing;
       }
       return prisma.apTitle.update({
         where: { id: params.id },

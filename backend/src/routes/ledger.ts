@@ -322,7 +322,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       });
       if (existing) {
         reply.status(200);
-        return existing;
+        return { ...existing, changed: false };
       }
 
       // Resolve account by externalCode (set during SyncAccounts)
@@ -388,7 +388,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       });
 
       reply.status(201);
-      return created;
+      return { ...created, changed: true };
     }
   );
 
@@ -416,7 +416,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       // Localiza o lançamento pelo externalId (salvo como documentNumber no import)
       const entry = await prisma.bankLedgerEntry.findFirst({
         where: { companyId, documentNumber: data.externalId },
-        select: { id: true },
+        select: { id: true, chartAccountId: true },
       });
       if (!entry) {
         throw Object.assign(
@@ -440,6 +440,26 @@ export async function ledgerRoutes(app: FastifyInstance) {
           new Error(`CHART_ACCOUNT_NOT_FOUND: code=${normalizedChartAccountCode}`),
           { statusCode: 422 }
         );
+      }
+
+      const existingSplit = await prisma.bankLedgerEntrySplit.findUnique({
+        where: {
+          entryId_chartAccountId: {
+            entryId: entry.id,
+            chartAccountId: chartAccount.id,
+          },
+        },
+      });
+
+      if (existingSplit && Math.abs(existingSplit.splitAmount - data.splitAmount) < 0.0001) {
+        if (entry.chartAccountId !== chartAccount.id) {
+          await prisma.bankLedgerEntry.update({
+            where: { id: entry.id },
+            data: { chartAccountId: chartAccount.id },
+          });
+        }
+        reply.status(200);
+        return { ...existingSplit, changed: false };
       }
 
       // Upsert: cria ou atualiza o split (chave: entryId + chartAccountId)
@@ -468,7 +488,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       });
 
       reply.status(200);
-      return split;
+      return { ...split, changed: true };
     }
   );
 

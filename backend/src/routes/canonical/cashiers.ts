@@ -70,6 +70,10 @@ export async function cashiersRoutes(app: FastifyInstance) {
           : await prisma.cashier.findFirst({ where: { companyId, name: data.name } });
 
         if (existing) {
+          const nextActive = data.active ?? existing.active;
+          if (existing.name === data.name && existing.externalId === externalId && existing.active === nextActive) {
+            return existing;
+          }
           return prisma.cashier.update({
             where: { id: existing.id },
             data: {
@@ -98,6 +102,10 @@ export async function cashiersRoutes(app: FastifyInstance) {
           : await prisma.cashier.findFirst({ where: { companyId, name: data.name } });
 
         if (existing) {
+          const nextActive = data.active ?? existing.active;
+          if (existing.name === data.name && existing.externalId === externalId && existing.active === nextActive) {
+            continue;
+          }
           await prisma.cashier.update({
             where: { id: existing.id },
             data: {
@@ -135,6 +143,13 @@ export async function cashiersRoutes(app: FastifyInstance) {
       const existing = await prisma.cashier.findUnique({ where: { id: params.id } });
       if (!existing || existing.companyId !== companyId) {
         throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+      }
+
+      const nextName = data.name ?? existing.name;
+      const nextExternalId = data.externalId !== undefined ? (data.externalId ?? null) : existing.externalId;
+      const nextActive = data.active ?? existing.active;
+      if (existing.name === nextName && existing.externalId === nextExternalId && existing.active === nextActive) {
+        return existing;
       }
 
       return prisma.cashier.update({

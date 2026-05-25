@@ -120,6 +120,31 @@ export async function productsRoutes(app: FastifyInstance) {
       };
 
       if (b.externalId) {
+        const existingByExternal = await prisma.product.findUnique({
+          where: { companyId_externalId: { companyId, externalId: b.externalId } },
+        });
+        if (existingByExternal) {
+          if (
+            existingByExternal.sku === data.sku &&
+            existingByExternal.barcode === data.barcode &&
+            existingByExternal.name === data.name &&
+            existingByExternal.section === data.section &&
+            existingByExternal.group === data.group &&
+            existingByExternal.subgroup === data.subgroup &&
+            existingByExternal.brandName === data.brandName &&
+            (existingByExternal.costPrice ?? null) === (data.costPrice ?? null) &&
+            (existingByExternal.salePrice ?? null) === (data.salePrice ?? null) &&
+            existingByExternal.active === data.active
+          ) {
+            return existingByExternal;
+          }
+
+          return prisma.product.update({
+            where: { id: existingByExternal.id },
+            data: { ...data, companyId: undefined, externalId: undefined, code: undefined },
+          });
+        }
+
         // For upsert, we need code only on create if it's not provided.
         // If updating, we don't touch code.
         // But prisma upsert requires all create fields.
@@ -133,10 +158,8 @@ export async function productsRoutes(app: FastifyInstance) {
                 return String(next).padStart(6, "0");
               })();
 
-        return prisma.product.upsert({
-          where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: { ...data, code: codeForCreate },
-          update: { ...data, companyId: undefined, externalId: undefined },
+        return prisma.product.create({
+          data: { ...data, code: codeForCreate },
         });
       }
 
@@ -167,6 +190,36 @@ export async function productsRoutes(app: FastifyInstance) {
       if (request.user.role !== UserRole.ADMIN && existing.companyId !== request.user.companyId) {
         throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
       }
+
+      const nextCode = b.code === undefined ? existing.code : b.code;
+      const nextExternalId = b.externalId === undefined ? existing.externalId : b.externalId;
+      const nextSku = b.sku === undefined ? existing.sku : b.sku;
+      const nextBarcode = b.barcode === undefined ? existing.barcode : b.barcode;
+      const nextName = b.name === undefined ? existing.name : b.name;
+      const nextSection = b.section === undefined ? existing.section : b.section;
+      const nextGroup = b.group === undefined ? existing.group : b.group;
+      const nextSubgroup = b.subgroup === undefined ? existing.subgroup : b.subgroup;
+      const nextBrandName = b.brandName === undefined ? existing.brandName : b.brandName;
+      const nextCostPrice = b.costPrice === undefined ? existing.costPrice : b.costPrice;
+      const nextSalePrice = b.salePrice === undefined ? existing.salePrice : b.salePrice;
+      const nextActive = b.active === undefined ? existing.active : b.active;
+      if (
+        existing.code === nextCode &&
+        existing.externalId === nextExternalId &&
+        existing.sku === nextSku &&
+        existing.barcode === nextBarcode &&
+        existing.name === nextName &&
+        existing.section === nextSection &&
+        existing.group === nextGroup &&
+        existing.subgroup === nextSubgroup &&
+        existing.brandName === nextBrandName &&
+        (existing.costPrice ?? null) === (nextCostPrice ?? null) &&
+        (existing.salePrice ?? null) === (nextSalePrice ?? null) &&
+        existing.active === nextActive
+      ) {
+        return existing;
+      }
+
       return prisma.product.update({
         where: { id: params.id },
         data: {
@@ -236,6 +289,11 @@ export async function productsRoutes(app: FastifyInstance) {
             where: { companyId, name: { equals: data.name, mode: "insensitive" } },
           });
       if (existing) {
+        const nextCode = inputCode ? inputCode : existing.code;
+        const nextName = data.name;
+        if (existing.code === nextCode && existing.name === nextName) {
+          return existing;
+        }
         try {
           return await prisma.productSection.update({
             where: { id: existing.id },
@@ -279,6 +337,11 @@ export async function productsRoutes(app: FastifyInstance) {
       const existing = await prisma.productSection.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const nextCode = data.code === undefined ? existing.code : data.code;
+      const nextName = data.name === undefined ? existing.name : data.name;
+      if (existing.code === nextCode && existing.name === nextName) {
+        return existing;
+      }
       try {
         return await prisma.productSection.update({
           where: { id: params.id },
@@ -362,6 +425,12 @@ export async function productsRoutes(app: FastifyInstance) {
             where: { sectionId, name: { equals: data.name, mode: "insensitive" } },
           });
       if (existing) {
+        const nextSectionId = sectionId;
+        const nextCode = inputCode ? inputCode : existing.code;
+        const nextName = data.name;
+        if (existing.sectionId === nextSectionId && existing.code === nextCode && existing.name === nextName) {
+          return existing;
+        }
         try {
           return await prisma.productGroup.update({
             where: { id: existing.id },
@@ -411,6 +480,12 @@ export async function productsRoutes(app: FastifyInstance) {
         const section = await prisma.productSection.findUnique({ where: { id: data.sectionId } });
         if (!section) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
         if (section.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      const nextSectionId = data.sectionId === undefined ? existing.sectionId : data.sectionId;
+      const nextCode = data.code === undefined ? existing.code : data.code;
+      const nextName = data.name === undefined ? existing.name : data.name;
+      if (existing.sectionId === nextSectionId && existing.code === nextCode && existing.name === nextName) {
+        return existing;
       }
       try {
         return await prisma.productGroup.update({
@@ -518,6 +593,12 @@ export async function productsRoutes(app: FastifyInstance) {
             where: { groupId, name: { equals: data.name, mode: "insensitive" } },
           });
       if (existing) {
+        const nextGroupId = groupId;
+        const nextCode = inputCode ? inputCode : existing.code;
+        const nextName = data.name;
+        if (existing.groupId === nextGroupId && existing.code === nextCode && existing.name === nextName) {
+          return existing;
+        }
         try {
           return await prisma.productSubgroup.update({
             where: { id: existing.id },
@@ -567,6 +648,12 @@ export async function productsRoutes(app: FastifyInstance) {
         const group = await prisma.productGroup.findUnique({ where: { id: data.groupId } });
         if (!group) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
         if (group.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      }
+      const nextGroupId = data.groupId === undefined ? existing.groupId : data.groupId;
+      const nextCode = data.code === undefined ? existing.code : data.code;
+      const nextName = data.name === undefined ? existing.name : data.name;
+      if (existing.groupId === nextGroupId && existing.code === nextCode && existing.name === nextName) {
+        return existing;
       }
       try {
         return await prisma.productSubgroup.update({
@@ -633,6 +720,11 @@ export async function productsRoutes(app: FastifyInstance) {
             where: { companyId, name: { equals: data.name, mode: "insensitive" } },
           });
       if (existing) {
+        const nextCode = inputCode ? inputCode : existing.code;
+        const nextName = data.name;
+        if (existing.code === nextCode && existing.name === nextName) {
+          return existing;
+        }
         try {
           return await prisma.productManufacturer.update({
             where: { id: existing.id },
@@ -676,6 +768,11 @@ export async function productsRoutes(app: FastifyInstance) {
       const existing = await prisma.productManufacturer.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+      const nextCode = data.code === undefined ? existing.code : data.code;
+      const nextName = data.name === undefined ? existing.name : data.name;
+      if (existing.code === nextCode && existing.name === nextName) {
+        return existing;
+      }
       try {
         return await prisma.productManufacturer.update({
           where: { id: params.id },

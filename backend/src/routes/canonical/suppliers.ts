@@ -98,6 +98,21 @@ export async function suppliersRoutes(app: FastifyInstance) {
           orderBy: { createdAt: "asc" },
         });
         if (existingByDoc) {
+          const nextExternalId = existingByDoc.externalId ? existingByDoc.externalId : (b.externalId ?? null);
+          if (
+            existingByDoc.name === data.name &&
+            existingByDoc.externalId === nextExternalId &&
+            existingByDoc.email === (data.email ?? null) &&
+            existingByDoc.phone === (data.phone ?? null) &&
+            existingByDoc.city === (data.city ?? null) &&
+            existingByDoc.state === (data.state ?? null) &&
+            existingByDoc.cityId === (data.cityId ?? null) &&
+            existingByDoc.stateCode === (data.stateCode ?? null) &&
+            existingByDoc.isActive === (data.isActive ?? true)
+          ) {
+            return existingByDoc;
+          }
+
           return prisma.supplier.update({
             where: { id: existingByDoc.id },
             data: {
@@ -111,11 +126,31 @@ export async function suppliersRoutes(app: FastifyInstance) {
       }
 
       if (b.externalId) {
-        return prisma.supplier.upsert({
+        const existingByExternal = await prisma.supplier.findUnique({
           where: { companyId_externalId: { companyId, externalId: b.externalId } },
-          create: data,
-          update: { ...data, companyId: undefined, externalId: undefined },
         });
+        if (existingByExternal) {
+          if (
+            existingByExternal.name === data.name &&
+            existingByExternal.document === (data.document ?? null) &&
+            existingByExternal.email === (data.email ?? null) &&
+            existingByExternal.phone === (data.phone ?? null) &&
+            existingByExternal.city === (data.city ?? null) &&
+            existingByExternal.state === (data.state ?? null) &&
+            existingByExternal.cityId === (data.cityId ?? null) &&
+            existingByExternal.stateCode === (data.stateCode ?? null) &&
+            existingByExternal.isActive === (data.isActive ?? true)
+          ) {
+            return existingByExternal;
+          }
+
+          return prisma.supplier.update({
+            where: { id: existingByExternal.id },
+            data: { ...data, companyId: undefined, externalId: undefined },
+          });
+        }
+
+        return prisma.supplier.create({ data });
       }
 
       return prisma.supplier.create({ data });

@@ -312,62 +312,106 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "externalId required" });
       }
 
-      const ticket = await prisma.supportTicket.upsert({
+      const next = {
+        codCli: d.codCli != null ? Number(d.codCli) : null,
+        obsAtendimento: (d.obsAtendimento as string) || null,
+        cidRes: (d.cidRes as string) || null,
+        dataCadastroCliente: toDate(d.dataCadastroCliente),
+        solucao: (d.solucao as string) || null,
+        dataHoraAtendimento: toDate(d.dataHoraAtendimento),
+        dataHoraFinalizacao: toDate(d.dataHoraFinalizacao),
+        nota: d.nota != null && d.nota !== "" ? Number(d.nota) : null,
+        departamento: (d.departamento as string) || null,
+        protocolo: (d.protocolo as string) || null,
+        nomeClienteAtendimento: (d.nomeClienteAtendimento as string) || null,
+        tempoAtendimento: (d.tempoAtendimento as string) || null,
+        numeroCliente: (d.numeroCliente as string) || null,
+        nomeCli: (d.nomeCli as string) || null,
+        usuLanc: (d.usuLanc as string) || null,
+        usuConfEnc: (d.usuConfEnc as string) || null,
+        usuAtend: (d.usuAtend as string) || null,
+        nomeDesenvolvedor: (d.nomeDesenvolvedor as string) || null,
+        horaAtendimento: (d.horaAtendimento as string) || null,
+        pontoRevenda: (d.pontoRevenda as string) || null,
+        codigosProcedimento: (d.codigosProcedimento as string) || null,
+        nomesProcedimento: (d.nomesProcedimento as string) || null,
+      };
+
+      const existing = await prisma.supportTicket.findUnique({
         where: { companyId_externalId: { companyId, externalId } },
-        create: {
-          companyId,
-          externalId,
-          codCli:                 d.codCli != null ? Number(d.codCli) : null,
-          obsAtendimento:         (d.obsAtendimento as string) || null,
-          cidRes:                 (d.cidRes as string) || null,
-          dataCadastroCliente:    toDate(d.dataCadastroCliente),
-          solucao:                (d.solucao as string) || null,
-          dataHoraAtendimento:    toDate(d.dataHoraAtendimento),
-          dataHoraFinalizacao:    toDate(d.dataHoraFinalizacao),
-          nota:                   d.nota != null && d.nota !== "" ? Number(d.nota) : null,
-          departamento:           (d.departamento as string) || null,
-          protocolo:              (d.protocolo as string) || null,
-          nomeClienteAtendimento: (d.nomeClienteAtendimento as string) || null,
-          tempoAtendimento:       (d.tempoAtendimento as string) || null,
-          numeroCliente:          (d.numeroCliente as string) || null,
-          nomeCli:                (d.nomeCli as string) || null,
-          usuLanc:                (d.usuLanc as string) || null,
-          usuConfEnc:             (d.usuConfEnc as string) || null,
-          usuAtend:               (d.usuAtend as string) || null,
-          nomeDesenvolvedor:      (d.nomeDesenvolvedor as string) || null,
-          horaAtendimento:        (d.horaAtendimento as string) || null,
-          pontoRevenda:           (d.pontoRevenda as string) || null,
-          codigosProcedimento:    (d.codigosProcedimento as string) || null,
-          nomesProcedimento:      (d.nomesProcedimento as string) || null,
+        select: {
+          id: true,
+          codCli: true,
+          obsAtendimento: true,
+          cidRes: true,
+          dataCadastroCliente: true,
+          solucao: true,
+          dataHoraAtendimento: true,
+          dataHoraFinalizacao: true,
+          nota: true,
+          departamento: true,
+          protocolo: true,
+          nomeClienteAtendimento: true,
+          tempoAtendimento: true,
+          numeroCliente: true,
+          nomeCli: true,
+          usuLanc: true,
+          usuConfEnc: true,
+          usuAtend: true,
+          nomeDesenvolvedor: true,
+          horaAtendimento: true,
+          pontoRevenda: true,
+          codigosProcedimento: true,
+          nomesProcedimento: true,
         },
-        update: {
-          codCli:                 d.codCli != null ? Number(d.codCli) : null,
-          obsAtendimento:         (d.obsAtendimento as string) || null,
-          cidRes:                 (d.cidRes as string) || null,
-          dataCadastroCliente:    toDate(d.dataCadastroCliente),
-          solucao:                (d.solucao as string) || null,
-          dataHoraAtendimento:    toDate(d.dataHoraAtendimento),
-          dataHoraFinalizacao:    toDate(d.dataHoraFinalizacao),
-          nota:                   d.nota != null && d.nota !== "" ? Number(d.nota) : null,
-          departamento:           (d.departamento as string) || null,
-          protocolo:              (d.protocolo as string) || null,
-          nomeClienteAtendimento: (d.nomeClienteAtendimento as string) || null,
-          tempoAtendimento:       (d.tempoAtendimento as string) || null,
-          numeroCliente:          (d.numeroCliente as string) || null,
-          nomeCli:                (d.nomeCli as string) || null,
-          usuLanc:                (d.usuLanc as string) || null,
-          usuConfEnc:             (d.usuConfEnc as string) || null,
-          usuAtend:               (d.usuAtend as string) || null,
-          nomeDesenvolvedor:      (d.nomeDesenvolvedor as string) || null,
-          horaAtendimento:        (d.horaAtendimento as string) || null,
-          pontoRevenda:           (d.pontoRevenda as string) || null,
-          codigosProcedimento:    (d.codigosProcedimento as string) || null,
-          nomesProcedimento:      (d.nomesProcedimento as string) || null,
-        },
+      });
+
+      if (existing) {
+        const same =
+          existing.codCli === next.codCli &&
+          existing.obsAtendimento === next.obsAtendimento &&
+          existing.cidRes === next.cidRes &&
+          (existing.dataCadastroCliente ? existing.dataCadastroCliente.toISOString() : null) ===
+            (next.dataCadastroCliente ? next.dataCadastroCliente.toISOString() : null) &&
+          existing.solucao === next.solucao &&
+          (existing.dataHoraAtendimento ? existing.dataHoraAtendimento.toISOString() : null) ===
+            (next.dataHoraAtendimento ? next.dataHoraAtendimento.toISOString() : null) &&
+          (existing.dataHoraFinalizacao ? existing.dataHoraFinalizacao.toISOString() : null) ===
+            (next.dataHoraFinalizacao ? next.dataHoraFinalizacao.toISOString() : null) &&
+          (existing.nota ?? null) === (next.nota ?? null) &&
+          existing.departamento === next.departamento &&
+          existing.protocolo === next.protocolo &&
+          existing.nomeClienteAtendimento === next.nomeClienteAtendimento &&
+          existing.tempoAtendimento === next.tempoAtendimento &&
+          existing.numeroCliente === next.numeroCliente &&
+          existing.nomeCli === next.nomeCli &&
+          existing.usuLanc === next.usuLanc &&
+          existing.usuConfEnc === next.usuConfEnc &&
+          existing.usuAtend === next.usuAtend &&
+          existing.nomeDesenvolvedor === next.nomeDesenvolvedor &&
+          existing.horaAtendimento === next.horaAtendimento &&
+          existing.pontoRevenda === next.pontoRevenda &&
+          existing.codigosProcedimento === next.codigosProcedimento &&
+          existing.nomesProcedimento === next.nomesProcedimento;
+
+        if (same) {
+          return reply.status(200).send({ id: existing.id, changed: false });
+        }
+
+        const updated = await prisma.supportTicket.update({
+          where: { id: existing.id },
+          data: next,
+          select: { id: true },
+        });
+        return reply.status(200).send({ id: updated.id, changed: true });
+      }
+
+      const created = await prisma.supportTicket.create({
+        data: { companyId, externalId, ...next },
         select: { id: true },
       });
 
-      return reply.status(201).send({ id: ticket.id });
+      return reply.status(201).send({ id: created.id, changed: true });
     }
   );
 
@@ -419,10 +463,12 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request, reply) => {
       const companyId = await resolveCompanyId(request);
-      const { dateFrom, dateTo, reportType = "daily" } = request.body as {
+      const { dateFrom, dateTo, reportType = "daily", departamentos, usuAtend } = request.body as {
         dateFrom: string;
         dateTo: string;
         reportType?: "daily" | "weekly" | "monthly";
+        departamentos?: string[];
+        usuAtend?: string;
       };
 
       if (!dateFrom || !dateTo) {
@@ -430,14 +476,24 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       }
 
       // 1. Buscar tickets do período (por data de finalização)
-      const tickets = await prisma.supportTicket.findMany({
-        where: {
-          companyId,
-          dataHoraFinalizacao: {
-            gte: new Date(dateFrom),
-            lte: new Date(dateTo),
-          },
+      const aiWhere: Record<string, unknown> = {
+        companyId,
+        dataHoraFinalizacao: {
+          gte: new Date(dateFrom),
+          lte: new Date(dateTo),
         },
+      };
+      if (departamentos && departamentos.length > 0) {
+        aiWhere.departamento = departamentos.length === 1
+          ? departamentos[0]
+          : { in: departamentos };
+      }
+      if (usuAtend && usuAtend.trim()) {
+        aiWhere.usuAtend = usuAtend.trim();
+      }
+
+      const tickets = await prisma.supportTicket.findMany({
+        where: aiWhere,
         select: {
           dataHoraAtendimento: true,
           dataHoraFinalizacao: true,

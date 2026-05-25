@@ -99,6 +99,60 @@ export async function accountsRoutes(app: FastifyInstance) {
       const defaultType = await prisma.accountType.findFirst({ where: { code: "003" } });
       const accountTypeId = data.accountTypeId ?? defaultType?.id ?? null;
 
+      const externalCode = data.externalCode ?? null;
+      const matchByCode = data.code ? { code: data.code } : null;
+      const matchByExternal = externalCode ? { externalCode } : null;
+      const matchConditions = [matchByCode, matchByExternal].filter(Boolean) as Array<{ code?: string; externalCode?: string }>;
+      const existing = matchConditions.length
+        ? await prisma.account.findFirst({ where: { companyId, OR: matchConditions } })
+        : null;
+
+      if (existing) {
+        const nextCode = data.code ?? existing.code;
+        const nextDescription = data.description;
+        const nextExternalCode = data.externalCode !== undefined ? (data.externalCode ?? null) : existing.externalCode;
+        const nextAccountTypeId = data.accountTypeId !== undefined ? (data.accountTypeId ?? null) : existing.accountTypeId;
+        const nextActive = data.active ?? existing.active;
+        const nextUseInCashFlow = data.useInCashFlow ?? existing.useInCashFlow;
+        const nextSuperOnly = data.superOnly ?? existing.superOnly;
+        const nextDefaultConfirmed = data.defaultConfirmed ?? existing.defaultConfirmed;
+
+        if (
+          existing.code === nextCode &&
+          existing.description === nextDescription &&
+          existing.externalCode === nextExternalCode &&
+          existing.accountTypeId === nextAccountTypeId &&
+          existing.active === nextActive &&
+          existing.useInCashFlow === nextUseInCashFlow &&
+          existing.superOnly === nextSuperOnly &&
+          existing.defaultConfirmed === nextDefaultConfirmed
+        ) {
+          return getAccountWithExtras({ companyId, accountId: existing.id });
+        }
+
+        let updated;
+        try {
+          updated = await prisma.account.update({
+            where: { id: existing.id },
+            data: {
+              code: data.code,
+              description: data.description,
+              externalCode: data.externalCode === undefined ? undefined : data.externalCode ?? null,
+              accountTypeId: data.accountTypeId === undefined ? undefined : data.accountTypeId ?? null,
+              active: data.active,
+              useInCashFlow: data.useInCashFlow,
+              superOnly: data.superOnly,
+              defaultConfirmed: data.defaultConfirmed,
+            },
+          });
+        } catch (e: unknown) {
+          const errCode = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : undefined;
+          if (errCode === "P2002") throw Object.assign(new Error("ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
+          throw e;
+        }
+        return getAccountWithExtras({ companyId, accountId: updated.id });
+      }
+
       let created;
       try {
         created = await prisma.account.create({
@@ -106,7 +160,7 @@ export async function accountsRoutes(app: FastifyInstance) {
             companyId,
             code,
             description: data.description,
-            externalCode: data.externalCode ?? null,
+            externalCode,
             accountTypeId,
             active: data.active ?? true,
             useInCashFlow: data.useInCashFlow ?? true,
@@ -134,6 +188,27 @@ export async function accountsRoutes(app: FastifyInstance) {
       const existing = await prisma.account.findUnique({ where: { id: params.id } });
       if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
       if (existing.companyId !== companyId) throw Object.assign(new Error("FORBIDDEN"), { statusCode: 403 });
+
+      const nextCode = data.code ?? existing.code;
+      const nextDescription = data.description ?? existing.description;
+      const nextExternalCode = data.externalCode !== undefined ? (data.externalCode ?? null) : existing.externalCode;
+      const nextAccountTypeId = data.accountTypeId !== undefined ? (data.accountTypeId ?? null) : existing.accountTypeId;
+      const nextActive = data.active ?? existing.active;
+      const nextUseInCashFlow = data.useInCashFlow ?? existing.useInCashFlow;
+      const nextSuperOnly = data.superOnly ?? existing.superOnly;
+      const nextDefaultConfirmed = data.defaultConfirmed ?? existing.defaultConfirmed;
+      if (
+        existing.code === nextCode &&
+        existing.description === nextDescription &&
+        existing.externalCode === nextExternalCode &&
+        existing.accountTypeId === nextAccountTypeId &&
+        existing.active === nextActive &&
+        existing.useInCashFlow === nextUseInCashFlow &&
+        existing.superOnly === nextSuperOnly &&
+        existing.defaultConfirmed === nextDefaultConfirmed
+      ) {
+        return getAccountWithExtras({ companyId, accountId: existing.id });
+      }
 
       let updated;
       try {

@@ -232,9 +232,101 @@ export async function salesRoutes(app: FastifyInstance) {
         return prisma.$transaction(async (tx) => {
           const existing = await tx.sale.findUnique({
             where: { companyId_externalId: { companyId, externalId: data.externalId! } },
+            include: { items: true, payments: { include: { paymentMethod: true } } },
           });
 
           if (existing) {
+            const normNum = (n: number) => Math.round(n * 10000) / 10000;
+            const dateIso = (d: Date) => d.toISOString().slice(0, 10);
+            const normItems = (arr: Array<{ productId: string | null; description: string; quantity: number; unitPrice: number; externalId: string | null }>) =>
+              arr
+                .map((x) => ({
+                  productId: x.productId,
+                  description: x.description,
+                  quantity: normNum(x.quantity),
+                  unitPrice: normNum(x.unitPrice),
+                  externalId: x.externalId,
+                }))
+                .sort((a, b) =>
+                  `${a.externalId ?? ""}|${a.productId ?? ""}|${a.description}`.localeCompare(
+                    `${b.externalId ?? ""}|${b.productId ?? ""}|${b.description}`
+                  )
+                );
+            const normPayments = (arr: Array<{ paymentMethodId: string | null; externalPaymentMethodId: string | null; amount: number }>) =>
+              arr
+                .map((x) => ({
+                  paymentMethodId: x.paymentMethodId,
+                  externalPaymentMethodId: x.externalPaymentMethodId,
+                  amount: normNum(x.amount),
+                }))
+                .sort((a, b) =>
+                  `${a.paymentMethodId ?? ""}|${a.externalPaymentMethodId ?? ""}|${a.amount}`.localeCompare(
+                    `${b.paymentMethodId ?? ""}|${b.externalPaymentMethodId ?? ""}|${b.amount}`
+                  )
+                );
+
+            const nextHeaderSame =
+              existing.customerId === customerId &&
+              existing.sellerId === sellerId &&
+              existing.cashierId === cashierId &&
+              existing.paymentMethodId === paymentMethodId &&
+              existing.status === data.status &&
+              dateIso(existing.date) === dateIso(new Date(data.date)) &&
+              normNum(existing.total) === normNum(total);
+
+            const nextItems = normItems(
+              (saleData.items.create as Array<{
+                productId: string | null;
+                description: string;
+                quantity: number;
+                unitPrice: number;
+                totalPrice: number;
+                externalId: string | null;
+              }>).map((x) => ({
+                productId: x.productId,
+                description: x.description,
+                quantity: x.quantity,
+                unitPrice: x.unitPrice,
+                externalId: x.externalId,
+              }))
+            );
+            const existingItems = normItems(
+              existing.items.map((x) => ({
+                productId: x.productId,
+                description: x.description,
+                quantity: x.quantity,
+                unitPrice: x.unitPrice,
+                externalId: x.externalId,
+              }))
+            );
+
+            const nextPayments = normPayments(
+              (saleData.payments.create as Array<{
+                paymentMethodId: string | null;
+                externalPaymentMethodId: string | null;
+                amount: number;
+              }>).map((x) => ({
+                paymentMethodId: x.paymentMethodId,
+                externalPaymentMethodId: x.externalPaymentMethodId,
+                amount: x.amount,
+              }))
+            );
+            const existingPayments = normPayments(
+              existing.payments.map((x) => ({
+                paymentMethodId: x.paymentMethodId,
+                externalPaymentMethodId: x.externalPaymentMethodId,
+                amount: x.amount,
+              }))
+            );
+
+            if (
+              nextHeaderSame &&
+              JSON.stringify(existingItems) === JSON.stringify(nextItems) &&
+              JSON.stringify(existingPayments) === JSON.stringify(nextPayments)
+            ) {
+              return existing;
+            }
+
             // Delete old items
             await tx.saleItem.deleteMany({ where: { saleId: existing.id } });
             await tx.salePayment.deleteMany({ where: { saleId: existing.id } });

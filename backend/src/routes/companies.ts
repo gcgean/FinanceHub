@@ -92,9 +92,34 @@ export async function companiesRoutes(app: FastifyInstance) {
           },
         });
         if (existing) {
+          const nextEmail = email === undefined ? existing.email : email ?? null;
+          const nextSegmento = segmento === undefined ? existing.segmento : segmento ?? null;
+          const nextPhone = phone === undefined ? existing.phone : phone ?? null;
+          const nextPlan = plan === undefined ? existing.plan : plan;
+          const nextStatus = status === undefined ? existing.status : status;
+          if (
+            existing.name === name &&
+            existing.cnpj === cnpjNorm &&
+            (existing.email ?? null) === (nextEmail ?? null) &&
+            (existing.segmento ?? null) === (nextSegmento ?? null) &&
+            (existing.phone ?? null) === (nextPhone ?? null) &&
+            existing.plan === nextPlan &&
+            existing.status === nextStatus
+          ) {
+            return existing;
+          }
+
           return prisma.company.update({
             where: { id: existing.id },
-            data: { name, cnpj: cnpjNorm, email: email ?? null, segmento: segmento ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined },
+            data: {
+              name,
+              cnpj: cnpjNorm,
+              email: email === undefined ? undefined : email ?? null,
+              segmento: segmento === undefined ? undefined : segmento ?? null,
+              phone: phone === undefined ? undefined : phone ?? null,
+              plan: plan === undefined ? undefined : plan,
+              status: status === undefined ? undefined : status,
+            },
           });
         }
       }
@@ -111,9 +136,43 @@ export async function companiesRoutes(app: FastifyInstance) {
     async (request) => {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
       const { name, cnpj, email, segmento, phone, plan, status, openaiApiKey } = parseBody(CompanyBody, request.body);
+      const existing = await prisma.company.findUnique({ where: { id: params.id } });
+      if (!existing) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+
+      const nextName = name;
+      const nextCnpj = cnpj === undefined ? existing.cnpj : cnpj ?? null;
+      const nextEmail = email === undefined ? existing.email : email ?? null;
+      const nextSegmento = segmento === undefined ? existing.segmento : segmento ?? null;
+      const nextPhone = phone === undefined ? existing.phone : phone ?? null;
+      const nextPlan = plan === undefined ? existing.plan : plan;
+      const nextStatus = status === undefined ? existing.status : status;
+      const nextOpenaiApiKey = openaiApiKey === undefined ? existing.openaiApiKey : openaiApiKey ?? null;
+
+      if (
+        existing.name === nextName &&
+        (existing.cnpj ?? null) === (nextCnpj ?? null) &&
+        (existing.email ?? null) === (nextEmail ?? null) &&
+        (existing.segmento ?? null) === (nextSegmento ?? null) &&
+        (existing.phone ?? null) === (nextPhone ?? null) &&
+        existing.plan === nextPlan &&
+        existing.status === nextStatus &&
+        (existing.openaiApiKey ?? null) === (nextOpenaiApiKey ?? null)
+      ) {
+        return existing;
+      }
+
       return prisma.company.update({
         where: { id: params.id },
-        data: { name, cnpj: cnpj ?? null, email: email ?? null, segmento: segmento ?? null, phone: phone ?? null, plan: plan ?? undefined, status: status ?? undefined, openaiApiKey: openaiApiKey ?? null },
+        data: {
+          name,
+          cnpj: cnpj === undefined ? undefined : cnpj ?? null,
+          email: email === undefined ? undefined : email ?? null,
+          segmento: segmento === undefined ? undefined : segmento ?? null,
+          phone: phone === undefined ? undefined : phone ?? null,
+          plan: plan === undefined ? undefined : plan,
+          status: status === undefined ? undefined : status,
+          openaiApiKey: openaiApiKey === undefined ? undefined : openaiApiKey ?? null,
+        },
       });
     }
   );

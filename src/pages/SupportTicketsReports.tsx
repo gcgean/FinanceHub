@@ -176,9 +176,13 @@ export default function SupportTicketsReports() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dateFrom:   `${dateFromInput}T00:00:00`,
-          dateTo:     `${dateToInput}T23:59:59`,
-          reportType: type,
+          dateFrom:      `${appliedFilters.dateFrom}T00:00:00`,
+          dateTo:        `${appliedFilters.dateTo}T23:59:59`,
+          reportType:    type,
+          departamentos: appliedFilters.departamentos.length > 0
+            ? appliedFilters.departamentos
+            : undefined,
+          usuAtend: appliedFilters.usuAtend.trim() || undefined,
         }),
       });
       setAiReport(result.report);

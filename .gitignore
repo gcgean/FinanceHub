@@ -18,6 +18,11 @@ backend/prisma/*.db
 backend/prisma/*.db-journal
 backend/uploads
 
+# Aplicativo Integração — binários grandes (não versionar)
+Aplicativo Integracao/*.zip
+Aplicativo Integracao/*.rar
+Aplicativo Integracao/*.7z
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

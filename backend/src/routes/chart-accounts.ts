@@ -128,6 +128,51 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
           });
           const keeper = matches[0];
           if (keeper) {
+            const current = await prisma.chartAccount.findUnique({ where: { id: keeper.id } });
+            if (!current) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
+
+            const next = {
+              description: base.description,
+              planType: base.planType,
+              parentId: base.parentId ?? null,
+              revenueExpense: base.revenueExpense,
+              debitCredit: base.debitCredit,
+              fixedVariable: base.fixedVariable,
+              costExpense: base.costExpense ?? null,
+              accountingCode: base.accountingCode ?? null,
+              active: base.active ?? true,
+              isSuper: base.isSuper ?? false,
+              dreHide: base.dreHide ?? false,
+              dreGroupOtherFinIncome: base.dreGroupOtherFinIncome ?? false,
+              dreGroupDeductionsTaxes: base.dreGroupDeductionsTaxes ?? false,
+              dreGroupInvestments: base.dreGroupInvestments ?? false,
+              dreGroupSalesMarketing: base.dreGroupSalesMarketing ?? false,
+              dreGroupProfitSharing: base.dreGroupProfitSharing ?? false,
+              cashflowHide: base.cashflowHide ?? false,
+            };
+
+            if (
+              current.description === next.description &&
+              current.planType === next.planType &&
+              current.parentId === next.parentId &&
+              current.revenueExpense === next.revenueExpense &&
+              current.debitCredit === next.debitCredit &&
+              current.fixedVariable === next.fixedVariable &&
+              (current.costExpense ?? null) === next.costExpense &&
+              (current.accountingCode ?? null) === next.accountingCode &&
+              current.active === next.active &&
+              current.isSuper === next.isSuper &&
+              current.dreHide === next.dreHide &&
+              current.dreGroupOtherFinIncome === next.dreGroupOtherFinIncome &&
+              current.dreGroupDeductionsTaxes === next.dreGroupDeductionsTaxes &&
+              current.dreGroupInvestments === next.dreGroupInvestments &&
+              current.dreGroupSalesMarketing === next.dreGroupSalesMarketing &&
+              current.dreGroupProfitSharing === next.dreGroupProfitSharing &&
+              current.cashflowHide === next.cashflowHide
+            ) {
+              return current;
+            }
+
             const extras = matches.slice(1).map((m) => m.id);
             if (extras.length) {
               await prisma.$transaction([
@@ -244,6 +289,50 @@ export async function chartAccountsRoutes(app: FastifyInstance) {
       if (payload.companyId === null && payload.code) {
         const exists = await prisma.chartAccount.findFirst({ where: { companyId: null, code: payload.code, id: { not: existing.id } } });
         if (exists) throw Object.assign(new Error("CHART_ACCOUNT_CODE_EXISTS"), { statusCode: 409 });
+      }
+
+      const nextCode = (payload.code as string | undefined) ?? existing.code;
+      const nextDescription = (payload.description as string | undefined) ?? existing.description;
+      const nextPlanType = (payload.planType as ChartPlanType | undefined) ?? existing.planType;
+      const nextParentId = payload.parentId === undefined ? existing.parentId : (payload.parentId as string | null);
+      const nextRevenueExpense = (payload.revenueExpense as RevenueExpense | undefined) ?? existing.revenueExpense;
+      const nextDebitCredit = (payload.debitCredit as DebitCredit | undefined) ?? existing.debitCredit;
+      const nextFixedVariable = (payload.fixedVariable as FixedVariable | undefined) ?? existing.fixedVariable;
+      const nextCostExpense = payload.costExpense === undefined ? existing.costExpense : (payload.costExpense as CostExpense | null);
+      const nextAccountingCode = payload.accountingCode === undefined ? existing.accountingCode : (payload.accountingCode as string | null);
+      const nextActive = (payload.active as boolean | undefined) ?? existing.active;
+      const nextIsSuper = (payload.isSuper as boolean | undefined) ?? existing.isSuper;
+      const nextDreHide = (payload.dreHide as boolean | undefined) ?? existing.dreHide;
+      const nextOther = (payload.dreGroupOtherFinIncome as boolean | undefined) ?? existing.dreGroupOtherFinIncome;
+      const nextTaxes = (payload.dreGroupDeductionsTaxes as boolean | undefined) ?? existing.dreGroupDeductionsTaxes;
+      const nextInvest = (payload.dreGroupInvestments as boolean | undefined) ?? existing.dreGroupInvestments;
+      const nextSalesMkt = (payload.dreGroupSalesMarketing as boolean | undefined) ?? existing.dreGroupSalesMarketing;
+      const nextProfit = (payload.dreGroupProfitSharing as boolean | undefined) ?? existing.dreGroupProfitSharing;
+      const nextCashflowHide = (payload.cashflowHide as boolean | undefined) ?? existing.cashflowHide;
+      const nextScopeCompanyId = payload.companyId === undefined ? existing.companyId : (payload.companyId as string | null);
+
+      if (
+        existing.code === nextCode &&
+        existing.description === nextDescription &&
+        existing.planType === nextPlanType &&
+        existing.parentId === nextParentId &&
+        existing.revenueExpense === nextRevenueExpense &&
+        existing.debitCredit === nextDebitCredit &&
+        existing.fixedVariable === nextFixedVariable &&
+        (existing.costExpense ?? null) === (nextCostExpense ?? null) &&
+        (existing.accountingCode ?? null) === (nextAccountingCode ?? null) &&
+        existing.active === nextActive &&
+        existing.isSuper === nextIsSuper &&
+        existing.dreHide === nextDreHide &&
+        existing.dreGroupOtherFinIncome === nextOther &&
+        existing.dreGroupDeductionsTaxes === nextTaxes &&
+        existing.dreGroupInvestments === nextInvest &&
+        existing.dreGroupSalesMarketing === nextSalesMkt &&
+        existing.dreGroupProfitSharing === nextProfit &&
+        existing.cashflowHide === nextCashflowHide &&
+        (existing.companyId ?? null) === (nextScopeCompanyId ?? null)
+      ) {
+        return existing;
       }
 
       return prisma.chartAccount.update({ where: { id: existing.id }, data: payload as Prisma.ChartAccountUpdateInput });
