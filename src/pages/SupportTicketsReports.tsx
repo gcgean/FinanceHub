@@ -818,12 +818,14 @@ export default function SupportTicketsReports() {
                   <br />
                   <span className="font-medium">Ex:</span> "DIEGO: técnico sênior, atende casos complexos de NF-e. LORENA: suporte nível 1, foco em atendimentos rápidos..."
                 </p>
-                <Textarea
+                <textarea
                   placeholder={"Escreva aqui o contexto da sua equipe...\n\nExemplo:\nDIEGO: Técnico sênior, especialista em NF-e e integrações fiscais. Atende os clientes mais complexos.\nLORENA: Atendente nível 1, foco em chamados de boleto e configuração de API PIX.\nERICLES: Estagiário em treinamento, ainda em adaptação ao sistema..."}
                   value={aiContext}
                   onChange={e => setAiContext(e.target.value)}
-                  rows={8}
-                  className="text-sm resize-y font-mono"
+                  onKeyDown={e => e.stopPropagation()}
+                  rows={10}
+                  style={{ resize: "vertical" }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
