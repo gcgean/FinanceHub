@@ -22,6 +22,9 @@ backend/uploads
 Aplicativo Integracao/*.zip
 Aplicativo Integracao/*.rar
 Aplicativo Integracao/*.7z
+*.zip
+*.rar
+*.7z
 
 # Editor directories and files
 .vscode/*
