@@ -278,12 +278,6 @@ ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes
 5. 🟡 PROCEDIMENTOS DOMINANTES
    - Se um tipo de procedimento representa a maioria dos chamados, pode indicar bug recorrente ou necessidade de documentação/treinamento.
 
-6. 💬 OBSERVAÇÕES DOS ATENDIMENTOS
-   - Analise as observações registradas nos chamados (campo "obs_amostra").
-   - Identifique padrões: reclamações repetidas, problemas técnicos recorrentes, clientes frustrados, elogios ou críticas ao atendimento.
-   - Se houver observações negativas em chamados com nota baixa, destaque o que o cliente reclamou especificamente.
-   - Não transcreva as observações — resuma os padrões que encontrou.
-
 Regras:
 - Seja específico — cite nomes reais dos dados fornecidos (técnicos e clientes).
 - Frases curtas e objetivas.
@@ -615,7 +609,6 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           })),
           clientes_recorrentes: metricas.titulares.slice(0, 15),
           clientes_pior_nota: metricas.clientes_pior_nota,
-          observacoes_atendimentos: metricas.obs_amostra,
           procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
         }, null, 2);
 
@@ -638,7 +631,8 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       const relatorioFinal = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
 
       return reply.send({
-        report: relatorioFinal,
+        report:   relatorioFinal,  // texto completo para copiar/compartilhar
+        analise:  analiseIA,       // só o texto da IA (para exibir separado da dashboard)
         metricas,
       });
     }
