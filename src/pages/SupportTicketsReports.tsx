@@ -386,6 +386,23 @@ export default function SupportTicketsReports() {
     );
   };
 
+  // ── IA — calcula período por tipo ────────────────────────────────────────
+  const resolveReportDates = (type: "daily" | "weekly" | "monthly") => {
+    const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+    const todayDate = new Date();
+    if (type === "daily") {
+      return { from: dateFromInput, to: dateToInput };
+    }
+    if (type === "weekly") {
+      const from = new Date(todayDate);
+      from.setDate(from.getDate() - 6); // últimos 7 dias (hoje incluso)
+      return { from: fmt(from), to: fmt(todayDate) };
+    }
+    // monthly: do dia 1 do mês corrente até hoje
+    const from = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
+    return { from: fmt(from), to: fmt(todayDate) };
+  };
+
   // ── IA — relatório ────────────────────────────────────────────────────────
   const generateAIReport = async (type: "daily" | "weekly" | "monthly") => {
     setAiLoading(true);
@@ -397,6 +414,7 @@ export default function SupportTicketsReports() {
     setAiExpanded(true);
     setChatMessages([]);
     setChatOpen(false);
+    const { from, to } = resolveReportDates(type);
     try {
       const result = await apiFetch<{ report: string; analise: string; metricas: AiMetricas }>(
         "/support-tickets/ai-report",
@@ -404,8 +422,8 @@ export default function SupportTicketsReports() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            dateFrom:      `${dateFromInput}T00:00:00`,
-            dateTo:        `${dateToInput}T23:59:59`,
+            dateFrom:      `${from}T00:00:00`,
+            dateTo:        `${to}T23:59:59`,
             reportType:    type,
             departamentos: selectedDepts.length > 0 ? selectedDepts : undefined,
             usuAtend:      usuAtendInput.trim() || undefined,
