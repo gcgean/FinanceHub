@@ -198,10 +198,11 @@ model Company {
   notificationChannels AINotificationChannel[]
   notificationLogs     AINotificationLog[]
 
-  supportTickets SupportTicket[]
-  departments    Department[]
-  accessGroups   AccessGroup[]
-  routines       Routine[]
+  supportTickets    SupportTicket[]
+  departments       Department[]
+  accessGroups      AccessGroup[]
+  routines          Routine[]
+  supportAiContext  SupportAIContext?
 }
 
 model SupportTicket {
@@ -237,6 +238,15 @@ model SupportTicket {
   @@unique([companyId, externalId])
   @@index([companyId])
   @@index([dataHoraAtendimento])
+}
+
+/// Contexto salvo pelo gestor para orientar a análise da IA nos relatórios de atendimento
+model SupportAIContext {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id])
+  context   String   @db.Text
+  updatedAt DateTime @updatedAt
 }
 
 model Department {

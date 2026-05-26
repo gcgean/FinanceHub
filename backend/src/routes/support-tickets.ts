@@ -469,6 +469,34 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
     }
   );
 
+  // GET /support-tickets/ai-context — retorna o contexto salvo pelo gestor
+  app.get(
+    "/ai-context",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request, reply) => {
+      const companyId = await resolveCompanyId(request);
+      const saved = await prisma.supportAIContext.findUnique({ where: { companyId } });
+      return reply.send({ context: saved?.context ?? "" });
+    }
+  );
+
+  // PUT /support-tickets/ai-context — salva / atualiza o contexto do gestor
+  app.put(
+    "/ai-context",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request, reply) => {
+      const companyId = await resolveCompanyId(request);
+      const { context } = request.body as { context: string };
+      const saved = await prisma.supportAIContext.upsert({
+        where:  { companyId },
+        update: { context },
+        create: { companyId, context },
+        select: { context: true, updatedAt: true },
+      });
+      return reply.send(saved);
+    }
+  );
+
   // POST /support-tickets/ai-report — gera relatório IA com base nos tickets do período
   app.post(
     "/ai-report",
@@ -536,11 +564,12 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       });
       const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
 
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { segmento: true },
-      });
+      const [company, aiContextRow] = await Promise.all([
+        prisma.company.findUnique({ where: { id: companyId }, select: { segmento: true } }),
+        prisma.supportAIContext.findUnique({ where: { companyId }, select: { context: true } }),
+      ]);
       const segmentoEmpresa = company?.segmento ?? null;
+      const gestorContexto   = aiContextRow?.context?.trim() ?? "";
 
       // 3. Nome do usuário autenticado
       const userName = String((request.user as unknown as { name?: string }).name ?? "Gestor")
@@ -617,8 +646,12 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportType === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com:\n- Volume de atendimentos (se acima ou abaixo da média da equipe)\n- TMA (se está dentro do esperado ou fora)\n- Nota média recebida pelos clientes (se tem ou não avaliações)\n- Veredicto: ✅ Bom desempenho / ⚠️ Atenção necessária / 🔴 Desempenho preocupante\n\nSeja direto. Cite o nome do técnico em negrito (**Nome**). Não invente dados.`
           : "";
 
+        const contextoGestor = gestorContexto
+          ? `\n\n---\nCONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):\n${gestorContexto}\n---`
+          : "";
+
         const aiResponse = await provider.generateResponse([
-          { role: "system", content: PROMPT_ANALISE + promptAdicional },
+          { role: "system", content: PROMPT_ANALISE + contextoGestor + promptAdicional },
           { role: "user",   content: resumoMetricas },
         ]);
         analiseIA = aiResponse.content ?? "";

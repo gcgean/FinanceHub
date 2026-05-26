@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -15,8 +15,9 @@ import {
   Filter, Search, Headphones, Clock, Star, Settings, Brain,
   CalendarDays, CalendarRange, Calendar, Copy, Check, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, MessageSquare, X, Bell,
-  Users, TrendingUp, Award, BarChart2, ListOrdered,
+  Users, TrendingUp, Award, BarChart2, ListOrdered, BookOpen, Save,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -281,6 +282,34 @@ export default function SupportTicketsReports() {
   const [aiType,      setAiType]      = useState<"daily" | "weekly" | "monthly" | null>(null);
   const [aiCopied,    setAiCopied]    = useState(false);
   const [aiExpanded,  setAiExpanded]  = useState(true);
+
+  // ── contexto da equipe para a IA ──────────────────────────────────────────
+  const [aiContext,        setAiContext]        = useState("");
+  const [aiContextOpen,    setAiContextOpen]    = useState(false);
+  const [aiContextSaving,  setAiContextSaving]  = useState(false);
+  const [aiContextSaved,   setAiContextSaved]   = useState(false);
+
+  // Carrega o contexto salvo ao montar
+  useEffect(() => {
+    apiFetch<{ context: string }>("/support-tickets/ai-context")
+      .then(r => setAiContext(r.context))
+      .catch(() => {});
+  }, []);
+
+  const saveAiContext = useCallback(async () => {
+    setAiContextSaving(true);
+    try {
+      await apiFetch("/support-tickets/ai-context", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: aiContext }),
+      });
+      setAiContextSaved(true);
+      setTimeout(() => setAiContextSaved(false), 2500);
+    } finally {
+      setAiContextSaving(false);
+    }
+  }, [aiContext]);
 
   // ── rotinas ────────────────────────────────────────────────────────────────
   const [routinePanelOpen, setRoutinePanelOpen] = useState(false);
@@ -766,6 +795,58 @@ export default function SupportTicketsReports() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Painel de contexto da equipe */}
+          <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20">
+            <button
+              className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors rounded-lg"
+              onClick={() => setAiContextOpen(v => !v)}
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Contexto da Equipe</span>
+                {aiContext.trim() && (
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0">Configurado</Badge>
+                )}
+              </div>
+              {aiContextOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+
+            {aiContextOpen && (
+              <div className="px-4 pb-4 space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Descreva o perfil de cada atendente, suas funções e características. A IA usará esse contexto para personalizar a análise.
+                  <br />
+                  <span className="font-medium">Ex:</span> "DIEGO: técnico sênior, atende casos complexos de NF-e. LORENA: suporte nível 1, foco em atendimentos rápidos..."
+                </p>
+                <Textarea
+                  placeholder={"Escreva aqui o contexto da sua equipe...\n\nExemplo:\nDIEGO: Técnico sênior, especialista em NF-e e integrações fiscais. Atende os clientes mais complexos.\nLORENA: Atendente nível 1, foco em chamados de boleto e configuração de API PIX.\nERICLES: Estagiário em treinamento, ainda em adaptação ao sistema..."}
+                  value={aiContext}
+                  onChange={e => setAiContext(e.target.value)}
+                  rows={8}
+                  className="text-sm resize-y font-mono"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">
+                    {aiContext.length} caracteres
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={saveAiContext}
+                    disabled={aiContextSaving}
+                    className="gap-2"
+                  >
+                    {aiContextSaving
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : aiContextSaved
+                      ? <Check className="w-4 h-4 text-green-400" />
+                      : <Save className="w-4 h-4" />}
+                    {aiContextSaved ? "Salvo!" : "Salvar Contexto"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Botões de tipo */}
           <div className="flex flex-wrap gap-2">
             <Button
