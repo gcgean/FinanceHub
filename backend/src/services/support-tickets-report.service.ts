@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import { chatService } from "../modules/ai/services/chat.service.js";
 
 // ── tipos ─────────────────────────────────────────────────────────────────────
@@ -209,18 +210,28 @@ export async function generateSupportTicketsAIReport(
   dateFrom: Date,
   dateTo: Date,
   reportType: "DAILY" | "WEEKLY" | "MONTHLY",
-  recipientName = "GESTOR"
+  recipientName = "GESTOR",
+  usuAtend?: string,
+  departamentos?: string[]
 ): Promise<SupportTicketsReportResult> {
   const dateFromStr = dateFrom.toISOString();
   const dateToStr = dateTo.toISOString();
   const reportTypeLower = reportType.toLowerCase() as "daily" | "weekly" | "monthly";
 
   // 1. Buscar tickets
+  const ticketWhere: Prisma.SupportTicketWhereInput = {
+    companyId,
+    dataHoraFinalizacao: { gte: dateFrom, lte: dateTo },
+  };
+  if (usuAtend && usuAtend.trim()) {
+    ticketWhere.usuAtend = { contains: usuAtend.trim(), mode: "insensitive" };
+  }
+  if (departamentos && departamentos.length > 0) {
+    ticketWhere.departamento = { in: departamentos };
+  }
+
   const tickets = await prisma.supportTicket.findMany({
-    where: {
-      companyId,
-      dataHoraFinalizacao: { gte: dateFrom, lte: dateTo },
-    },
+    where: ticketWhere,
     select: {
       dataHoraAtendimento: true, dataHoraFinalizacao: true,
       tempoAtendimento: true, usuAtend: true, nomeCli: true,

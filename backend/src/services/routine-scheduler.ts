@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { nanoid } from "nanoid";
 import { prisma } from "../lib/prisma.js";
-import { sendToUser } from "./telegram.service.js";
+import { sendToUser, sendMessage } from "./telegram.service.js";
 import { generateSupportTicketsAIReport } from "./support-tickets-report.service.js";
 import { env } from "../lib/env.js";
 
@@ -131,10 +131,13 @@ async function processRoutines() {
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
 
-  // Busca todas as rotinas ativas com o horário atual
+  // Busca todas as rotinas ativas com o horário atual (inclui user e recipient)
   const routines = await prisma.routine.findMany({
     where: { active: true, hour: currentHour, minute: currentMinute },
-    include: { user: { select: { id: true, name: true, telegramChatId: true } } },
+    include: {
+      user:      { select: { id: true, name: true, telegramChatId: true } },
+      recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true } },
+    },
   });
 
   if (routines.length === 0) return;
@@ -145,101 +148,86 @@ async function processRoutines() {
 
   console.log(`[RoutineScheduler] ${dueRoutines.length} rotina(s) para disparar às ${zeroPad(currentHour)}:${zeroPad(currentMinute)}`);
 
-  // ── DEDUPLICAÇÃO ──────────────────────────────────────────────────────────
-  // Agrupa por { companyId + context + type } — mesmo relatório, múltiplos destinatários
-  type GroupKey = string;
-  type RoutineGroup = {
-    companyId: string;
-    context: string;
-    type: "DAILY" | "WEEKLY" | "MONTHLY";
-    routines: typeof dueRoutines;
-  };
+  const typeLabels:    Record<string, string> = { DAILY: "Diário", WEEKLY: "Semanal", MONTHLY: "Mensal" };
+  const contextLabels: Record<string, string> = { supportTickets: "Atendimentos" };
 
-  const groups = new Map<GroupKey, RoutineGroup>();
-
+  // ── Processa cada rotina individualmente ──────────────────────────────────
+  // (cada destinatário pode ter filtros próprios — não é possível deduplicar)
   for (const routine of dueRoutines) {
-    const key = `${routine.companyId}::${routine.context}::${routine.type}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        companyId: routine.companyId,
-        context: routine.context,
-        type: routine.type as "DAILY" | "WEEKLY" | "MONTHLY",
-        routines: [],
-      });
-    }
-    groups.get(key)!.routines.push(routine);
-  }
-
-  // ── PROCESSAMENTO POR GRUPO ────────────────────────────────────────────────
-  for (const [key, group] of groups) {
     try {
-      // Usa o nome do primeiro destinatário com Telegram para gerar o relatório
-      const firstWithTelegram = group.routines.find(r => r.user.telegramChatId);
-      if (!firstWithTelegram) {
-        console.warn(`[RoutineScheduler] Grupo ${key}: nenhum destinatário com Telegram. Pulando.`);
-        // Atualiza lastRunAt mesmo assim para não tentar de novo
-        for (const r of group.routines) {
-          await prisma.routine.update({ where: { id: r.id }, data: { lastRunAt: now } });
-        }
+      const routineType = routine.type as "DAILY" | "WEEKLY" | "MONTHLY";
+
+      // Resolve destinatário e chatId
+      const chatId    = routine.recipient?.telegramChatId ?? routine.user?.telegramChatId ?? null;
+      const recipName = routine.recipient?.name ?? routine.user?.name ?? "GESTOR";
+      const role      = routine.recipient?.role ?? "SUPERVISOR";
+
+      if (!chatId) {
+        console.warn(`[RoutineScheduler] Rotina ${routine.id} (${routine.name}): destinatário sem Telegram. Pulando envio.`);
+        await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
         continue;
       }
 
-      const recipientName = firstWithTelegram.user.name ?? "GESTOR";
+      // Filtros por papel do destinatário
+      const usuAtendFilter = role === "ATTENDANT"
+        ? (routine.recipient?.usuAtend ?? undefined)
+        : undefined;
+      const departamentosFilter = role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
+        ? routine.recipient!.departamentos
+        : undefined;
 
-      console.log(`[RoutineScheduler] Gerando relatório IA para grupo ${key} (${group.routines.length} destinatário(s))...`);
+      console.log(`[RoutineScheduler] Gerando relatório para "${recipName}" (rotina: ${routine.name})...`);
 
-      // ── Gera o relatório UMA ÚNICA VEZ para todo o grupo ──
-      const reportResult = await generateReportForContext(
-        group.context,
-        group.companyId,
-        group.type,
-        now,
-        recipientName
-      );
-
-      // ── Cria o link público ──
-      const publicUrl = await createPublicReport(
-        group.companyId,
-        group.context,
-        group.type,
-        reportResult.title,
-        reportResult.content,
-        reportResult.periodFrom,
-        reportResult.periodTo
-      );
-
-      const typeLabels: Record<string, string> = { DAILY: "Diário", WEEKLY: "Semanal", MONTHLY: "Mensal" };
-      const contextLabels: Record<string, string> = { supportTickets: "Atendimentos" };
-      const contextLabel = contextLabels[group.context] ?? group.context;
-      const typeLabel = typeLabels[group.type] ?? group.type;
-
-      // ── Envia para CADA destinatário do grupo ──
-      for (const routine of group.routines) {
-        try {
-          if (!routine.user.telegramChatId) {
-            console.warn(`[RoutineScheduler] Usuário ${routine.user.id} sem Telegram. Rotina: ${routine.name}`);
-          } else {
-            const msg =
-              `📊 <b>Relatório ${typeLabel} de ${contextLabel}</b>\n\n` +
-              `📅 ${fmtDate(reportResult.periodFrom)} → ${fmtDate(reportResult.periodTo)}\n\n` +
-              `✅ Seu relatório está pronto!\n` +
-              `🔗 <a href="${publicUrl}">Clique aqui para visualizar</a>\n\n` +
-              `⏳ Link disponível por 7 dias.`;
-
-            await sendToUser(routine.userId, msg);
-            console.log(`[RoutineScheduler] ✅ Enviado para ${routine.user.name ?? routine.userId}`);
-          }
-
-          // Atualiza lastRunAt independentemente de ter Telegram
-          await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
-        } catch (err) {
-          console.error(`[RoutineScheduler] ❌ Erro ao enviar para ${routine.user.id}:`, err);
+      // Gera relatório com filtros individuais
+      let reportResult;
+      try {
+        if (routine.context === "supportTickets") {
+          const { dateFrom, dateTo } = getPeriod(routineType, now);
+          reportResult = await generateSupportTicketsAIReport(
+            routine.companyId, dateFrom, dateTo, routineType, recipName,
+            usuAtendFilter, departamentosFilter
+          );
+        } else {
+          reportResult = await generateReportForContext(
+            routine.context, routine.companyId, routineType, now, recipName
+          );
         }
+      } catch (reportErr) {
+        console.error(`[RoutineScheduler] ❌ Erro ao gerar relatório para ${recipName}:`, reportErr);
+        await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
+        continue;
       }
 
-      console.log(`[RoutineScheduler] ✅ Grupo ${key} concluído — link: ${publicUrl}`);
+      // Cria link público
+      const publicUrl = await createPublicReport(
+        routine.companyId, routine.context, routine.type,
+        reportResult.title, reportResult.content,
+        reportResult.periodFrom, reportResult.periodTo
+      );
+
+      const contextLabel = contextLabels[routine.context] ?? routine.context;
+      const typeLabel    = typeLabels[routine.type] ?? routine.type;
+      const roleLabel    = role === "ATTENDANT" ? "Desempenho Individual" : "Geral da Equipe";
+
+      const msg =
+        `📊 <b>Relatório ${typeLabel} de ${contextLabel} (${roleLabel})</b>\n\n` +
+        `📅 ${fmtDate(reportResult.periodFrom)} → ${fmtDate(reportResult.periodTo)}\n\n` +
+        `✅ Seu relatório está pronto!\n` +
+        `🔗 <a href="${publicUrl}">Clique aqui para visualizar</a>\n\n` +
+        `⏳ Link disponível por 7 dias.`;
+
+      // Envia mensagem
+      if (routine.userId) {
+        await sendToUser(routine.userId, msg);
+      } else {
+        await sendMessage(chatId, msg);
+      }
+
+      console.log(`[RoutineScheduler] ✅ Enviado para ${recipName} — link: ${publicUrl}`);
+      await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
+
     } catch (err) {
-      console.error(`[RoutineScheduler] ❌ Erro no grupo ${key}:`, err);
+      console.error(`[RoutineScheduler] ❌ Erro na rotina ${routine.id} (${routine.name}):`, err);
     }
   }
 }

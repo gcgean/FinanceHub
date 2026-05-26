@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usersApi } from "@/api/users";
+import { recipientsApi } from "@/api/routine-recipients";
 import { type Routine, type CreateRoutinePayload, type RoutineType } from "@/api/routines";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ interface Props {
   onSave: (data: CreateRoutinePayload) => void;
   saving: boolean;
   context: string;
-  routine?: Routine | null; // edição
+  routine?: Routine | null;
 }
 
 export function RoutineDialog({ open, onClose, onSave, saving, context, routine }: Props) {
@@ -46,19 +47,18 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
 
   const [name, setName] = useState("");
   const [type, setType] = useState<RoutineType>("DAILY");
-  const [userId, setUserId] = useState("");
+  const [recipientId, setRecipientId] = useState("");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
   const [weekDay, setWeekDay] = useState<number>(1);
   const [dayOfMonth, setDayOfMonth] = useState<number>(1);
   const [hour, setHour] = useState<number>(8);
   const [minute, setMinute] = useState<number>(0);
 
-  // Pré-preenche ao editar
   useEffect(() => {
     if (routine) {
       setName(routine.name);
       setType(routine.type);
-      setUserId(routine.userId);
+      setRecipientId(routine.recipientId ?? "");
       setHour(routine.hour);
       setMinute(routine.minute);
       if (routine.type === "DAILY") setDaysOfWeek(routine.daysOfWeek);
@@ -67,7 +67,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
     } else {
       setName("");
       setType("DAILY");
-      setUserId("");
+      setRecipientId("");
       setDaysOfWeek([1, 2, 3, 4, 5]);
       setWeekDay(1);
       setDayOfMonth(1);
@@ -76,14 +76,14 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
     }
   }, [routine, open]);
 
-  const { data: usersData } = useQuery({
-    queryKey: ["users-for-routine"],
-    queryFn: () => usersApi.list({ take: 200, skip: 0 }),
+  const { data: recipients = [] } = useQuery({
+    queryKey: ["routine-recipients"],
+    queryFn: () => recipientsApi.list(),
     enabled: open,
   });
 
-  const users = usersData?.items ?? [];
-  const selectedUser = users.find((u) => u.id === userId);
+  const activeRecipients = recipients.filter((r) => r.active);
+  const selectedRecipient = activeRecipients.find((r) => r.id === recipientId);
 
   const toggleDay = (day: number) => {
     setDaysOfWeek((prev) =>
@@ -92,13 +92,13 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
   };
 
   const handleSave = () => {
-    if (!name.trim() || !userId) return;
+    if (!name.trim() || !recipientId) return;
 
     const payload: CreateRoutinePayload = {
       name: name.trim(),
       type,
       context,
-      userId,
+      recipientId,
       daysOfWeek: type === "DAILY" ? daysOfWeek : type === "WEEKLY" ? [weekDay] : [],
       dayOfMonth: type === "MONTHLY" ? dayOfMonth : null,
       hour,
@@ -110,6 +110,10 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
 
   const hourOptions = Array.from({ length: 24 }, (_, i) => i);
   const minuteOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  // Group recipients by role
+  const supervisores = activeRecipients.filter((r) => r.role === "SUPERVISOR");
+  const atendentes = activeRecipients.filter((r) => r.role === "ATTENDANT");
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -136,6 +140,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
               {(["DAILY", "WEEKLY", "MONTHLY"] as RoutineType[]).map((t) => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => setType(t)}
                   className={cn(
                     "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
@@ -158,6 +163,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
                 {DAYS_OF_WEEK.map((day) => (
                   <button
                     key={day.value}
+                    type="button"
                     onClick={() => toggleDay(day.value)}
                     title={day.label}
                     className={cn(
@@ -185,6 +191,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
                 {DAYS_OF_WEEK.map((day) => (
                   <button
                     key={day.value}
+                    type="button"
                     onClick={() => setWeekDay(day.value)}
                     title={day.label}
                     className={cn(
@@ -258,37 +265,90 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
             </div>
           </div>
 
-          {/* Usuário destinatário */}
+          {/* Destinatário */}
           <div className="space-y-1.5">
             <Label>Destinatário</Label>
-            <Select value={userId} onValueChange={setUserId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o usuário..." />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{u.name}</span>
-                      {u.telegramChatId ? (
-                        <MessageCircle className="w-3.5 h-3.5 text-blue-500" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">(sem Telegram)</span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedUser && !selectedUser.telegramChatId && (
-              <p className="text-xs text-amber-600 flex items-center gap-1.5 mt-1">
-                ⚠️ Este usuário não tem o Telegram configurado. A notificação não será entregue.
-              </p>
+            {activeRecipients.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
+                <User className="w-4 h-4 mx-auto mb-1" />
+                Nenhum destinatário cadastrado.<br />
+                Cadastre na aba <strong>Destinatários</strong> do painel de rotinas.
+              </div>
+            ) : (
+              <Select value={recipientId} onValueChange={setRecipientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o destinatário..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {supervisores.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                        👔 Supervisores
+                      </div>
+                      {supervisores.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{r.name}</span>
+                            {r.telegramChatId ? (
+                              <MessageCircle className="w-3.5 h-3.5 text-blue-500" />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">(sem Telegram)</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {atendentes.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-1">
+                        🧑‍💻 Atendentes
+                      </div>
+                      {atendentes.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{r.name}</span>
+                            {r.telegramChatId ? (
+                              <MessageCircle className="w-3.5 h-3.5 text-blue-500" />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">(sem Telegram)</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             )}
-            {selectedUser?.telegramChatId && (
-              <p className="text-xs text-green-600 flex items-center gap-1.5 mt-1">
-                ✅ Telegram conectado — notificações serão entregues.
-              </p>
+
+            {/* Status do selecionado */}
+            {selectedRecipient && (
+              <div className="rounded-lg bg-muted/50 p-2.5 space-y-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedRecipient.role === "SUPERVISOR" ? "👔 Supervisor" : "🧑‍💻 Atendente"}
+                  </Badge>
+                  {selectedRecipient.telegramChatId ? (
+                    <span className="text-green-600">✅ Telegram configurado</span>
+                  ) : (
+                    <span className="text-amber-600">⚠️ Sem Telegram — notificação não será entregue</span>
+                  )}
+                </div>
+                {selectedRecipient.role === "ATTENDANT" && selectedRecipient.usuAtend && (
+                  <div className="text-muted-foreground">
+                    Filtra por: <strong>{selectedRecipient.usuAtend}</strong>
+                  </div>
+                )}
+                {selectedRecipient.role === "SUPERVISOR" && selectedRecipient.departamentos.length > 0 && (
+                  <div className="text-muted-foreground">
+                    Departamentos: <strong>{selectedRecipient.departamentos.join(", ")}</strong>
+                  </div>
+                )}
+                {selectedRecipient.role === "SUPERVISOR" && selectedRecipient.departamentos.length === 0 && (
+                  <div className="text-muted-foreground">Relatório geral de toda a equipe</div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -299,7 +359,12 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !name.trim() || !userId || (type === "DAILY" && daysOfWeek.length === 0)}
+            disabled={
+              saving ||
+              !name.trim() ||
+              !recipientId ||
+              (type === "DAILY" && daysOfWeek.length === 0)
+            }
           >
             {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {isEdit ? "Salvar" : "Criar Rotina"}

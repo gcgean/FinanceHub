@@ -44,6 +44,7 @@ import { queueService } from "./modules/ai/services/queue.service.js";
 import { telegramRoutes } from "./routes/telegram.js";
 import { startPolling } from "./services/telegram.service.js";
 import { routinesRoutes } from "./routes/routines.js";
+import { routineRecipientsRoutes } from "./routes/routine-recipients.js";
 import { publicReportsRoutes } from "./routes/public-reports.js";
 import { startRoutineScheduler } from "./services/routine-scheduler.js";
 import { categoriesRoutes } from "./routes/categories.js";
@@ -153,6 +154,7 @@ export function buildApp() {
   app.register(accessGroupsRoutes, { prefix: "/access-groups" });
   app.register(telegramRoutes, { prefix: "/telegram" });
   app.register(routinesRoutes, { prefix: "/routines" });
+  app.register(routineRecipientsRoutes, { prefix: "/routine-recipients" });
   app.register(publicReportsRoutes, { prefix: "/public-reports" });
 
   startSyncService();

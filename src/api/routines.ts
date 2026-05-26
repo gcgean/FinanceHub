@@ -1,4 +1,5 @@
 import { apiFetch } from "@/utils/api";
+import type { RoutineRecipient } from "./routine-recipients";
 
 export type RoutineType = "DAILY" | "WEEKLY" | "MONTHLY";
 
@@ -15,8 +16,10 @@ export type Routine = {
   name: string;
   type: RoutineType;
   context: string;
-  userId: string;
-  user: RoutineUser;
+  userId: string | null;
+  user: RoutineUser | null;
+  recipientId: string | null;
+  recipient: Pick<RoutineRecipient, "id" | "name" | "role" | "telegramChatId" | "email" | "whatsapp" | "usuAtend" | "departamentos"> | null;
   daysOfWeek: number[];
   dayOfMonth: number | null;
   hour: number;
@@ -31,7 +34,8 @@ export type CreateRoutinePayload = {
   name: string;
   type: RoutineType;
   context: string;
-  userId: string;
+  userId?: string | null;
+  recipientId?: string | null;
   daysOfWeek: number[];
   dayOfMonth?: number | null;
   hour: number;

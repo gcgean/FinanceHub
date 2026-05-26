@@ -106,6 +106,11 @@ enum RoutineType {
   MONTHLY
 }
 
+enum RecipientRole {
+  SUPERVISOR
+  ATTENDANT
+}
+
 enum CompanyPlan {
   BASIC
   PROFESSIONAL
@@ -198,11 +203,12 @@ model Company {
   notificationChannels AINotificationChannel[]
   notificationLogs     AINotificationLog[]
 
-  supportTickets    SupportTicket[]
-  departments       Department[]
-  accessGroups      AccessGroup[]
-  routines          Routine[]
-  supportAiContext  SupportAIContext?
+  supportTickets      SupportTicket[]
+  departments         Department[]
+  accessGroups        AccessGroup[]
+  routines            Routine[]
+  supportAiContext    SupportAIContext?
+  routineRecipients   RoutineRecipient[]
 }
 
 model SupportTicket {
@@ -361,8 +367,11 @@ model Routine {
   name        String
   type        RoutineType
   context     String      // "supportTickets", "financialReports", etc.
-  userId      String
-  user        User        @relation("RoutineRecipient", fields: [userId], references: [id])
+  // destinatário: userId (usuário do sistema, legado) ou recipientId (novo cadastro)
+  userId      String?
+  user        User?       @relation("RoutineRecipient", fields: [userId], references: [id])
+  recipientId String?
+  recipient   RoutineRecipient? @relation(fields: [recipientId], references: [id])
   daysOfWeek  Int[]       // DAILY: [1,2,3,4,5]; WEEKLY: [3] (one day)
   dayOfMonth  Int?        // MONTHLY: 1-31
   hour        Int         // 0-23
@@ -374,6 +383,30 @@ model Routine {
 
   @@index([companyId])
   @@index([active])
+}
+
+/// Destinatário cadastrado para rotinas de envio automático de relatórios
+model RoutineRecipient {
+  id             String        @id @default(cuid())
+  companyId      String
+  company        Company       @relation(fields: [companyId], references: [id])
+  name           String
+  role           RecipientRole @default(SUPERVISOR)
+  telegramChatId String?
+  email          String?
+  whatsapp       String?
+  /// Para ATTENDANT: nome que aparece em SupportTicket.usuAtend
+  usuAtend       String?
+  /// Para SUPERVISOR: erpCodes dos departamentos gerenciados (vazio = todos)
+  departamentos  String[]
+  notes          String?       @db.Text
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  routines       Routine[]
+
+  @@index([companyId])
 }
 
 model Transaction {
