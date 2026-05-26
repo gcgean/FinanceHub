@@ -212,7 +212,8 @@ export async function generateSupportTicketsAIReport(
   reportType: "DAILY" | "WEEKLY" | "MONTHLY",
   recipientName = "GESTOR",
   usuAtend?: string,
-  departamentos?: string[]
+  departamentos?: string[],
+  aiInstructions?: string
 ): Promise<SupportTicketsReportResult> {
   const dateFromStr = dateFrom.toISOString();
   const dateToStr = dateTo.toISOString();
@@ -289,8 +290,22 @@ export async function generateSupportTicketsAIReport(
       ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportTypeLower === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com volume, TMA, nota e veredicto: ✅ Bom / ⚠️ Atenção / 🔴 Preocupante`
       : "";
 
+    // Contexto para a IA:
+    // 1. Se há instruções específicas do destinatário, usa elas (relatório individual de rotina)
+    // 2. Se não, busca o contexto global da equipe cadastrado no sistema
+    let contextoIA = "";
+    if (aiInstructions && aiInstructions.trim()) {
+      contextoIA = `\n\n---\nINSTRUÇÕES DO GESTOR SOBRE ESTE TÉCNICO/DESTINATÁRIO:\n${aiInstructions.trim()}\n---`;
+    } else {
+      const aiContextRecord = await prisma.supportAIContext.findUnique({ where: { companyId } });
+      const gestorContexto = aiContextRecord?.context?.trim() ?? "";
+      if (gestorContexto) {
+        contextoIA = `\n\n---\nCONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):\n${gestorContexto}\n---`;
+      }
+    }
+
     const aiResponse = await provider.generateResponse([
-      { role: "system", content: PROMPT_ANALISE + promptAdicional },
+      { role: "system", content: PROMPT_ANALISE + contextoIA + promptAdicional },
       { role: "user", content: resumoMetricas },
     ]);
     analiseIA = aiResponse.content ?? "";

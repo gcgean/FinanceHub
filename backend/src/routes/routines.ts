@@ -39,7 +39,7 @@ const routineSelect = {
   userId: true,
   user: { select: { id: true, name: true, email: true, telegramChatId: true } },
   recipientId: true,
-  recipient: { select: { id: true, name: true, role: true, telegramChatId: true, email: true, whatsapp: true, usuAtend: true, departamentos: true } },
+  recipient: { select: { id: true, name: true, role: true, telegramChatId: true, email: true, whatsapp: true, usuAtend: true, departamentos: true, aiInstructions: true } },
   daysOfWeek: true,
   dayOfMonth: true,
   hour: true,
@@ -186,7 +186,7 @@ export async function routinesRoutes(app: FastifyInstance) {
         where: { id, companyId },
         include: {
           user:      { select: { id: true, name: true, telegramChatId: true } },
-          recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true } },
+          recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true } },
         },
       });
 
@@ -215,13 +215,16 @@ export async function routinesRoutes(app: FastifyInstance) {
       const departamentosFilter = role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
         ? routine.recipient!.departamentos : undefined;
 
+      // Instruções de IA personalizadas do destinatário (substitui contexto global da equipe)
+      const aiInstructions = routine.recipient?.aiInstructions ?? undefined;
+
       // Gera relatório real com IA
       let reportResult;
       try {
         if (routine.context === "supportTickets") {
           reportResult = await generateSupportTicketsAIReport(
             companyId, dateFrom, dateTo, type, recipName,
-            usuAtendFilter, departamentosFilter
+            usuAtendFilter, departamentosFilter, aiInstructions
           );
         }
       } catch { reportResult = null; }

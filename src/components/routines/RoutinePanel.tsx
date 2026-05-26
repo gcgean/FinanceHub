@@ -642,6 +642,9 @@ function RecipientCard({
           {recipient.role === "SUPERVISOR" && recipient.departamentos.length === 0 && (
             <span className="text-muted-foreground/70">Todos os departamentos</span>
           )}
+          {recipient.aiInstructions && (
+            <span className="text-amber-600">🤖 Instruções IA configuradas</span>
+          )}
         </div>
       </div>
 

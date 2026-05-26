@@ -398,9 +398,11 @@ model RoutineRecipient {
   /// Para ATTENDANT: nome que aparece em SupportTicket.usuAtend
   usuAtend       String?
   /// Para SUPERVISOR: erpCodes dos departamentos gerenciados (vazio = todos)
-  departamentos  String[]
-  notes          String?       @db.Text
-  active         Boolean       @default(true)
+  departamentos    String[]
+  notes            String?       @db.Text
+  /// Instruções personalizadas para a IA ao gerar relatório deste destinatário
+  aiInstructions   String?       @db.Text
+  active           Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

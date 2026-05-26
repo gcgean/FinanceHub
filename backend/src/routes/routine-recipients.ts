@@ -6,21 +6,23 @@ import { resolveCompanyId } from "../lib/company.js";
 import { RecipientRole } from "@prisma/client";
 
 const RecipientBody = z.object({
-  name:          z.string().min(1),
-  role:          z.nativeEnum(RecipientRole).default("SUPERVISOR"),
+  name:           z.string().min(1),
+  role:           z.nativeEnum(RecipientRole).default("SUPERVISOR"),
   telegramChatId: z.string().optional().nullable(),
-  email:         z.string().email().optional().nullable(),
-  whatsapp:      z.string().optional().nullable(),
-  usuAtend:      z.string().optional().nullable(),   // nome em SupportTicket.usuAtend
-  departamentos: z.array(z.string()).default([]),
-  notes:         z.string().optional().nullable(),
-  active:        z.boolean().optional().default(true),
+  email:          z.string().email().optional().nullable(),
+  whatsapp:       z.string().optional().nullable(),
+  usuAtend:       z.string().optional().nullable(),   // nome em SupportTicket.usuAtend
+  departamentos:  z.array(z.string()).default([]),
+  notes:          z.string().optional().nullable(),
+  aiInstructions: z.string().optional().nullable(),
+  active:         z.boolean().optional().default(true),
 });
 
 const recipientSelect = {
   id: true, companyId: true, name: true, role: true,
   telegramChatId: true, email: true, whatsapp: true,
   usuAtend: true, departamentos: true, notes: true,
+  aiInstructions: true,
   active: true, createdAt: true, updatedAt: true,
 } as const;
 
@@ -67,8 +69,9 @@ export async function routineRecipientsRoutes(app: FastifyInstance) {
         ...(data.whatsapp      !== undefined && { whatsapp:      data.whatsapp }),
         ...(data.usuAtend      !== undefined && { usuAtend:      data.usuAtend }),
         ...(data.departamentos !== undefined && { departamentos: data.departamentos }),
-        ...(data.notes         !== undefined && { notes:         data.notes }),
-        ...(data.active        !== undefined && { active:        data.active }),
+        ...(data.notes          !== undefined && { notes:          data.notes }),
+        ...(data.aiInstructions !== undefined && { aiInstructions: data.aiInstructions }),
+        ...(data.active         !== undefined && { active:         data.active }),
       },
       select: recipientSelect,
     });

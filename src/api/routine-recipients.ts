@@ -13,6 +13,7 @@ export type RoutineRecipient = {
   usuAtend: string | null;
   departamentos: string[];
   notes: string | null;
+  aiInstructions: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +28,7 @@ export type CreateRecipientPayload = {
   usuAtend?: string | null;
   departamentos?: string[];
   notes?: string | null;
+  aiInstructions?: string | null;
   active?: boolean;
 };
 

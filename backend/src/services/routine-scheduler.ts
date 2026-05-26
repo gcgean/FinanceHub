@@ -136,7 +136,7 @@ async function processRoutines() {
     where: { active: true, hour: currentHour, minute: currentMinute },
     include: {
       user:      { select: { id: true, name: true, telegramChatId: true } },
-      recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true } },
+      recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true } },
     },
   });
 
@@ -176,6 +176,9 @@ async function processRoutines() {
         ? routine.recipient!.departamentos
         : undefined;
 
+      // Instruções de IA personalizadas do destinatário (substitui contexto global da equipe)
+      const aiInstructions = routine.recipient?.aiInstructions ?? undefined;
+
       console.log(`[RoutineScheduler] Gerando relatório para "${recipName}" (rotina: ${routine.name})...`);
 
       // Gera relatório com filtros individuais
@@ -185,7 +188,7 @@ async function processRoutines() {
           const { dateFrom, dateTo } = getPeriod(routineType, now);
           reportResult = await generateSupportTicketsAIReport(
             routine.companyId, dateFrom, dateTo, routineType, recipName,
-            usuAtendFilter, departamentosFilter
+            usuAtendFilter, departamentosFilter, aiInstructions
           );
         } else {
           reportResult = await generateReportForContext(

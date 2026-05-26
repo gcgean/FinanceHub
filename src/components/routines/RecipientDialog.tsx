@@ -32,6 +32,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
   const [usuAtend, setUsuAtend] = useState("");
   const [departamentos, setDepartamentos] = useState("");
   const [notes, setNotes] = useState("");
+  const [aiInstructions, setAiInstructions] = useState("");
   const [active, setActive] = useState(true);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       setUsuAtend(recipient.usuAtend ?? "");
       setDepartamentos(recipient.departamentos.join(", "));
       setNotes(recipient.notes ?? "");
+      setAiInstructions(recipient.aiInstructions ?? "");
       setActive(recipient.active);
     } else {
       setName("");
@@ -54,6 +56,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       setUsuAtend("");
       setDepartamentos("");
       setNotes("");
+      setAiInstructions("");
       setActive(true);
     }
   }, [recipient, open]);
@@ -75,6 +78,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       usuAtend: role === "ATTENDANT" ? (usuAtend.trim() || null) : null,
       departamentos: role === "SUPERVISOR" ? deptArray : [],
       notes: notes.trim() || null,
+      aiInstructions: aiInstructions.trim() || null,
       active,
     });
   };
@@ -204,15 +208,39 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
             </div>
           )}
 
+          {/* Instruções para a IA */}
+          <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 p-3">
+            <Label className="flex items-center gap-1.5 text-amber-800 dark:text-amber-400">
+              🤖 Instruções para a IA
+              <span className="text-xs font-normal text-amber-600 dark:text-amber-500">(personaliza a análise deste destinatário)</span>
+            </Label>
+            <textarea
+              value={aiInstructions}
+              onChange={(e) => setAiInstructions(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              placeholder={
+                role === "ATTENDANT"
+                  ? "Ex: João é técnico sênior com foco em instalações complexas. Ele gerencia os maiores clientes da carteira e costuma ter TMA maior por conta da complexidade dos atendimentos. A meta dele é 12 atendimentos/dia com nota mínima de 4,5."
+                  : "Ex: Supervisor do setor de Suporte N2. Responsável por 5 atendentes. Meta da equipe: 80 atendimentos/dia, TMA máximo de 25 minutos e nota média acima de 4,0."
+              }
+              rows={6}
+              style={{ resize: "vertical" }}
+              className="w-full rounded-md border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            />
+            <p className="text-xs text-amber-700 dark:text-amber-500">
+              Quando esta rotina disparar, a IA usará essas instruções <strong>em vez</strong> do contexto global da equipe. Descreva o perfil, metas e expectativas para que a análise seja personalizada.
+            </p>
+          </div>
+
           {/* Observações */}
           <div className="space-y-1.5">
-            <Label>Observações <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Label>Observações internas <span className="text-muted-foreground text-xs">(não enviado à IA)</span></Label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
               placeholder="Informações adicionais sobre este destinatário..."
-              rows={3}
+              rows={2}
               style={{ resize: "vertical" }}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
