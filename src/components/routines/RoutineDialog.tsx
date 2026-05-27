@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { recipientsApi } from "@/api/routine-recipients";
 import { type Routine, type CreateRoutinePayload, type RoutineType } from "@/api/routines";
+import { listDepartments } from "@/api/departments";
 import { cn } from "@/lib/utils";
 
 const DAYS_OF_WEEK = [
@@ -54,6 +55,8 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
   const [hour, setHour] = useState<number>(8);
   const [minute, setMinute] = useState<number>(0);
   const [previousDay, setPreviousDay] = useState(false);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [deptDropOpen, setDeptDropOpen] = useState(false);
 
   useEffect(() => {
     if (routine) {
@@ -66,6 +69,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       if (routine.type === "WEEKLY") setWeekDay(routine.daysOfWeek[0] ?? 1);
       if (routine.type === "MONTHLY") setDayOfMonth(routine.dayOfMonth ?? 1);
       setPreviousDay(routine.previousDay ?? false);
+      setSelectedDepts(routine.departamentos ?? []);
     } else {
       setName("");
       setType("DAILY");
@@ -76,12 +80,19 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       setHour(8);
       setMinute(0);
       setPreviousDay(false);
+      setSelectedDepts([]);
     }
   }, [routine, open]);
 
   const { data: recipients = [] } = useQuery({
     queryKey: ["routine-recipients"],
     queryFn: () => recipientsApi.list(),
+    enabled: open,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: listDepartments,
     enabled: open,
   });
 
@@ -108,6 +119,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       minute,
       active: true,
       previousDay,
+      departamentos: selectedDepts,
     };
     onSave(payload);
   };
@@ -308,6 +320,100 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
               <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
                 💡 A rotina disparará no horário configurado e enviará a movimentação completa do <strong>dia anterior</strong>. Ideal para relatórios matinais.
               </p>
+            )}
+          </div>
+
+          {/* Departamentos */}
+          <div className="space-y-1.5">
+            <Label>
+              Departamentos{" "}
+              <span className="text-muted-foreground font-normal text-xs">(opcional — deixe vazio para todos)</span>
+            </Label>
+            {departments.length === 0 ? (
+              <div className="text-xs text-muted-foreground">Nenhum departamento cadastrado.</div>
+            ) : (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDeptDropOpen((v) => !v)}
+                  className={cn(
+                    "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors",
+                    deptDropOpen ? "border-primary ring-1 ring-primary" : "border-border hover:bg-muted"
+                  )}
+                >
+                  <span className={selectedDepts.length === 0 ? "text-muted-foreground" : ""}>
+                    {selectedDepts.length === 0
+                      ? "Todos os departamentos"
+                      : selectedDepts.length === 1
+                        ? departments.find((d) => d.erpCode === selectedDepts[0])?.name ?? selectedDepts[0]
+                        : `${selectedDepts.length} departamentos selecionados`}
+                  </span>
+                  <svg
+                    className={cn("w-4 h-4 text-muted-foreground transition-transform", deptDropOpen && "rotate-180")}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {deptDropOpen && (
+                  <div className="absolute z-50 mt-1 w-full rounded-lg border bg-popover shadow-md max-h-48 overflow-y-auto">
+                    {departments.map((dept) => {
+                      const checked = selectedDepts.includes(dept.erpCode);
+                      return (
+                        <label
+                          key={dept.erpCode}
+                          className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setSelectedDepts((prev) =>
+                                checked ? prev.filter((c) => c !== dept.erpCode) : [...prev, dept.erpCode]
+                              )
+                            }
+                            className="accent-primary"
+                          />
+                          <span>{dept.name}</span>
+                          {dept.erpCode && (
+                            <span className="ml-auto text-xs text-muted-foreground">{dept.erpCode}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedDepts.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {selectedDepts.map((code) => {
+                  const dept = departments.find((d) => d.erpCode === code);
+                  return (
+                    <span
+                      key={code}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5"
+                    >
+                      {dept?.name ?? code}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDepts((prev) => prev.filter((c) => c !== code))}
+                        className="hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setSelectedDepts([])}
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                >
+                  Limpar
+                </button>
+              </div>
             )}
           </div>
 

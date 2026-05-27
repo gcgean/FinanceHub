@@ -389,6 +389,8 @@ model Routine {
   dayOfMonth  Int?        // MONTHLY: 1-31
   hour        Int         // 0-23
   minute      Int         // 0-59
+  /// Filtro por departamento (erpCodes) — vazio = todos os departamentos
+  departamentos String[]
   active      Boolean     @default(true)
   /// Quando true, o relatório cobre o dia anterior ao disparo (útil para relatórios matinais do dia anterior)
   previousDay Boolean     @default(false)

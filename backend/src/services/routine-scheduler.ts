@@ -178,9 +178,13 @@ async function processRoutines() {
       const usuAtendFilter = role === "ATTENDANT"
         ? (routine.recipient?.usuAtend ?? undefined)
         : undefined;
-      const departamentosFilter = role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
-        ? routine.recipient!.departamentos
-        : undefined;
+      // Prioridade: departamentos da rotina > departamentos do destinatário > todos
+      const departamentosFilter =
+        (routine.departamentos?.length ?? 0) > 0
+          ? routine.departamentos
+          : role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
+            ? routine.recipient!.departamentos
+            : undefined;
 
       // Instruções de IA personalizadas do destinatário (substitui contexto global da equipe)
       const aiInstructions = routine.recipient?.aiInstructions ?? undefined;

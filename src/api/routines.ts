@@ -24,6 +24,7 @@ export type Routine = {
   dayOfMonth: number | null;
   hour: number;
   minute: number;
+  departamentos: string[];
   active: boolean;
   previousDay: boolean;
   lastRunAt: string | null;
@@ -41,6 +42,7 @@ export type CreateRoutinePayload = {
   dayOfMonth?: number | null;
   hour: number;
   minute: number;
+  departamentos?: string[];
   active?: boolean;
   previousDay?: boolean;
 };

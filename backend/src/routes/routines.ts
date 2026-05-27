@@ -25,8 +25,9 @@ const RoutineBodyBase = z.object({
   dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
   hour: z.number().int().min(0).max(23),
   minute: z.number().int().min(0).max(59),
-  active:      z.boolean().optional().default(true),
-  previousDay: z.boolean().optional().default(false),
+  departamentos: z.array(z.string()).default([]),
+  active:        z.boolean().optional().default(true),
+  previousDay:   z.boolean().optional().default(false),
 });
 
 const RoutineBody = RoutineBodyBase.refine(d => d.userId || d.recipientId, { message: "Informe userId ou recipientId" });
@@ -45,6 +46,7 @@ const routineSelect = {
   dayOfMonth: true,
   hour: true,
   minute: true,
+  departamentos: true,
   active: true,
   previousDay: true,
   lastRunAt: true,
@@ -91,6 +93,7 @@ export async function routinesRoutes(app: FastifyInstance) {
           dayOfMonth: data.dayOfMonth ?? null,
           hour: data.hour,
           minute: data.minute,
+          departamentos: data.departamentos ?? [],
           active: data.active ?? true,
           previousDay: data.previousDay ?? false,
         },
@@ -129,8 +132,9 @@ export async function routinesRoutes(app: FastifyInstance) {
           ...(data.dayOfMonth !== undefined && { dayOfMonth: data.dayOfMonth }),
           ...(data.hour !== undefined && { hour: data.hour }),
           ...(data.minute !== undefined && { minute: data.minute }),
-          ...(data.active      !== undefined && { active:      data.active }),
-          ...(data.previousDay !== undefined && { previousDay: data.previousDay }),
+          ...(data.departamentos !== undefined && { departamentos: data.departamentos }),
+          ...(data.active       !== undefined && { active:       data.active }),
+          ...(data.previousDay  !== undefined && { previousDay:  data.previousDay }),
         },
         select: routineSelect,
       });
@@ -218,9 +222,14 @@ export async function routinesRoutes(app: FastifyInstance) {
       else                         { dateFrom.setDate(1); dateFrom.setHours(0, 0, 0, 0); }
 
       // Filtros por papel do destinatário
-      const usuAtendFilter      = role === "ATTENDANT" ? (routine.recipient?.usuAtend ?? undefined) : undefined;
-      const departamentosFilter = role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
-        ? routine.recipient!.departamentos : undefined;
+      // Prioridade: departamentos da rotina > departamentos do destinatário > todos
+      const usuAtendFilter = role === "ATTENDANT" ? (routine.recipient?.usuAtend ?? undefined) : undefined;
+      const departamentosFilter =
+        (routine.departamentos?.length ?? 0) > 0
+          ? routine.departamentos
+          : role === "SUPERVISOR" && (routine.recipient?.departamentos?.length ?? 0) > 0
+            ? routine.recipient!.departamentos
+            : undefined;
 
       // Instruções de IA personalizadas do destinatário (substitui contexto global da equipe)
       const aiInstructions = routine.recipient?.aiInstructions ?? undefined;
