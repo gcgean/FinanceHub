@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
 import { RoutineType } from "@prisma/client";
-import { sendToUser } from "../services/telegram.service.js";
+import { sendToUser, sendMessage, sendMessageWithToken } from "../services/telegram.service.js";
 import { generateSupportTicketsAIReport } from "../services/support-tickets-report.service.js";
 import { env } from "../lib/env.js";
 
@@ -186,7 +186,7 @@ export async function routinesRoutes(app: FastifyInstance) {
         where: { id, companyId },
         include: {
           user:      { select: { id: true, name: true, telegramChatId: true } },
-          recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true } },
+          recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true, telegramBot: { select: { token: true } } } },
         },
       });
 
@@ -266,9 +266,13 @@ export async function routinesRoutes(app: FastifyInstance) {
       if (sendUserId) {
         await sendToUser(sendUserId, msg);
       } else if (routine.recipientId && chatId) {
-        // Envia diretamente pelo chatId do destinatário cadastrado
-        const { sendMessage } = await import("../services/telegram.service.js");
-        await sendMessage(chatId, msg);
+        // Usa o bot configurado no destinatário, ou o bot padrão se não houver
+        const botToken = routine.recipient?.telegramBot?.token;
+        if (botToken) {
+          await sendMessageWithToken(botToken, chatId, msg);
+        } else {
+          await sendMessage(chatId, msg);
+        }
       }
 
       return { ok: true, publicUrl };

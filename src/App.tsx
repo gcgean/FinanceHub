@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import PublicReport from "./pages/PublicReport";
+import LandingPage from "./pages/LandingPage";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { useGlobalEnter } from "@/hooks/useGlobalEnter";
 
@@ -22,6 +23,8 @@ const App = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<AuthGate><Index /></AuthGate>} />
+            {/* Landing page pública */}
+            <Route path="/lp" element={<LandingPage />} />
             {/* Página pública de relatório — sem autenticação */}
             <Route path="/r/:token" element={<PublicReport />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
