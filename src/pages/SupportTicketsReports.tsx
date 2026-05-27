@@ -261,6 +261,8 @@ export default function SupportTicketsReports() {
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);   // erpCodes
   const [deptPopoverOpen, setDeptPopoverOpen] = useState(false);
   const [usuAtendInput,   setUsuAtendInput]   = useState("");
+  const [nomeCliInput,    setNomeCliInput]    = useState("");
+  const [procedimentoInput, setProcedimentoInput] = useState("");
 
   const [hasSearched,    setHasSearched]    = useState(false);
   const [appliedFilters, setAppliedFilters] = useState({
@@ -268,6 +270,8 @@ export default function SupportTicketsReports() {
     dateTo:     defaultDateTo,
     departamentos: [] as string[],
     usuAtend:   "",
+    nomeCli:    "",
+    procedimento: "",
   });
 
   // ── paginação ─────────────────────────────────────────────────────────────
@@ -356,7 +360,9 @@ export default function SupportTicketsReports() {
       if (appliedFilters.departamentos.length > 0) {
         params.append("departamento", appliedFilters.departamentos.join(","));
       }
-      if (appliedFilters.usuAtend.trim()) params.append("usuAtend", appliedFilters.usuAtend.trim());
+      if (appliedFilters.usuAtend.trim())    params.append("usuAtend",    appliedFilters.usuAtend.trim());
+      if (appliedFilters.nomeCli.trim())     params.append("nomeCli",     appliedFilters.nomeCli.trim());
+      if (appliedFilters.procedimento.trim()) params.append("procedimento", appliedFilters.procedimento.trim());
       return apiFetch<SupportTicketsResponse>(`/support-tickets?${params.toString()}`);
     },
     enabled: hasSearched,
@@ -377,6 +383,8 @@ export default function SupportTicketsReports() {
       dateTo:        dateToInput,
       departamentos: selectedDepts,
       usuAtend:      usuAtendInput,
+      nomeCli:       nomeCliInput,
+      procedimento:  procedimentoInput,
     });
   };
 
@@ -604,6 +612,31 @@ export default function SupportTicketsReports() {
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
             </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Cliente</label>
+              <Input
+                type="text"
+                placeholder="Nome do cliente..."
+                value={nomeCliInput}
+                onChange={(e) => setNomeCliInput(e.target.value)}
+                className="w-44"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Procedimento</label>
+              <Input
+                type="text"
+                placeholder="Nome do procedimento..."
+                value={procedimentoInput}
+                onChange={(e) => setProcedimentoInput(e.target.value)}
+                className="w-48"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+            </div>
+
             <Button onClick={handleSearch} className="mb-0.5">
               <Search className="w-4 h-4 mr-2" />
               Buscar

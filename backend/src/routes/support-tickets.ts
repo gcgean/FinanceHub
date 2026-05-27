@@ -450,7 +450,9 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           where.departamento = { in: depts };
         }
       }
-      if (q.usuAtend)     where.usuAtend = { contains: q.usuAtend, mode: "insensitive" };
+      if (q.usuAtend)     where.usuAtend        = { contains: q.usuAtend,        mode: "insensitive" };
+      if (q.nomeCli)      where.nomeCli         = { contains: q.nomeCli,         mode: "insensitive" };
+      if (q.procedimento) where.nomesProcedimento = { contains: q.procedimento, mode: "insensitive" };
 
       const take = Number(q.take ?? 50);
       const skip = Number(q.skip ?? 0);
