@@ -42,8 +42,13 @@ export async function sendMessage(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { description?: string; error_code?: number };
+      console.error(`[Telegram] ❌ Falha ao enviar para chatId=${chatId}: ${body.description ?? res.status} (code ${body.error_code ?? res.status})`);
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error(`[Telegram] ❌ Erro de rede ao enviar para chatId=${chatId}:`, err);
     return false;
   }
 }

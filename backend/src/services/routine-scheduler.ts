@@ -220,13 +220,18 @@ async function processRoutines() {
         `⏳ Link disponível por 7 dias.`;
 
       // Envia mensagem
+      let sent = false;
       if (routine.userId) {
-        await sendToUser(routine.userId, msg);
+        sent = await sendToUser(routine.userId, msg);
       } else {
-        await sendMessage(chatId, msg);
+        sent = await sendMessage(chatId, msg);
       }
 
-      console.log(`[RoutineScheduler] ✅ Enviado para ${recipName} — link: ${publicUrl}`);
+      if (sent) {
+        console.log(`[RoutineScheduler] ✅ Enviado para ${recipName} (chatId=${chatId}) — link: ${publicUrl}`);
+      } else {
+        console.error(`[RoutineScheduler] ❌ Falha ao enviar para ${recipName} (chatId=${chatId}). Verifique se o usuário iniciou conversa com o bot.`);
+      }
       await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
 
     } catch (err) {
