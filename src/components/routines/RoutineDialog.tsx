@@ -53,6 +53,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
   const [dayOfMonth, setDayOfMonth] = useState<number>(1);
   const [hour, setHour] = useState<number>(8);
   const [minute, setMinute] = useState<number>(0);
+  const [previousDay, setPreviousDay] = useState(false);
 
   useEffect(() => {
     if (routine) {
@@ -64,6 +65,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       if (routine.type === "DAILY") setDaysOfWeek(routine.daysOfWeek);
       if (routine.type === "WEEKLY") setWeekDay(routine.daysOfWeek[0] ?? 1);
       if (routine.type === "MONTHLY") setDayOfMonth(routine.dayOfMonth ?? 1);
+      setPreviousDay(routine.previousDay ?? false);
     } else {
       setName("");
       setType("DAILY");
@@ -73,6 +75,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       setDayOfMonth(1);
       setHour(8);
       setMinute(0);
+      setPreviousDay(false);
     }
   }, [routine, open]);
 
@@ -104,6 +107,7 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
       hour,
       minute,
       active: true,
+      previousDay,
     };
     onSave(payload);
   };
@@ -263,6 +267,48 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
                 → {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
               </span>
             </div>
+          </div>
+
+          {/* Período do relatório */}
+          <div className="space-y-1.5">
+            <Label>Período do Relatório</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviousDay(false)}
+                className={cn(
+                  "rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-left",
+                  !previousDay
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-muted"
+                )}
+              >
+                <div className="font-semibold">📅 Dia atual</div>
+                <div className={cn("text-xs mt-0.5", !previousDay ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  Movimentação do próprio dia
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviousDay(true)}
+                className={cn(
+                  "rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-left",
+                  previousDay
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-muted"
+                )}
+              >
+                <div className="font-semibold">⏮️ Dia anterior</div>
+                <div className={cn("text-xs mt-0.5", previousDay ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  Relatório de ontem ao acordar
+                </div>
+              </button>
+            </div>
+            {previousDay && (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                💡 A rotina disparará no horário configurado e enviará a movimentação completa do <strong>dia anterior</strong>. Ideal para relatórios matinais.
+              </p>
+            )}
           </div>
 
           {/* Destinatário */}

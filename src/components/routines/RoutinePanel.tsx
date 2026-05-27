@@ -57,6 +57,11 @@ function scheduleDescription(routine: Routine): string {
   return `Todo dia ${routine.dayOfMonth} às ${time}`;
 }
 
+function periodLabel(routine: Routine): string | null {
+  if (routine.previousDay) return "⏮️ Dia anterior";
+  return null;
+}
+
 function recipientInfo(routine: Routine) {
   if (routine.recipient) {
     return {
@@ -355,6 +360,11 @@ export function RoutinePanel({ open, onClose, context, contextLabel }: Props) {
                               {info.role && (
                                 <Badge variant="outline" className="text-xs px-1.5 py-0">
                                   {info.role === "SUPERVISOR" ? "👔" : "🧑‍💻"}
+                                </Badge>
+                              )}
+                              {routine.previousDay && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0 text-violet-600 border-violet-200">
+                                  ⏮️ Dia ant.
                                 </Badge>
                               )}
                               {!routine.active && (

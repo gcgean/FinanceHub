@@ -25,7 +25,8 @@ const RoutineBodyBase = z.object({
   dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
   hour: z.number().int().min(0).max(23),
   minute: z.number().int().min(0).max(59),
-  active: z.boolean().optional().default(true),
+  active:      z.boolean().optional().default(true),
+  previousDay: z.boolean().optional().default(false),
 });
 
 const RoutineBody = RoutineBodyBase.refine(d => d.userId || d.recipientId, { message: "Informe userId ou recipientId" });
@@ -45,6 +46,7 @@ const routineSelect = {
   hour: true,
   minute: true,
   active: true,
+  previousDay: true,
   lastRunAt: true,
   createdAt: true,
   updatedAt: true,
@@ -90,6 +92,7 @@ export async function routinesRoutes(app: FastifyInstance) {
           hour: data.hour,
           minute: data.minute,
           active: data.active ?? true,
+          previousDay: data.previousDay ?? false,
         },
         select: routineSelect,
       });
@@ -126,7 +129,8 @@ export async function routinesRoutes(app: FastifyInstance) {
           ...(data.dayOfMonth !== undefined && { dayOfMonth: data.dayOfMonth }),
           ...(data.hour !== undefined && { hour: data.hour }),
           ...(data.minute !== undefined && { minute: data.minute }),
-          ...(data.active !== undefined && { active: data.active }),
+          ...(data.active      !== undefined && { active:      data.active }),
+          ...(data.previousDay !== undefined && { previousDay: data.previousDay }),
         },
         select: routineSelect,
       });
@@ -203,11 +207,14 @@ export async function routinesRoutes(app: FastifyInstance) {
       const now  = new Date();
       const type = routine.type as "DAILY" | "WEEKLY" | "MONTHLY";
 
-      // Período baseado no tipo
-      const dateTo   = new Date(now); dateTo.setHours(23, 59, 59, 999);
-      const dateFrom = new Date(now);
+      // Período baseado no tipo (e em previousDay)
+      const baseDate = routine.previousDay
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+        : now;
+      const dateTo   = new Date(baseDate); dateTo.setHours(23, 59, 59, 999);
+      const dateFrom = new Date(baseDate);
       if (type === "DAILY")        { dateFrom.setHours(0, 0, 0, 0); }
-      else if (type === "WEEKLY")  { dateFrom.setDate(now.getDate() - 6); dateFrom.setHours(0, 0, 0, 0); }
+      else if (type === "WEEKLY")  { dateFrom.setDate(baseDate.getDate() - 6); dateFrom.setHours(0, 0, 0, 0); }
       else                         { dateFrom.setDate(1); dateFrom.setHours(0, 0, 0, 0); }
 
       // Filtros por papel do destinatário

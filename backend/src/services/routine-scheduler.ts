@@ -61,15 +61,20 @@ function getFrontendUrl(): string {
 
 // ── cálculo do período do relatório ──────────────────────────────────────────
 
-function getPeriod(type: "DAILY" | "WEEKLY" | "MONTHLY", now: Date): { dateFrom: Date; dateTo: Date } {
-  const dateTo = new Date(now);
+function getPeriod(type: "DAILY" | "WEEKLY" | "MONTHLY", now: Date, previousDay = false): { dateFrom: Date; dateTo: Date } {
+  // Quando previousDay=true, o período de referência é ontem
+  const baseDate = previousDay
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    : now;
+
+  const dateTo = new Date(baseDate);
   dateTo.setHours(23, 59, 59, 999);
 
-  const dateFrom = new Date(now);
+  const dateFrom = new Date(baseDate);
   if (type === "DAILY") {
     dateFrom.setHours(0, 0, 0, 0);
   } else if (type === "WEEKLY") {
-    dateFrom.setDate(now.getDate() - 6);
+    dateFrom.setDate(baseDate.getDate() - 6);
     dateFrom.setHours(0, 0, 0, 0);
   } else {
     dateFrom.setDate(1);
@@ -134,6 +139,7 @@ async function processRoutines() {
   // Busca todas as rotinas ativas com o horário atual (inclui user e recipient)
   const routines = await prisma.routine.findMany({
     where: { active: true, hour: currentHour, minute: currentMinute },
+    // previousDay incluído via select implícito (findMany retorna todos os campos escalares)
     include: {
       user:      { select: { id: true, name: true, telegramChatId: true } },
       recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true, telegramBot: { select: { token: true } } } },
@@ -185,14 +191,16 @@ async function processRoutines() {
       let reportResult;
       try {
         if (routine.context === "supportTickets") {
-          const { dateFrom, dateTo } = getPeriod(routineType, now);
+          const { dateFrom, dateTo } = getPeriod(routineType, now, routine.previousDay);
           reportResult = await generateSupportTicketsAIReport(
             routine.companyId, dateFrom, dateTo, routineType, recipName,
             usuAtendFilter, departamentosFilter, aiInstructions
           );
         } else {
           reportResult = await generateReportForContext(
-            routine.context, routine.companyId, routineType, now, recipName
+            routine.context, routine.companyId, routineType,
+            routine.previousDay ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) : now,
+            recipName
           );
         }
       } catch (reportErr) {

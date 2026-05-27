@@ -25,6 +25,7 @@ export type Routine = {
   hour: number;
   minute: number;
   active: boolean;
+  previousDay: boolean;
   lastRunAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +42,7 @@ export type CreateRoutinePayload = {
   hour: number;
   minute: number;
   active?: boolean;
+  previousDay?: boolean;
 };
 
 export const routinesApi = {
