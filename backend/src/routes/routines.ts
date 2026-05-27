@@ -272,7 +272,7 @@ export async function routinesRoutes(app: FastifyInstance) {
 
       const roleLabel = role === "ATTENDANT" ? "Desempenho Individual" : "Geral da Equipe";
       const msg = publicUrl
-        ? `📊 <b>Teste — Relatório ${typeLabel} de ${contextLabel} (${roleLabel})</b>\n\n` +
+        ? `📊 <b>${routine.name}</b>\n\n` +
           `📅 ${fmtDate(dateFrom)} → ${fmtDate(dateTo)}\n\n` +
           `✅ Relatório gerado com sucesso!\n` +
           `🔗 <a href="${publicUrl}">Clique aqui para visualizar</a>\n\n` +

@@ -225,7 +225,7 @@ async function processRoutines() {
       const roleLabel    = role === "ATTENDANT" ? "Desempenho Individual" : "Geral da Equipe";
 
       const msg =
-        `📊 <b>Relatório ${typeLabel} de ${contextLabel} (${roleLabel})</b>\n\n` +
+        `📊 <b>${routine.name}</b>\n\n` +
         `📅 ${fmtDate(reportResult.periodFrom)} → ${fmtDate(reportResult.periodTo)}\n\n` +
         `✅ Seu relatório está pronto!\n` +
         `🔗 <a href="${publicUrl}">Clique aqui para visualizar</a>\n\n` +
