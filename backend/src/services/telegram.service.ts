@@ -45,7 +45,7 @@ export async function sendMessageWithToken(
     const res = await fetch(`${apiBase}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { description?: string; error_code?: number };
