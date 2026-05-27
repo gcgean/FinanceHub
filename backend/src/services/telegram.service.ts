@@ -31,13 +31,18 @@ export async function createLinkCode(userId: string): Promise<string> {
 
 // ── envio de mensagens ────────────────────────────────────────────────────────
 
-export async function sendMessage(
+/**
+ * Envia mensagem usando um token explícito — permite múltiplos bots por empresa.
+ */
+export async function sendMessageWithToken(
+  token: string,
   chatId: string | number,
   text: string
 ): Promise<boolean> {
-  if (!BOT_TOKEN) return false;
+  if (!token) return false;
   try {
-    const res = await fetch(`${API_BASE}/sendMessage`, {
+    const apiBase = `https://api.telegram.org/bot${token}`;
+    const res = await fetch(`${apiBase}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
@@ -51,6 +56,14 @@ export async function sendMessage(
     console.error(`[Telegram] ❌ Erro de rede ao enviar para chatId=${chatId}:`, err);
     return false;
   }
+}
+
+export async function sendMessage(
+  chatId: string | number,
+  text: string
+): Promise<boolean> {
+  if (!BOT_TOKEN) return false;
+  return sendMessageWithToken(BOT_TOKEN, chatId, text);
 }
 
 export async function sendToUser(

@@ -14,6 +14,8 @@ export type RoutineRecipient = {
   departamentos: string[];
   notes: string | null;
   aiInstructions: string | null;
+  telegramBotId: string | null;
+  telegramBot: { id: string; name: string; username: string | null } | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +31,7 @@ export type CreateRecipientPayload = {
   departamentos?: string[];
   notes?: string | null;
   aiInstructions?: string | null;
+  telegramBotId?: string | null;
   active?: boolean;
 };
 

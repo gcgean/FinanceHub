@@ -209,6 +209,7 @@ model Company {
   routines            Routine[]
   supportAiContext    SupportAIContext?
   routineRecipients   RoutineRecipient[]
+  telegramBots        TelegramBot[]
 }
 
 model SupportTicket {
@@ -414,11 +415,31 @@ model RoutineRecipient {
   notes            String?       @db.Text
   /// Instruções personalizadas para a IA ao gerar relatório deste destinatário
   aiInstructions   String?       @db.Text
+  /// Bot do Telegram usado para enviar relatórios a este destinatário (null = bot padrão)
+  telegramBotId    String?
+  telegramBot      TelegramBot?  @relation(fields: [telegramBotId], references: [id], onDelete: SetNull)
   active           Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   routines       Routine[]
+
+  @@index([companyId])
+}
+
+/// Bot do Telegram cadastrado pela empresa para envio de relatórios
+model TelegramBot {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String   // Nome amigável, ex: "@GestorFacilBot"
+  username  String?  // username do bot sem @
+  token     String   // token do BotFather (armazenado no banco)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients RoutineRecipient[]
 
   @@index([companyId])
 }

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { nanoid } from "nanoid";
 import { prisma } from "../lib/prisma.js";
-import { sendToUser, sendMessage } from "./telegram.service.js";
+import { sendToUser, sendMessage, sendMessageWithToken } from "./telegram.service.js";
 import { generateSupportTicketsAIReport } from "./support-tickets-report.service.js";
 import { env } from "../lib/env.js";
 
@@ -136,7 +136,7 @@ async function processRoutines() {
     where: { active: true, hour: currentHour, minute: currentMinute },
     include: {
       user:      { select: { id: true, name: true, telegramChatId: true } },
-      recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true } },
+      recipient: { select: { id: true, name: true, role: true, telegramChatId: true, usuAtend: true, departamentos: true, aiInstructions: true, telegramBot: { select: { token: true } } } },
     },
   });
 
@@ -219,12 +219,15 @@ async function processRoutines() {
         `🔗 <a href="${publicUrl}">Clique aqui para visualizar</a>\n\n` +
         `⏳ Link disponível por 7 dias.`;
 
-      // Envia mensagem
+      // Envia mensagem — usa bot específico do destinatário se configurado
       let sent = false;
       if (routine.userId) {
         sent = await sendToUser(routine.userId, msg);
       } else {
-        sent = await sendMessage(chatId, msg);
+        const botToken = routine.recipient?.telegramBot?.token;
+        sent = botToken
+          ? await sendMessageWithToken(botToken, chatId, msg)
+          : await sendMessage(chatId, msg);
       }
 
       if (sent) {

@@ -15,6 +15,7 @@ const RecipientBody = z.object({
   departamentos:  z.array(z.string()).default([]),
   notes:          z.string().optional().nullable(),
   aiInstructions: z.string().optional().nullable(),
+  telegramBotId:  z.string().optional().nullable(),
   active:         z.boolean().optional().default(true),
 });
 
@@ -23,6 +24,8 @@ const recipientSelect = {
   telegramChatId: true, email: true, whatsapp: true,
   usuAtend: true, departamentos: true, notes: true,
   aiInstructions: true,
+  telegramBotId: true,
+  telegramBot: { select: { id: true, name: true, username: true } },
   active: true, createdAt: true, updatedAt: true,
 } as const;
 
@@ -71,6 +74,7 @@ export async function routineRecipientsRoutes(app: FastifyInstance) {
         ...(data.departamentos !== undefined && { departamentos: data.departamentos }),
         ...(data.notes          !== undefined && { notes:          data.notes }),
         ...(data.aiInstructions !== undefined && { aiInstructions: data.aiInstructions }),
+        ...(data.telegramBotId  !== undefined && { telegramBotId:  data.telegramBotId }),
         ...(data.active         !== undefined && { active:         data.active }),
       },
       select: recipientSelect,

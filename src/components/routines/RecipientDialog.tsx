@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { RoutineRecipient, CreateRecipientPayload, RecipientRole } from "@/api/routine-recipients";
+import { telegramBotsApi } from "@/api/telegram-bots";
 
 interface Props {
   open: boolean;
@@ -33,7 +42,13 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
   const [departamentos, setDepartamentos] = useState("");
   const [notes, setNotes] = useState("");
   const [aiInstructions, setAiInstructions] = useState("");
+  const [telegramBotId, setTelegramBotId] = useState<string | null>(null);
   const [active, setActive] = useState(true);
+
+  const { data: bots = [] } = useQuery({
+    queryKey: ["telegram-bots"],
+    queryFn: telegramBotsApi.list,
+  });
 
   useEffect(() => {
     if (recipient) {
@@ -46,6 +61,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       setDepartamentos(recipient.departamentos.join(", "));
       setNotes(recipient.notes ?? "");
       setAiInstructions(recipient.aiInstructions ?? "");
+      setTelegramBotId(recipient.telegramBotId ?? null);
       setActive(recipient.active);
     } else {
       setName("");
@@ -57,6 +73,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       setDepartamentos("");
       setNotes("");
       setAiInstructions("");
+      setTelegramBotId(null);
       setActive(true);
     }
   }, [recipient, open]);
@@ -79,6 +96,7 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
       departamentos: role === "SUPERVISOR" ? deptArray : [],
       notes: notes.trim() || null,
       aiInstructions: aiInstructions.trim() || null,
+      telegramBotId: telegramBotId || null,
       active,
     });
   };
@@ -139,16 +157,42 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
           </div>
 
           {/* Telegram */}
-          <div className="space-y-1.5">
-            <Label>
-              Telegram Chat ID
-              <span className="text-muted-foreground text-xs ml-2">(obrigatório para envio)</span>
-            </Label>
-            <Input
-              value={telegramChatId}
-              onChange={(e) => setTelegramChatId(e.target.value)}
-              placeholder="Ex: 123456789"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>
+                Telegram Chat ID
+                <span className="text-muted-foreground text-xs ml-2">(obrigatório)</span>
+              </Label>
+              <Input
+                value={telegramChatId}
+                onChange={(e) => setTelegramChatId(e.target.value)}
+                placeholder="Ex: 123456789"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>
+                Bot do Telegram
+                <span className="text-muted-foreground text-xs ml-2">(padrão se vazio)</span>
+              </Label>
+              <Select
+                value={telegramBotId ?? "__default__"}
+                onValueChange={(v) => setTelegramBotId(v === "__default__" ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Bot padrão" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">🤖 Bot padrão</SelectItem>
+                  {bots.filter(b => b.active).map(bot => (
+                    <SelectItem key={bot.id} value={bot.id}>
+                      {bot.name}
+                      {bot.username && <span className="text-muted-foreground ml-1">@{bot.username}</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

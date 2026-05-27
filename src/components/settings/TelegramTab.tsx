@@ -1,11 +1,108 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Link, Unlink, RefreshCw, Send, Copy, Check, ExternalLink, Loader2 } from "lucide-react";
+import { MessageCircle, Link, Unlink, RefreshCw, Send, Copy, Check, ExternalLink, Loader2, Bot, Plus, Trash2, Pencil, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { telegramApi, type LinkCodeResponse } from "@/api/telegram";
+import { telegramBotsApi, type TelegramBot, type CreateBotPayload } from "@/api/telegram-bots";
+
+// ── BotDialog ─────────────────────────────────────────────────────────────────
+
+type BotDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: CreateBotPayload & { id?: string }) => void;
+  saving: boolean;
+  bot?: TelegramBot | null;
+};
+
+function BotDialog({ open, onClose, onSave, saving, bot }: BotDialogProps) {
+  const isEdit = !!bot;
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [token, setToken] = useState("");
+  const [testChatId, setTestChatId] = useState("");
+
+  useEffect(() => {
+    if (bot) {
+      setName(bot.name);
+      setUsername(bot.username ?? "");
+      setToken("");      // token nunca é pré-preenchido por segurança
+    } else {
+      setName("");
+      setUsername("");
+      setToken("");
+    }
+    setTestChatId("");
+  }, [bot, open]);
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    if (!isEdit && !token.trim()) return;
+    onSave({
+      ...(bot ? { id: bot.id } : {}),
+      name: name.trim(),
+      username: username.trim() || null,
+      ...(token.trim() ? { token: token.trim() } : {}),
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Editar Bot" : "Adicionar Bot do Telegram"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Nome amigável</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: @GestorFacilBot" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Username do bot <span className="text-muted-foreground text-xs">(sem @, opcional)</span></Label>
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Ex: GestorFacilBot" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>
+              Token do BotFather
+              {isEdit && <span className="text-muted-foreground text-xs ml-2">(deixe em branco para não alterar)</span>}
+            </Label>
+            <Input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Ex: 1234567890:AAFxxx..."
+              type="password"
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Obtenha o token em <strong>@BotFather</strong> → /mybots → API Token.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving || !name.trim() || (!isEdit && !token.trim())}>
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {isEdit ? "Salvar" : "Adicionar Bot"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── TelegramTab ───────────────────────────────────────────────────────────────
 
 export function TelegramTab() {
   const qc = useQueryClient();
@@ -13,6 +110,11 @@ export function TelegramTab() {
   const [linkData, setLinkData] = useState<LinkCodeResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState(0);
+
+  // Bot management state
+  const [botDialogOpen, setBotDialogOpen] = useState(false);
+  const [editingBot, setEditingBot] = useState<TelegramBot | null>(null);
+  const [testChatIdMap, setTestChatIdMap] = useState<Record<string, string>>({});
 
   const { data: status, isLoading } = useQuery({
     queryKey: ["telegram-status"],
@@ -59,6 +161,62 @@ export function TelegramTab() {
     onSuccess: () => toast({ title: "✅ Mensagem enviada!", description: "Verifique seu Telegram." }),
     onError: () => toast({ title: "Erro ao enviar", description: "Verifique sua conexão.", variant: "destructive" }),
   });
+
+  // ── bots ──────────────────────────────────────────────────────────────────
+  const { data: bots = [], isLoading: botsLoading } = useQuery({
+    queryKey: ["telegram-bots"],
+    queryFn: telegramBotsApi.list,
+  });
+
+  const createBotMut = useMutation({
+    mutationFn: telegramBotsApi.create,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telegram-bots"] });
+      setBotDialogOpen(false);
+      toast({ title: "✅ Bot adicionado!" });
+    },
+    onError: (e: Error) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const updateBotMut = useMutation({
+    mutationFn: ({ id, ...data }: { id: string } & Parameters<typeof telegramBotsApi.update>[1]) =>
+      telegramBotsApi.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telegram-bots"] });
+      setBotDialogOpen(false);
+      setEditingBot(null);
+      toast({ title: "✅ Bot atualizado!" });
+    },
+    onError: (e: Error) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteBotMut = useMutation({
+    mutationFn: telegramBotsApi.delete,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telegram-bots"] });
+      qc.invalidateQueries({ queryKey: ["routine-recipients"] });
+      toast({ title: "Bot removido." });
+    },
+    onError: (e: Error) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const testBotMut = useMutation({
+    mutationFn: ({ id, chatId }: { id: string; chatId: string }) => telegramBotsApi.test(id, chatId),
+    onSuccess: (data) => {
+      if (data.ok) toast({ title: "✅ Mensagem enviada!", description: "Verifique o Telegram." });
+      else toast({ title: "❌ Falha no envio", description: "Verifique o token e o Chat ID.", variant: "destructive" });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao testar bot.", variant: "destructive" }),
+  });
+
+  const handleSaveBot = (data: CreateBotPayload & { id?: string }) => {
+    if (data.id) {
+      const { id, ...rest } = data;
+      updateBotMut.mutate({ id, ...rest });
+    } else {
+      createBotMut.mutate(data as CreateBotPayload);
+    }
+  };
 
   const copyCode = async () => {
     if (!linkData) return;
@@ -200,6 +358,106 @@ export function TelegramTab() {
           <li>Notificações de insights da IA</li>
         </ul>
       </div>
+
+      {/* ── Bots da empresa ── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <Bot className="w-4 h-4" /> Bots cadastrados
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Adicione bots extras para enviar relatórios a diferentes destinatários.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => { setEditingBot(null); setBotDialogOpen(true); }}>
+            <Plus className="w-4 h-4 mr-1.5" /> Adicionar Bot
+          </Button>
+        </div>
+
+        {botsLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : bots.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            Nenhum bot adicional cadastrado. O bot padrão (<strong>@GestorFacilBot</strong>) continuará sendo usado.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {bots.map(bot => (
+              <Card key={bot.id}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Bot className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{bot.name}</span>
+                        {bot.username && (
+                          <span className="text-xs text-muted-foreground">@{bot.username}</span>
+                        )}
+                        <Badge variant={bot.active ? "default" : "secondary"} className="text-xs">
+                          {bot.active ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 font-mono">{bot.tokenMask}</p>
+
+                      {/* Mini-form de teste */}
+                      <div className="flex gap-2 mt-3 items-center">
+                        <Input
+                          className="h-7 text-xs w-40"
+                          placeholder="Chat ID para testar"
+                          value={testChatIdMap[bot.id] ?? ""}
+                          onChange={(e) => setTestChatIdMap(prev => ({ ...prev, [bot.id]: e.target.value }))}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={testBotMut.isPending || !testChatIdMap[bot.id]?.trim()}
+                          onClick={() => testBotMut.mutate({ id: bot.id, chatId: testChatIdMap[bot.id] })}
+                        >
+                          {testBotMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <FlaskConical className="w-3 h-3" />}
+                          <span className="ml-1">Testar</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => { setEditingBot(bot); setBotDialogOpen(true); }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => deleteBotMut.mutate(bot.id)}
+                        disabled={deleteBotMut.isPending}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Dialog de bot */}
+      <BotDialog
+        open={botDialogOpen}
+        onClose={() => { setBotDialogOpen(false); setEditingBot(null); }}
+        onSave={handleSaveBot}
+        saving={createBotMut.isPending || updateBotMut.isPending}
+        bot={editingBot}
+      />
     </div>
   );
 }
