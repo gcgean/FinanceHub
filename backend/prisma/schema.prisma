@@ -314,6 +314,18 @@ updatedAt DateTime @updatedAt
   aiInsightFeedback    AIInsightFeedback[]
   notificationChannels AINotificationChannel[]
   userCompanies        UserCompany[]
+  telegramLinkCodes    TelegramLinkCode[]
+}
+
+model TelegramLinkCode {
+  code      String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserCompany {

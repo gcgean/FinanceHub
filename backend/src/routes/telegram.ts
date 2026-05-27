@@ -32,7 +32,7 @@ export async function telegramRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app)] },
     async (request, reply) => {
       const userId = request.user.sub;
-      const code = createLinkCode(userId);
+      const code = await createLinkCode(userId);
       return reply.send({
         code,
         botUsername: "GestorFacilBot",

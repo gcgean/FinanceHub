@@ -2,32 +2,34 @@ import { env } from "../lib/env.js";
 import { prisma } from "../lib/prisma.js";
 
 const BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
-const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const API_BASE  = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// In-memory link codes: code -> { userId, expiresAt }
-const linkCodes = new Map<string, { userId: string; expiresAt: number }>();
-
-const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars (0/O, 1/I)
+const CODE_CHARS  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem chars ambíguos (0/O, 1/I)
 const CODE_LENGTH = 6;
-const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutos
 
-export function createLinkCode(userId: string): string {
-  // Remove any existing codes for this user
-  for (const [code, data] of linkCodes.entries()) {
-    if (data.userId === userId) {
-      linkCodes.delete(code);
-    }
-  }
+// ── geração/lookup de código ──────────────────────────────────────────────────
 
-  // Generate new code
+export async function createLinkCode(userId: string): Promise<string> {
+  // Remove códigos antigos do mesmo usuário
+  await prisma.telegramLinkCode.deleteMany({ where: { userId } });
+
+  // Limpa também códigos expirados de outros usuários (housekeeping passivo)
+  await prisma.telegramLinkCode.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
+  // Gera código único
   let code = "";
   for (let i = 0; i < CODE_LENGTH; i++) {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   }
 
-  linkCodes.set(code, { userId, expiresAt: Date.now() + CODE_TTL_MS });
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+  await prisma.telegramLinkCode.create({ data: { code, userId, expiresAt } });
+
   return code;
 }
+
+// ── envio de mensagens ────────────────────────────────────────────────────────
 
 export async function sendMessage(
   chatId: string | number,
@@ -58,36 +60,39 @@ export async function sendToUser(
   return sendMessage(user.telegramChatId, text);
 }
 
+// ── processamento de updates ──────────────────────────────────────────────────
+
 export async function handleUpdate(update: unknown): Promise<void> {
-  const upd = update as Record<string, unknown>;
+  const upd     = update as Record<string, unknown>;
   const message = upd?.message as Record<string, unknown> | undefined;
   if (!message) return;
 
   const rawText = (message.text as string | undefined) ?? "";
-  const chat = message.chat as Record<string, unknown> | undefined;
+  const chat    = message.chat as Record<string, unknown> | undefined;
   if (!chat) return;
   const chatId = String(chat.id);
 
   const text = rawText.trim().toUpperCase();
 
-  // Extract code from /START CODE or bare code
+  // Extrai o código de /START CÓDIGO ou código bare
   let code: string | null = null;
   if (text.startsWith("/START")) {
     const parts = rawText.trim().split(/\s+/);
     if (parts.length >= 2) {
       code = parts[1].toUpperCase();
     } else {
-      // /start with no code — send welcome
+      // /start sem código — mensagem de boas-vindas
       await sendMessage(
         chatId,
-        "Olá! 👋 Bem-vindo ao <b>@GestorFacilBot</b>.\n\nPara vincular sua conta, vá em <b>Configurações → Telegram</b> no FinanceHub, gere um código e envie-o aqui."
+        "Olá! 👋 Bem-vindo ao <b>@GestorFacilBot</b>.\n\n" +
+        "Para vincular sua conta, acesse <b>Configurações → Telegram</b> no FinanceHub, " +
+        "gere um código e envie-o aqui."
       );
       return;
     }
   } else if (/^[A-Z0-9]{6}$/.test(text)) {
     code = text;
   } else {
-    // Unknown command or message
     await sendMessage(
       chatId,
       "Para vincular sua conta, acesse <b>Configurações → Telegram</b> no FinanceHub e envie o código gerado."
@@ -95,30 +100,35 @@ export async function handleUpdate(update: unknown): Promise<void> {
     return;
   }
 
-  // Look up the code
-  const entry = linkCodes.get(code);
-  if (!entry || entry.expiresAt < Date.now()) {
-    linkCodes.delete(code ?? "");
+  // Busca o código no banco
+  const entry = await prisma.telegramLinkCode.findUnique({
+    where: { code },
+    include: { user: { select: { id: true, name: true } } },
+  });
+
+  if (!entry || entry.expiresAt < new Date()) {
+    if (entry) await prisma.telegramLinkCode.delete({ where: { code } });
     await sendMessage(
       chatId,
-      "❌ Código inválido ou expirado. Gere um novo código em <b>Configurações → Telegram</b> no FinanceHub."
+      "❌ Código inválido ou expirado.\n\nGere um novo código em <b>Configurações → Telegram</b> no FinanceHub."
     );
     return;
   }
 
-  // Link the account
+  // Vincula a conta
   try {
     await prisma.user.update({
       where: { id: entry.userId },
       data: { telegramChatId: chatId },
     });
-    linkCodes.delete(code);
+    await prisma.telegramLinkCode.delete({ where: { code } });
     await sendMessage(
       chatId,
-      "✅ <b>Conta vinculada com sucesso!</b>\n\nVocê receberá notificações e relatórios do FinanceHub aqui."
+      `✅ <b>Conta vinculada com sucesso!</b>\n\n` +
+      `Olá, ${entry.user.name}! Você receberá notificações e relatórios do FinanceHub aqui. 🎉`
     );
   } catch (err) {
-    console.error("[Telegram] Failed to link account:", err);
+    console.error("[Telegram] Erro ao vincular conta:", err);
     await sendMessage(
       chatId,
       "❌ Erro ao vincular conta. Tente novamente mais tarde."
@@ -126,23 +136,53 @@ export async function handleUpdate(update: unknown): Promise<void> {
   }
 }
 
+// ── polling ───────────────────────────────────────────────────────────────────
+
 let lastUpdateId = 0;
+
+/**
+ * Remove qualquer webhook configurado — necessário para o polling funcionar.
+ * Se um webhook estiver ativo, o Telegram não entrega updates via getUpdates.
+ */
+async function clearWebhookIfSet(): Promise<void> {
+  if (!BOT_TOKEN) return;
+  try {
+    const infoRes  = await fetch(`${API_BASE}/getWebhookInfo`);
+    const infoData = await infoRes.json() as { ok: boolean; result: { url: string } };
+
+    if (infoData.ok && infoData.result.url) {
+      console.log(`[Telegram] Webhook ativo detectado (${infoData.result.url}) — removendo para habilitar polling...`);
+      const delRes  = await fetch(`${API_BASE}/deleteWebhook`, { method: "POST" });
+      const delData = await delRes.json() as { ok: boolean };
+      if (delData.ok) {
+        console.log("[Telegram] ✅ Webhook removido — polling ativo.");
+      } else {
+        console.error("[Telegram] ❌ Falha ao remover webhook:", delData);
+      }
+    } else {
+      console.log("[Telegram] Nenhum webhook ativo — polling pronto.");
+    }
+  } catch (err) {
+    console.error("[Telegram] Erro ao verificar webhook:", err);
+  }
+}
 
 export async function startPolling(): Promise<void> {
   if (!BOT_TOKEN) {
-    console.warn("[Telegram] TELEGRAM_BOT_TOKEN not set — polling disabled.");
+    console.warn("[Telegram] TELEGRAM_BOT_TOKEN não configurado — polling desativado.");
     return;
   }
+
+  // Garante que não há webhook conflitando com o polling
+  await clearWebhookIfSet();
 
   async function poll(): Promise<void> {
     try {
       const url = `${API_BASE}/getUpdates?offset=${lastUpdateId + 1}&timeout=30&allowed_updates=${encodeURIComponent(JSON.stringify(["message"]))}`;
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(35000),
-      });
+      const res = await fetch(url, { signal: AbortSignal.timeout(35000) });
 
       if (res.ok) {
-        const data = (await res.json()) as {
+        const data = await res.json() as {
           ok: boolean;
           result: Array<{ update_id: number; [k: string]: unknown }>;
         };
@@ -153,7 +193,7 @@ export async function startPolling(): Promise<void> {
             try {
               await handleUpdate(update);
             } catch (err) {
-              console.error("[Telegram] Error handling update:", err);
+              console.error("[Telegram] Erro ao processar update:", err);
             }
           }
         }
@@ -161,9 +201,9 @@ export async function startPolling(): Promise<void> {
     } catch (err: unknown) {
       const name = (err as { name?: string })?.name;
       if (name === "TimeoutError" || name === "AbortError") {
-        // Normal long-poll timeout — no warning needed
+        // Timeout normal do long-poll — não é erro
       } else {
-        console.error("[Telegram] Polling error:", err);
+        console.error("[Telegram] Erro no polling:", err);
         await new Promise((r) => setTimeout(r, 5000));
       }
     }
