@@ -241,6 +241,9 @@ export function RoutineDialog({ open, onClose, onSave, saving, context, routine 
                       Dia {d}
                     </SelectItem>
                   ))}
+                  <SelectItem value="0">
+                    📅 Último dia do mês
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

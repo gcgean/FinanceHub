@@ -54,7 +54,8 @@ function scheduleDescription(routine: Routine): string {
     const day = DAYS_LABEL[routine.daysOfWeek[0] ?? 0];
     return `Toda ${day} às ${time}`;
   }
-  return `Todo dia ${routine.dayOfMonth} às ${time}`;
+  const dayLabel = routine.dayOfMonth === 0 ? "último dia" : `dia ${routine.dayOfMonth}`;
+  return `Todo ${dayLabel} às ${time}`;
 }
 
 function periodLabel(routine: Routine): string | null {

@@ -22,7 +22,7 @@ const RoutineBodyBase = z.object({
   userId: z.string().optional().nullable(),
   recipientId: z.string().optional().nullable(),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).default([]),
-  dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+  dayOfMonth: z.number().int().min(0).max(31).nullable().optional(), // 0 = último dia do mês
   hour: z.number().int().min(0).max(23),
   minute: z.number().int().min(0).max(59),
   departamentos: z.array(z.string()).default([]),

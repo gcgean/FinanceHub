@@ -49,6 +49,11 @@ function shouldRun(routine: { type: string; daysOfWeek: number[]; dayOfMonth: nu
   }
   if (routine.type === "MONTHLY") {
     if (alreadyRanThisMonth(routine.lastRunAt, now)) return false;
+    if (routine.dayOfMonth === 0) {
+      // Último dia do mês: verifica se amanhã é dia 1 (ou seja, hoje é o último dia)
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      return currentDayOfMonth === lastDay;
+    }
     return currentDayOfMonth === routine.dayOfMonth;
   }
   return false;
