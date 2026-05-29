@@ -37,3 +37,8 @@ Aplicativo Integracao/*.7z
 *.sln
 *.sw?
 /.claude
+
+# Arquivo de produção com credenciais reais — não versionar
+docker-compose.prod.yml
+Dockerfile.frontend
+nginx.frontend.conf
