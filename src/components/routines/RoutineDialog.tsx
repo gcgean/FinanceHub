@@ -44,7 +44,7 @@ interface Props {
 }
 
 export function RoutineDialog({ open, onClose, onSave, saving, context, routine }: Props) {
-  const isEdit = !!routine;
+  const isEdit = !!routine?.id;
 
   const [name, setName] = useState("");
   const [type, setType] = useState<RoutineType>("DAILY");

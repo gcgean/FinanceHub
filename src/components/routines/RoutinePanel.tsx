@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Plus, Edit, Trash2, Play, Pause, Loader2,
   MessageCircle, CalendarDays, CalendarRange, Calendar, Clock, SendHorizontal,
-  Users, ChevronRight,
+  Users, ChevronRight, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -210,8 +210,20 @@ export function RoutinePanel({ open, onClose, context, contextLabel }: Props) {
   });
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleDuplicate = (routine: Routine) => {
+    // Cria um objeto "fake" baseado na rotina existente, mas sem id
+    // O RoutineDialog vai tratar como nova rotina (isEdit = false)
+    const draft = {
+      ...routine,
+      id: "",          // vazio → dialog entende como nova rotina
+      name: `${routine.name} (cópia)`,
+    } as Routine;
+    setEditingRoutine(draft);
+    setRoutineDialogOpen(true);
+  };
+
   const handleSaveRoutine = (data: CreateRoutinePayload) => {
-    if (editingRoutine) {
+    if (editingRoutine?.id) {
       updateRoutineMut.mutate({ id: editingRoutine.id, data });
     } else {
       createRoutineMut.mutate(data);
@@ -410,6 +422,15 @@ export function RoutinePanel({ open, onClose, context, contextLabel }: Props) {
                             ) : (
                               <Play className="w-3.5 h-3.5" />
                             )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-8 h-8 p-0"
+                            title="Duplicar rotina"
+                            onClick={() => handleDuplicate(routine)}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
