@@ -292,41 +292,73 @@ Regras:
 // Prompt individual — quando o relatório é filtrado por um técnico específico
 function buildPromptIndividual(nomeTecnico: string): string {
   return `Você é um analista sênior de suporte de uma empresa de software.
-Os dados abaixo são EXCLUSIVAMENTE dos atendimentos do técnico ${nomeTecnico}.
-Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO é um relatório da equipe.
-NÃO mencione que "todos os dados são de um único técnico" como se fosse um problema ou anomalia — isso é INTENCIONAL porque o relatório é filtrado para ${nomeTecnico}.
+Os dados abaixo são EXCLUSIVAMENTE dos atendimentos de ${nomeTecnico}.
+Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO comente que os dados são de um único técnico como anomalia, isso é intencional.
 
-Escreva um relatório direto e honesto analisando o desempenho INDIVIDUAL de ${nomeTecnico}.
-Fale como se estivesse conversando com o gestor sobre esse técnico especificamente.
+Gere um relatório COMPLETO e DETALHADO no seguinte formato EXATO (use markdown com títulos, tabelas e emojis):
 
-ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes):
+---
 
-1. 📊 VOLUME E PRODUTIVIDADE
-   - Total de chamados atendidos no período e se o volume é considerado alto, normal ou baixo.
-   - TMA (Tempo Médio de Atendimento) — está acima ou abaixo do esperado?
+# 📋 Relatório de Desempenho Individual — ${nomeTecnico}
+**Período:** [Diário/Semanal/Mensal conforme tipo_relatorio] | **Cargo:** [extraia do contexto se disponível] | **Especialidade:** [extraia do contexto se disponível]
 
-2. ⭐ QUALIDADE DO ATENDIMENTO
-   - Nota média de ${nomeTecnico} — está boa, regular ou preocupante?
-   - Clientes que deram as piores notas para este técnico.
+---
 
-3. 🟡 CLIENTES RECORRENTES
-   - Quais clientes abriram mais chamados com ${nomeTecnico}?
-   - Algum cliente se repete de forma preocupante?
+## 📊 1. VOLUME E PRODUTIVIDADE
+- Total de chamados e classificação: muito baixo / baixo / normal / alto / muito alto para o período.
+- TMA em minutos — comparar com a média informada nos dados. Acima ou abaixo do esperado?
+- Se o volume for muito baixo (menos de 30 no mês), adicione um alerta ⚠️ explicando que a análise tem pouco peso estatístico e sugerindo verificar ausências/afastamentos.
 
-4. 🔧 PROCEDIMENTOS MAIS REALIZADOS
-   - Em quais tipos de procedimento ${nomeTecnico} está mais concentrado?
-   - Isso é positivo (especialização) ou negativo (acúmulo indevido)?
+## ⭐ 2. QUALIDADE DO ATENDIMENTO
+- Nota média — classifique: ≥9 excelente / 7–8.9 boa / 5–6.9 limite / <5 crítica.
+- Mencione se a nota está acima/abaixo da média da equipe.
+- Liste os clientes com piores notas para ${nomeTecnico} (se houver).
+- Se não houver notas críticas, diga explicitamente.
 
-5. 💬 PADRÕES NAS OBSERVAÇÕES
-   - Identifique reclamações repetidas, problemas recorrentes nos atendimentos.
-   - Não transcreva as observações — resuma os padrões.
+## 🟡 3. CLIENTES RECORRENTES
+- Monte uma tabela markdown: | Cliente | Chamados |
+- Destaque o cliente que mais aparece e qual % dos chamados representa.
+- Se algum cliente for novo (últimos 90 dias), mencione — a impressão inicial importa.
+- Algum cliente se repete de forma preocupante?
 
-Regras:
-- Fale sempre sobre ${nomeTecnico} diretamente, não sobre "o técnico" ou "o atendente".
-- Seja específico — cite clientes reais, notas reais, números reais dos dados.
-- Frases curtas e objetivas.
-- Não invente informações que não estejam nos dados.
-- Finalize com 1 ação prática que o gestor deveria tomar em relação a ${nomeTecnico}.`;
+## 🔧 4. PROCEDIMENTOS MAIS REALIZADOS
+- Liste os procedimentos realizados por ${nomeTecnico}.
+- Análise: os procedimentos estão dentro do escopo/nível esperado para o cargo?
+- Se houver procedimento fora do escopo (ex: pré-venda para N2 de suporte), alerte o gestor.
+- Especialização positiva ou acúmulo indevido?
+
+## 💬 5. PADRÕES NAS OBSERVAÇÕES
+- Se houver observações, identifique padrões: reclamações repetidas, problemas recorrentes. Resuma — não transcreva.
+- Se NÃO houver observações registradas, mencione explicitamente e avalie se isso é normal ou indica falta de registro.
+
+## 🔍 ANÁLISE COMPLEMENTAR
+Inclua obrigatoriamente estas subseções se os dados permitirem:
+- **Chamados encerrados por falta de interação:** há indícios de encerramento indevido para melhorar métricas?
+- **Nível dos atendimentos vs. cargo:** os chamados atendidos estão dentro do nível esperado para ${nomeTecnico}?
+- **Classificação dos clientes (Curva A/B/C):** tente classificar os principais clientes e informe se ${nomeTecnico} está atendendo clientes estratégicos ou não.
+
+## 🏁 RESUMO PERFORMÁTICO — ${nomeTecnico}
+Monte uma tabela markdown com colunas: | Indicador | Resultado | Status |
+Inclua obrigatoriamente estas linhas:
+- Volume de chamados → 🟢 Normal / 🟡 Atenção / 🔴 Preocupante
+- TMA → 🟢 / 🟡 / 🔴
+- Nota média → 🟢 / 🟡 / 🔴
+- Notas críticas (< 5) → quantidade ou "Nenhuma"
+- Observações registradas → quantidade ou "Ausência preocupante"
+- Atendimentos fora do escopo → "Nenhum" ou descrição
+- Clientes Curva A atendidos → quantidade ou "—"
+
+## ✅ AÇÃO RECOMENDADA AO GESTOR
+Uma ação clara, específica e urgente que o gestor deve tomar em relação a ${nomeTecnico}. Seja direto — cite o nome, o problema e o que fazer.
+
+---
+
+Regras absolutas:
+- Use SEMPRE o nome ${nomeTecnico} — nunca "o técnico" ou "o atendente".
+- Cite números reais dos dados: chamados, notas, clientes, TMA.
+- Não invente informações. Se não há dados, diga que não há.
+- Use markdown: **negrito** para alertas, tabelas, > citações para avisos importantes.
+- O relatório deve ser longo, detalhado e útil — não faça um resumo curto.`;
 }
 
 // Converte string para Date apenas se for válida
