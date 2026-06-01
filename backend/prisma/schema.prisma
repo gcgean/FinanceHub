@@ -210,6 +210,7 @@ model Company {
   supportAiContext    SupportAIContext?
   routineRecipients   RoutineRecipient[]
   telegramBots        TelegramBot[]
+  supportShareLinks   SupportShareLink[]
 }
 
 model SupportTicket {
@@ -369,6 +370,19 @@ model PublicReport {
   periodTo   DateTime
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+
+  @@index([token])
+  @@index([companyId])
+}
+
+model SupportShareLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String   @default("Acesso compartilhado")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   @@index([token])
   @@index([companyId])

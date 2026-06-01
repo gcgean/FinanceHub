@@ -104,7 +104,7 @@ Regras:
 
 // ── cálculo de métricas ───────────────────────────────────────────────────────
 
-function calcularMetricasDetalhadas(
+export function calcularMetricasDetalhadas(
   tickets: TicketMetrics[],
   dateFrom: string,
   dateTo: string,
@@ -211,7 +211,7 @@ function calcularMetricasDetalhadas(
   };
 }
 
-function formatarRelatorioEstruturado(m: ReturnType<typeof calcularMetricasDetalhadas>, reportType: string, userName: string): string {
+export function formatarRelatorioEstruturado(m: ReturnType<typeof calcularMetricasDetalhadas>, reportType: string, userName: string): string {
   const { de, ate } = m.periodo;
   const fmtDate = (iso: string) => { try { const [y, mo, d] = iso.split("T")[0].split("-"); return `${d}/${mo}/${y}`; } catch { return iso; } };
   const labels: Record<string, string> = { daily: "DIÁRIO", weekly: "SEMANAL", monthly: "MENSAL" };

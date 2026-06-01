@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { apiFetch } from "@/utils/api";
@@ -15,8 +15,9 @@ import {
   Filter, Search, Brain, Settings,
   CalendarDays, CalendarRange, Calendar, Copy, Check, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, MessageSquare, X, Bell,
-  BookOpen, Save, Headphones, Clock, Star,
+  BookOpen, Save, Headphones, Clock, Star, Link2, Trash2, ToggleLeft, ToggleRight, Plus,
 } from "lucide-react";
+import { supportShareApi, type SupportShareLink } from "@/api/support-share";
 import { Textarea } from "@/components/ui/textarea";
 import { DateInputPicker } from "@/components/ui/DateInputPicker";
 import { RoutinePanel } from "@/components/routines/RoutinePanel";
@@ -145,6 +146,41 @@ export default function SupportTicketsReports() {
 
   // ── rotinas ────────────────────────────────────────────────────────────────
   const [routinePanelOpen, setRoutinePanelOpen] = useState(false);
+
+  // ── link público compartilhado ────────────────────────────────────────────
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [copiedToken, setCopiedToken]       = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const { data: shareLinks = [] } = useQuery({
+    queryKey: ["support-share-links"],
+    queryFn:  () => supportShareApi.list(),
+    enabled:  shareModalOpen,
+  });
+
+  const createLinkMut = useMutation({
+    mutationFn: () => supportShareApi.create(),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ["support-share-links"] }),
+  });
+
+  const deleteLinkMut = useMutation({
+    mutationFn: (id: string) => supportShareApi.delete(id),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ["support-share-links"] }),
+  });
+
+  const toggleLinkMut = useMutation({
+    mutationFn: (id: string) => supportShareApi.toggle(id),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ["support-share-links"] }),
+  });
+
+  const copyLink = (token: string) => {
+    const url = `${window.location.origin}/acesso/${token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(null), 2000);
+  };
+
+  const shareUrl = (token: string) => `${window.location.origin}/acesso/${token}`;
 
   // ── IA — chat ─────────────────────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -361,15 +397,109 @@ export default function SupportTicketsReports() {
           <h2 className="text-2xl font-bold text-foreground">Relatório de Atendimentos</h2>
           <p className="text-muted-foreground">Listagem dos atendimentos finalizados importados do sistema Analytics.</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setRoutinePanelOpen(true)}
-          className="gap-2 shrink-0"
-        >
-          <Bell className="w-4 h-4" />
-          Rotinas
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => setShareModalOpen(true)}
+            className="gap-2"
+          >
+            <Link2 className="w-4 h-4" />
+            Compartilhar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setRoutinePanelOpen(true)}
+            className="gap-2"
+          >
+            <Bell className="w-4 h-4" />
+            Rotinas
+          </Button>
+        </div>
       </div>
+
+      {/* Modal de link público */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-xl shadow-xl w-full max-w-lg space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg">Links de Acesso Compartilhado</h3>
+              </div>
+              <button onClick={() => setShareModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Quem tiver o link pode visualizar, filtrar e analisar os atendimentos — sem precisar fazer login.
+            </p>
+
+            {/* Lista de links */}
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {shareLinks.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhum link criado ainda.
+                </p>
+              )}
+              {shareLinks.map((link: SupportShareLink) => (
+                <div key={link.id} className={`rounded-lg border p-3 space-y-2 ${!link.active ? "opacity-50" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium truncate">{link.name}</span>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => toggleLinkMut.mutate(link.id)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                        title={link.active ? "Desativar" : "Ativar"}
+                      >
+                        {link.active ? <ToggleRight className="w-4 h-4 text-green-500" /> : <ToggleLeft className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => copyLink(link.token)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                        title="Copiar link"
+                      >
+                        {copiedToken === link.token ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => deleteLinkMut.mutate(link.id)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                        title="Revogar link"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={shareUrl(link.token)}
+                      className="flex-1 text-xs bg-muted rounded px-2 py-1 font-mono truncate border-0 outline-none"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Criado em {new Date(link.createdAt).toLocaleDateString("pt-BR")}
+                    {" · "}
+                    <span className={link.active ? "text-green-600" : "text-red-500"}>
+                      {link.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              onClick={() => createLinkMut.mutate()}
+              disabled={createLinkMut.isPending}
+              className="w-full gap-2"
+            >
+              {createLinkMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Gerar novo link
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Painel de Rotinas */}
       <RoutinePanel

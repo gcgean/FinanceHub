@@ -47,6 +47,7 @@ import { startPolling } from "./services/telegram.service.js";
 import { routinesRoutes } from "./routes/routines.js";
 import { routineRecipientsRoutes } from "./routes/routine-recipients.js";
 import { publicReportsRoutes } from "./routes/public-reports.js";
+import { supportShareRoutes, publicSupportRoutes } from "./routes/support-share.js";
 import { startRoutineScheduler } from "./services/routine-scheduler.js";
 import { categoriesRoutes } from "./routes/categories.js";
 import { financeHubRoutes } from "./routes/financehub.js";
@@ -158,6 +159,8 @@ export function buildApp() {
   app.register(routinesRoutes, { prefix: "/routines" });
   app.register(routineRecipientsRoutes, { prefix: "/routine-recipients" });
   app.register(publicReportsRoutes, { prefix: "/public-reports" });
+  app.register(supportShareRoutes,  { prefix: "/support-share" });
+  app.register(publicSupportRoutes, { prefix: "/public-support" });
 
   startSyncService();
   startPolling();
