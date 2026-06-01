@@ -87,6 +87,8 @@ export default function SupportTicketsReports() {
   const [usuAtendInput,   setUsuAtendInput]   = useState("");
   const [nomeCliInput,    setNomeCliInput]    = useState("");
   const [procedimentoInput, setProcedimentoInput] = useState("");
+  const [notaMinInput,    setNotaMinInput]    = useState<string>("");
+  const [notaMaxInput,    setNotaMaxInput]    = useState<string>("");
 
   const [hasSearched,    setHasSearched]    = useState(false);
   const [appliedFilters, setAppliedFilters] = useState({
@@ -96,6 +98,8 @@ export default function SupportTicketsReports() {
     usuAtend:   "",
     nomeCli:    "",
     procedimento: "",
+    notaMin:    "",
+    notaMax:    "",
   });
 
   // ── paginação ─────────────────────────────────────────────────────────────
@@ -187,6 +191,8 @@ export default function SupportTicketsReports() {
       if (appliedFilters.usuAtend.trim())    params.append("usuAtend",    appliedFilters.usuAtend.trim());
       if (appliedFilters.nomeCli.trim())     params.append("nomeCli",     appliedFilters.nomeCli.trim());
       if (appliedFilters.procedimento.trim()) params.append("procedimento", appliedFilters.procedimento.trim());
+      if (appliedFilters.notaMin)            params.append("notaMin",     appliedFilters.notaMin);
+      if (appliedFilters.notaMax)            params.append("notaMax",     appliedFilters.notaMax);
       return apiFetch<SupportTicketsResponse>(`/support-tickets?${params.toString()}`);
     },
     enabled: hasSearched,
@@ -209,6 +215,8 @@ export default function SupportTicketsReports() {
       usuAtend:      usuAtendInput,
       nomeCli:       nomeCliInput,
       procedimento:  procedimentoInput,
+      notaMin:       notaMinInput,
+      notaMax:       notaMaxInput,
     });
   };
 
@@ -464,6 +472,35 @@ export default function SupportTicketsReports() {
                 className="w-48"
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Nota</label>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={notaMinInput}
+                  onChange={(e) => setNotaMinInput(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-ring"
+                  title="Nota mínima"
+                >
+                  <option value="">Mín</option>
+                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <option key={n} value={String(n)}>{"★".repeat(n)} {n}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">até</span>
+                <select
+                  value={notaMaxInput}
+                  onChange={(e) => setNotaMaxInput(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-ring"
+                  title="Nota máxima"
+                >
+                  <option value="">Máx</option>
+                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <option key={n} value={String(n)}>{"★".repeat(n)} {n}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <Button onClick={handleSearch} className="mb-0.5">

@@ -278,6 +278,10 @@ ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes
 5. 🟡 PROCEDIMENTOS DOMINANTES
    - Se um tipo de procedimento representa a maioria dos chamados, pode indicar bug recorrente ou necessidade de documentação/treinamento.
 
+6. 💬 OBSERVAÇÕES DOS ATENDIMENTOS
+   - Identifique padrões nas observações: reclamações repetidas, problemas recorrentes.
+   - Não transcreva as observações — resuma os padrões que encontrou.
+
 Regras:
 - Seja específico — cite nomes reais dos dados fornecidos (técnicos e clientes).
 - Frases curtas e objetivas.
@@ -290,33 +294,38 @@ function buildPromptIndividual(nomeTecnico: string): string {
   return `Você é um analista sênior de suporte de uma empresa de software.
 Os dados abaixo são EXCLUSIVAMENTE dos atendimentos do técnico ${nomeTecnico}.
 Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO é um relatório da equipe.
-NÃO mencione que "todos os dados são de um único técnico" como se fosse anomalia — isso é INTENCIONAL.
+NÃO mencione que "todos os dados são de um único técnico" como se fosse um problema ou anomalia — isso é INTENCIONAL porque o relatório é filtrado para ${nomeTecnico}.
 
 Escreva um relatório direto e honesto analisando o desempenho INDIVIDUAL de ${nomeTecnico}.
+Fale como se estivesse conversando com o gestor sobre esse técnico especificamente.
 
-ANALISE OBRIGATORIAMENTE:
+ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes):
 
 1. 📊 VOLUME E PRODUTIVIDADE
-   - Total de chamados e se o volume é alto, normal ou baixo para o período.
-   - TMA — está dentro do esperado ou fora?
+   - Total de chamados atendidos no período e se o volume é considerado alto, normal ou baixo.
+   - TMA (Tempo Médio de Atendimento) — está acima ou abaixo do esperado?
 
 2. ⭐ QUALIDADE DO ATENDIMENTO
-   - Nota média — boa, regular ou preocupante?
-   - Clientes que deram as piores notas para ${nomeTecnico}.
+   - Nota média de ${nomeTecnico} — está boa, regular ou preocupante?
+   - Clientes que deram as piores notas para este técnico.
 
 3. 🟡 CLIENTES RECORRENTES
-   - Quais clientes aparecem mais nos atendimentos de ${nomeTecnico}?
+   - Quais clientes abriram mais chamados com ${nomeTecnico}?
+   - Algum cliente se repete de forma preocupante?
 
 4. 🔧 PROCEDIMENTOS MAIS REALIZADOS
-   - Em quais procedimentos ${nomeTecnico} está concentrado?
+   - Em quais tipos de procedimento ${nomeTecnico} está mais concentrado?
+   - Isso é positivo (especialização) ou negativo (acúmulo indevido)?
 
 5. 💬 PADRÕES NAS OBSERVAÇÕES
-   - Reclamações repetidas, problemas recorrentes. Resuma os padrões — não transcreva.
+   - Identifique reclamações repetidas, problemas recorrentes nos atendimentos.
+   - Não transcreva as observações — resuma os padrões.
 
 Regras:
-- Fale diretamente sobre ${nomeTecnico}, não sobre "o técnico".
-- Cite clientes, notas e números reais dos dados.
-- Não invente informações.
+- Fale sempre sobre ${nomeTecnico} diretamente, não sobre "o técnico" ou "o atendente".
+- Seja específico — cite clientes reais, notas reais, números reais dos dados.
+- Frases curtas e objetivas.
+- Não invente informações que não estejam nos dados.
 - Finalize com 1 ação prática que o gestor deveria tomar em relação a ${nomeTecnico}.`;
 }
 
@@ -488,6 +497,12 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       if (q.usuAtend)     where.usuAtend        = { contains: q.usuAtend,        mode: "insensitive" };
       if (q.nomeCli)      where.nomeCli         = { contains: q.nomeCli,         mode: "insensitive" };
       if (q.procedimento) where.nomesProcedimento = { contains: q.procedimento, mode: "insensitive" };
+      if (q.notaMin || q.notaMax) {
+        where.nota = {
+          ...(q.notaMin ? { gte: Number(q.notaMin) } : {}),
+          ...(q.notaMax ? { lte: Number(q.notaMax) } : {}),
+        };
+      }
 
       const take = Number(q.take ?? 50);
       const skip = Number(q.skip ?? 0);
@@ -687,6 +702,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           })),
           clientes_recorrentes: metricas.titulares.slice(0, 15),
           clientes_pior_nota: metricas.clientes_pior_nota,
+          observacoes_atendimentos: metricas.obs_amostra,
           procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
         }, null, 2);
 
