@@ -1,7 +1,6 @@
 import React from "react";
 import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export const CHART_COLORS = [
   "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6",
@@ -198,16 +197,31 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
       {/* Atendentes por Volume + Fila */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard icon={<BarChart2 className="w-4 h-4 text-indigo-500" />} title="Atendentes por Volume">
-          <ResponsiveContainer width="100%" height={Math.max(atendentesChart.length * 32 + 20, 60)}>
-            <BarChart data={atendentesChart} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
-              <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} tickLine={false} axisLine={false} />
-              <Tooltip formatter={(v) => [`${v} atend.`, "Volume"]} contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                {atendentesChart.map((_: unknown, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="space-y-2">
+            {atendentesChart.map((a: AiMetricas, i: number) => {
+              const totalAtend = atendentesChart.reduce((s: number, x: AiMetricas) => s + x.value, 0);
+              const pct      = totalAtend > 0 ? Math.round((a.value / totalAtend) * 100) : 0;
+              const barWidth = atendentesChart[0]?.value > 0 ? Math.round((a.value / atendentesChart[0].value) * 100) : 0;
+              return (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-foreground font-medium truncate flex-1" title={a.name}>{a.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground">{a.value}</span>
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + "22", color: CHART_COLORS[i % CHART_COLORS.length] }}>
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${barWidth}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </ChartCard>
 
         <ChartCard icon={<ListOrdered className="w-4 h-4 text-purple-500" />} title="Fila por Departamento">
@@ -248,16 +262,36 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
       {/* TMA + Top Procedimentos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard icon={<Clock className="w-4 h-4 text-blue-500" />} title="TMA por Atendente (min)">
-          <ResponsiveContainer width="100%" height={Math.max(tmaChart.length * 32 + 20, 60)}>
-            <BarChart data={tmaChart} layout="vertical" margin={{ left: 4, right: 32, top: 4, bottom: 4 }}>
-              <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} tickLine={false} axisLine={false} />
-              <Tooltip formatter={(v) => [`${v} min`, "TMA"]} contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                {tmaChart.map((_: unknown, i: number) => <Cell key={i} fill={CHART_COLORS[(i + 2) % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="space-y-2">
+            {tmaChart.map((a: AiMetricas, i: number) => {
+              const tmaMedia = m.tma_geral ?? 0;
+              // % relativo à média da equipe (desvio)
+              const desvio  = tmaMedia > 0 ? Math.round(((a.value - tmaMedia) / tmaMedia) * 100) : 0;
+              const barWidth = tmaChart[0]?.value > 0 ? Math.round((a.value / tmaChart[0].value) * 100) : 0;
+              const cor = a.value > tmaMedia * 1.3 ? CHART_COLORS[6]  // vermelho
+                        : a.value < tmaMedia * 0.8 ? CHART_COLORS[4]  // verde
+                        : CHART_COLORS[(i + 2) % CHART_COLORS.length];
+              return (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-foreground font-medium truncate flex-1" title={a.name}>{a.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground">{a.value} min</span>
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: cor + "22", color: cor }}>
+                        {desvio > 0 ? `+${desvio}%` : desvio === 0 ? "=med" : `${desvio}%`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${barWidth}%`, backgroundColor: cor }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">% = desvio em relação à média da equipe ({m.tma_geral} min)</p>
         </ChartCard>
 
         <ChartCard icon={<ListOrdered className="w-4 h-4 text-emerald-500" />} title="Top Procedimentos">

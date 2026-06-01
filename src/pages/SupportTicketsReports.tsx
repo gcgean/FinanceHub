@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Filter, Search, Brain, Settings,
+  Filter, Search, Brain, Settings, BarChart2,
   CalendarDays, CalendarRange, Calendar, Copy, Check, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, MessageSquare, X, Bell,
   BookOpen, Save, Headphones, Clock, Star, Link2, Trash2, ToggleLeft, ToggleRight, Plus,
@@ -239,6 +239,24 @@ export default function SupportTicketsReports() {
   const items      = data?.items ?? [];
   const total      = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // ── métricas automáticas (sem IA) para exibir dashboard ao buscar ─────────
+  const { data: metricsData } = useQuery({
+    queryKey: ["support-metrics", appliedFilters],
+    queryFn: () => apiFetch<{ metricas: AiMetricas }>("/support-tickets/metrics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dateFrom:      `${appliedFilters.dateFrom}T00:00:00`,
+        dateTo:        `${appliedFilters.dateTo}T23:59:59`,
+        departamentos: appliedFilters.departamentos.length > 0 ? appliedFilters.departamentos : undefined,
+        usuAtend:      appliedFilters.usuAtend.trim() || undefined,
+      }),
+    }),
+    enabled: hasSearched,
+    retry: 1,
+  });
+  const searchMetricas = metricsData?.metricas ?? null;
 
   // ── handlers ──────────────────────────────────────────────────────────────
   const handleSearch = () => {
@@ -678,6 +696,21 @@ export default function SupportTicketsReports() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Dashboard de métricas — aparece imediatamente ao buscar */}
+      {searchMetricas && (
+        <Card className="border-muted">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-primary" />
+              Dashboard do Período
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SupportDashboard m={searchMetricas} />
+          </CardContent>
+        </Card>
       )}
 
       {/* Tabela */}

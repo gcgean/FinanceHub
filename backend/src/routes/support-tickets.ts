@@ -544,6 +544,45 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
     }
   );
 
+  // POST /support-tickets/metrics — calcula métricas sem chamar IA (para exibir dashboard imediato)
+  app.post(
+    "/metrics",
+    { preHandler: [requireAuth(app), requireCompanyScope()] },
+    async (request, reply) => {
+      const companyId = await resolveCompanyId(request);
+      const { dateFrom, dateTo, departamentos, usuAtend } = request.body as {
+        dateFrom: string; dateTo: string;
+        departamentos?: string[];
+        usuAtend?: string;
+      };
+      if (!dateFrom || !dateTo) return reply.status(400).send({ error: "dateFrom e dateTo são obrigatórios" });
+
+      const where: Record<string, unknown> = {
+        companyId,
+        dataHoraFinalizacao: { gte: new Date(dateFrom), lte: new Date(dateTo) },
+      };
+      if (departamentos?.length) where.departamento = departamentos.length === 1 ? departamentos[0] : { in: departamentos };
+      if (usuAtend?.trim()) where.usuAtend = { contains: usuAtend.trim(), mode: "insensitive" };
+
+      const tickets = await prisma.supportTicket.findMany({
+        where,
+        select: {
+          dataHoraAtendimento: true, dataHoraFinalizacao: true, tempoAtendimento: true,
+          usuAtend: true, nomeCli: true, nomeClienteAtendimento: true,
+          nota: true, departamento: true, nomesProcedimento: true,
+          pontoRevenda: true, cidRes: true, dataCadastroCliente: true, obsAtendimento: true,
+        },
+      });
+      if (tickets.length === 0) return reply.status(404).send({ error: "Nenhum atendimento no período." });
+
+      const departments = await prisma.department.findMany({ where: { companyId }, select: { erpCode: true, name: true } });
+      const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
+
+      const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+      return reply.send({ metricas });
+    }
+  );
+
   // GET /support-tickets/ai-context — retorna o contexto salvo pelo gestor
   app.get(
     "/ai-context",
