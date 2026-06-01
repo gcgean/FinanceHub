@@ -1,5 +1,5 @@
 import React from "react";
-import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award } from "lucide-react";
+import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
@@ -43,12 +43,44 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
   );
 }
 
+// ── Ranking composto ─────────────────────────────────────────────────────────
+// Critérios (em ordem): 1º nota_media desc · 2º atendimentos desc · 3º tma asc
+function buildRanking(atendentes: AiMetricas[]): AiMetricas[] {
+  return [...atendentes].sort((a, b) => {
+    const notaA = a.nota_media ?? -1;
+    const notaB = b.nota_media ?? -1;
+    if (notaB !== notaA) return notaB - notaA;
+    if (b.atendimentos !== a.atendimentos) return b.atendimentos - a.atendimentos;
+    return (a.tma ?? 0) - (b.tma ?? 0);
+  });
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function notaStars(nota: number | null) {
+  if (nota == null) return <span className="text-xs text-muted-foreground">—</span>;
+  const full  = Math.floor(nota);
+  const color = nota >= 7 ? "text-emerald-500" : nota >= 5 ? "text-yellow-500" : nota >= 3 ? "text-orange-500" : "text-red-500";
+  return (
+    <span className={`text-xs font-bold ${color}`}>
+      {"★".repeat(Math.min(full, 10))} {nota.toFixed(1)}
+    </span>
+  );
+}
+
 export function SupportDashboard({ m }: { m: AiMetricas }) {
-  const atendentesChart = (m.atendentes ?? []).slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.atendimentos }));
+  const atendentes = m.atendentes ?? [];
+  const ranking    = buildRanking(atendentes);
+
+  const atendentesChart = atendentes.slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.atendimentos }));
   const tmaChart = [...(m.atendentes_por_tma ?? [])].sort((a: AiMetricas, b: AiMetricas) => b.tma - a.tma).slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.tma }));
   const procChart = (m.procedimentos ?? []).slice(0, 8).map((p: AiMetricas) => ({ name: p.nome.length > 30 ? p.nome.slice(0, 30) + "…" : p.nome, value: p.count }));
   const filaChart = (m.fila ?? []).map((f: AiMetricas) => ({ name: f.nome, value: f.count }));
   const titulares = m.titulares ?? [];
+  // TMA lookup por nome (atendentes_por_tma pode ter mais detalhes)
+  const tmaByName = new Map<string, number>(
+    (m.atendentes_por_tma ?? []).map((a: AiMetricas) => [a.nome, a.tma])
+  );
 
   return (
     <div className="space-y-4">
@@ -69,6 +101,88 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
           <p className="text-xs text-muted-foreground leading-tight">{m.classificacao}</p>
         </div>
       </div>
+
+      {/* Ranking de Técnicos */}
+      {ranking.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy className="w-4 h-4 text-yellow-500" />
+            <span className="text-sm font-semibold text-foreground">Ranking de Técnicos</span>
+            <span className="text-xs text-muted-foreground ml-1">
+              — 1º melhor nota · 2º maior volume · 3º menor TMA
+            </span>
+          </div>
+
+          {/* Header */}
+          <div className="grid grid-cols-[2rem_1fr_5rem_5rem_5rem] gap-x-3 px-2 mb-2">
+            <span />
+            <span className="text-xs font-semibold text-muted-foreground uppercase">Técnico</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Nota</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Chamados</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">TMA</span>
+          </div>
+
+          <div className="space-y-1">
+            {ranking.map((a: AiMetricas, i: number) => {
+              const tma = tmaByName.get(a.nome) ?? a.tma ?? 0;
+              const isTop = i < 3;
+              const bgClass = i === 0
+                ? "bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800"
+                : i === 1
+                ? "bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700"
+                : i === 2
+                ? "bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800"
+                : "hover:bg-muted/40";
+
+              return (
+                <div
+                  key={a.nome}
+                  className={`grid grid-cols-[2rem_1fr_5rem_5rem_5rem] gap-x-3 items-center px-2 py-2 rounded-lg transition-colors ${bgClass}`}
+                >
+                  {/* Posição */}
+                  <span className={`text-base text-center ${isTop ? "" : "text-xs text-muted-foreground font-bold"}`}>
+                    {isTop ? MEDALS[i] : `${i + 1}º`}
+                  </span>
+
+                  {/* Nome */}
+                  <span className={`text-sm truncate ${isTop ? "font-semibold" : "font-medium"}`}>
+                    {a.nome}
+                  </span>
+
+                  {/* Nota */}
+                  <div className="text-center">
+                    {notaStars(a.nota_media)}
+                  </div>
+
+                  {/* Chamados */}
+                  <div className="text-center">
+                    <span className="text-xs font-semibold text-foreground">{a.atendimentos}</span>
+                  </div>
+
+                  {/* TMA */}
+                  <div className="text-center">
+                    <span className={`text-xs font-semibold ${tma > (m.tma_geral ?? 0) * 1.3 ? "text-red-500" : tma < (m.tma_geral ?? 0) * 0.8 ? "text-emerald-500" : "text-foreground"}`}>
+                      {tma} min
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legenda */}
+          <div className="flex gap-4 mt-3 pt-3 border-t flex-wrap">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              TMA abaixo da média
+            </span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+              TMA acima da média (+30%)
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Atendentes por Volume + Fila */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
