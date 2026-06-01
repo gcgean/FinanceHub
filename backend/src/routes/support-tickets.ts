@@ -285,6 +285,41 @@ Regras:
 - Não invente informações que não estejam nos dados.
 - Finalize sempre com 1 ação prática e urgente que o gestor deveria tomar agora.`;
 
+// Prompt individual — quando o relatório é filtrado por um técnico específico
+function buildPromptIndividual(nomeTecnico: string): string {
+  return `Você é um analista sênior de suporte de uma empresa de software.
+Os dados abaixo são EXCLUSIVAMENTE dos atendimentos do técnico ${nomeTecnico}.
+Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO é um relatório da equipe.
+NÃO mencione que "todos os dados são de um único técnico" como se fosse anomalia — isso é INTENCIONAL.
+
+Escreva um relatório direto e honesto analisando o desempenho INDIVIDUAL de ${nomeTecnico}.
+
+ANALISE OBRIGATORIAMENTE:
+
+1. 📊 VOLUME E PRODUTIVIDADE
+   - Total de chamados e se o volume é alto, normal ou baixo para o período.
+   - TMA — está dentro do esperado ou fora?
+
+2. ⭐ QUALIDADE DO ATENDIMENTO
+   - Nota média — boa, regular ou preocupante?
+   - Clientes que deram as piores notas para ${nomeTecnico}.
+
+3. 🟡 CLIENTES RECORRENTES
+   - Quais clientes aparecem mais nos atendimentos de ${nomeTecnico}?
+
+4. 🔧 PROCEDIMENTOS MAIS REALIZADOS
+   - Em quais procedimentos ${nomeTecnico} está concentrado?
+
+5. 💬 PADRÕES NAS OBSERVAÇÕES
+   - Reclamações repetidas, problemas recorrentes. Resuma os padrões — não transcreva.
+
+Regras:
+- Fale diretamente sobre ${nomeTecnico}, não sobre "o técnico".
+- Cite clientes, notas e números reais dos dados.
+- Não invente informações.
+- Finalize com 1 ação prática que o gestor deveria tomar em relação a ${nomeTecnico}.`;
+}
+
 // Converte string para Date apenas se for válida
 function toDate(val: unknown): Date | null {
   if (!val || typeof val !== "string" || val.trim() === "") return null;
@@ -566,12 +601,24 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       });
       const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
 
-      const [company, aiContextRow] = await Promise.all([
+      const isIndividual = !!(usuAtend && usuAtend.trim());
+      const nomeTecnico  = isIndividual ? usuAtend!.trim().toUpperCase() : "";
+
+      // Busca dados em paralelo: empresa, contexto global e (se individual) destinatário pelo usuAtend
+      const [company, aiContextRow, recipientRow] = await Promise.all([
         prisma.company.findUnique({ where: { id: companyId }, select: { segmento: true } }),
         prisma.supportAIContext.findUnique({ where: { companyId }, select: { context: true } }),
+        isIndividual
+          ? prisma.routineRecipient.findFirst({
+              where: { companyId, usuAtend: { equals: usuAtend!.trim(), mode: "insensitive" } },
+              select: { aiInstructions: true, name: true },
+            })
+          : Promise.resolve(null),
       ]);
       const segmentoEmpresa = company?.segmento ?? null;
-      const gestorContexto   = aiContextRow?.context?.trim() ?? "";
+      const gestorContexto  = aiContextRow?.context?.trim() ?? "";
+      // Instruções IA do destinatário específico (prioridade sobre contexto global)
+      const recipientInstructions = recipientRow?.aiInstructions?.trim() ?? "";
 
       // 3. Nome do usuário autenticado
       const userName = String((request.user as unknown as { name?: string }).name ?? "Gestor")
@@ -643,17 +690,31 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
         }, null, 2);
 
-        // Prompt adicional para relatórios semanais e mensais — avaliação individual por técnico
-        const promptAdicional = (reportType === "weekly" || reportType === "monthly")
+        // Escolhe prompt base: individual (quando filtrado por técnico) ou geral da equipe
+        const promptBase = isIndividual
+          ? buildPromptIndividual(nomeTecnico)
+          : PROMPT_ANALISE;
+
+        // Instrução extra para semanal/mensal GERAIS
+        const promptAdicional = (!isIndividual && (reportType === "weekly" || reportType === "monthly"))
           ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportType === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com:\n- Volume de atendimentos (se acima ou abaixo da média da equipe)\n- TMA (se está dentro do esperado ou fora)\n- Nota média recebida pelos clientes (se tem ou não avaliações)\n- Veredicto: ✅ Bom desempenho / ⚠️ Atenção necessária / 🔴 Desempenho preocupante\n\nSeja direto. Cite o nome do técnico em negrito (**Nome**). Não invente dados.`
           : "";
 
-        const contextoGestor = gestorContexto
-          ? `\n\n---\nCONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):\n${gestorContexto}\n---`
-          : "";
+        // Contexto adicional:
+        // - Individual: usa aiInstructions do destinatário (se configurado), senão cai no contexto global
+        // - Geral: usa contexto global da equipe
+        let contextoIA = "";
+        if (isIndividual && recipientInstructions) {
+          contextoIA = `\n\n---\nINSTRUÇÕES ESPECÍFICAS DO GESTOR PARA ${nomeTecnico}:\n${recipientInstructions}\n---`;
+        } else if (gestorContexto) {
+          const label = isIndividual
+            ? `CONTEXTO DA EQUIPE (use para contextualizar a análise de ${nomeTecnico}):`
+            : "CONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):";
+          contextoIA = `\n\n---\n${label}\n${gestorContexto}\n---`;
+        }
 
         const aiResponse = await provider.generateResponse([
-          { role: "system", content: PROMPT_ANALISE + contextoGestor + promptAdicional },
+          { role: "system", content: promptBase + contextoIA + promptAdicional },
           { role: "user",   content: resumoMetricas },
         ]);
         analiseIA = aiResponse.content ?? "";
