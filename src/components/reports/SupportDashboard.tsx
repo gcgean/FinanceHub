@@ -211,16 +211,37 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         </ChartCard>
 
         <ChartCard icon={<ListOrdered className="w-4 h-4 text-purple-500" />} title="Fila por Departamento">
-          <ResponsiveContainer width="100%" height={Math.max(filaChart.length * 40 + 20, 80)}>
-            <BarChart data={filaChart} layout="vertical" margin={{ left: 4, right: 32, top: 4, bottom: 4 }}>
-              <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} tickLine={false} axisLine={false} />
-              <Tooltip formatter={(v) => [`${v} chamados`, "Volume"]} contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                {filaChart.map((_: unknown, i: number) => <Cell key={i} fill={CHART_COLORS[(i + 4) % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="space-y-2">
+            {filaChart.map((f: AiMetricas, i: number) => {
+              const total = filaChart.reduce((s: number, x: AiMetricas) => s + x.value, 0);
+              const pct   = total > 0 ? Math.round((f.value / total) * 100) : 0;
+              const barWidth = filaChart[0]?.value > 0 ? Math.round((f.value / filaChart[0].value) * 100) : 0;
+              return (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-foreground font-medium truncate flex-1" title={f.name}>
+                      {f.name}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground">{f.value}</span>
+                      <span
+                        className="text-xs font-bold px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: CHART_COLORS[(i + 4) % CHART_COLORS.length] + "22", color: CHART_COLORS[(i + 4) % CHART_COLORS.length] }}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${barWidth}%`, backgroundColor: CHART_COLORS[(i + 4) % CHART_COLORS.length] }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </ChartCard>
       </div>
 
