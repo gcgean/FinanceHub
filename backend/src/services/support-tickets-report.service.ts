@@ -198,11 +198,15 @@ function formatarRelatorioEstruturado(m: ReturnType<typeof calcularMetricasDetal
 
 // ── função principal exportada ────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AiMetricas = Record<string, any>;
+
 export type SupportTicketsReportResult = {
   content: string;
   title: string;
   periodFrom: Date;
   periodTo: Date;
+  metricas?: AiMetricas;
 };
 
 export async function generateSupportTicketsAIReport(
@@ -319,5 +323,5 @@ export async function generateSupportTicketsAIReport(
   const labels: Record<string, string> = { DAILY: "Diário", WEEKLY: "Semanal", MONTHLY: "Mensal" };
   const title = `Relatório ${labels[reportType]} de Atendimentos — ${fmtDate(dateFrom)}`;
 
-  return { content, title, periodFrom: dateFrom, periodTo: dateTo };
+  return { content, title, periodFrom: dateFrom, periodTo: dateTo, metricas };
 }

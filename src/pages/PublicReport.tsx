@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, FileText, AlertCircle, Clock, Calendar } from "lucide-react";
+import { Loader2, FileText, AlertCircle, Clock, Calendar, Brain } from "lucide-react";
 import { publicReportsApi, type PublicReport } from "@/api/public-reports";
+import { SupportDashboard } from "@/components/reports/SupportDashboard";
 
 const TYPE_LABELS: Record<string, string> = {
   DAILY: "Diário",
@@ -141,8 +142,25 @@ export default function PublicReportPage() {
           </p>
         </div>
 
-        {/* Relatório */}
+        {/* Dashboard de métricas */}
+        {report.metricas && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Brain className="w-4 h-4 text-primary" />
+              Dashboard de Métricas
+            </div>
+            <SupportDashboard m={report.metricas} />
+          </div>
+        )}
+
+        {/* Análise textual */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border shadow-sm p-6 sm:p-8">
+          {report.metricas && (
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b">
+              <Brain className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Análise da Inteligência Artificial</span>
+            </div>
+          )}
           <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground break-words">
             {report.content}
           </pre>

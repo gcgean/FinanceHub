@@ -267,6 +267,7 @@ export async function routinesRoutes(app: FastifyInstance) {
             title: reportResult.title, content: reportResult.content,
             periodFrom: reportResult.periodFrom, periodTo: reportResult.periodTo,
             expiresAt,
+            ...(reportResult.metricas ? { metricas: reportResult.metricas } : {}),
           },
         });
         const frontendUrl = (env.FRONTEND_ORIGIN ?? "http://localhost:5173").replace(/\/$/, "");

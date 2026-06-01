@@ -11,6 +11,8 @@ export type PublicReport = {
   periodTo: string;
   expiresAt: string;
   createdAt: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metricas?: Record<string, any> | null;
 };
 
 export const publicReportsApi = {

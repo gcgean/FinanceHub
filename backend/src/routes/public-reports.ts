@@ -11,7 +11,7 @@ export async function publicReportsRoutes(app: FastifyInstance) {
       select: {
         id: true, token: true, title: true, content: true,
         context: true, type: true, periodFrom: true, periodTo: true,
-        expiresAt: true, createdAt: true,
+        expiresAt: true, createdAt: true, metricas: true,
       },
     });
 

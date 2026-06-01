@@ -364,6 +364,7 @@ model PublicReport {
   type       String   // "DAILY" | "WEEKLY" | "MONTHLY"
   title      String
   content    String
+  metricas   Json?
   periodFrom DateTime
   periodTo   DateTime
   expiresAt  DateTime

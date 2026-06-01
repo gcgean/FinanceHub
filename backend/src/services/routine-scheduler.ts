@@ -129,14 +129,16 @@ async function createPublicReport(
   title: string,
   content: string,
   periodFrom: Date,
-  periodTo: Date
+  periodTo: Date,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metricas?: Record<string, any>
 ): Promise<string> {
   const token = nanoid(12); // token URL-safe de 12 chars
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // expira em 7 dias
 
   await prisma.publicReport.create({
-    data: { token, companyId, context, type, title, content, periodFrom, periodTo, expiresAt },
+    data: { token, companyId, context, type, title, content, periodFrom, periodTo, expiresAt, ...(metricas ? { metricas } : {}) },
   });
 
   return `${getFrontendUrl()}/r/${token}`;
@@ -230,7 +232,8 @@ async function processRoutines() {
       const publicUrl = await createPublicReport(
         routine.companyId, routine.context, routine.type,
         reportResult.title, reportResult.content,
-        reportResult.periodFrom, reportResult.periodTo
+        reportResult.periodFrom, reportResult.periodTo,
+        reportResult.metricas
       );
 
       const contextLabel = contextLabels[routine.context] ?? routine.context;
