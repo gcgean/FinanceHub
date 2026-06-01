@@ -44,15 +44,20 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
 }
 
 // ── Ranking composto ─────────────────────────────────────────────────────────
+// Mínimo de 200 chamados para participar
 // Critérios (em ordem): 1º nota_media desc · 2º atendimentos desc · 3º tma asc
+const RANKING_MIN_CALLS = 200;
+
 function buildRanking(atendentes: AiMetricas[]): AiMetricas[] {
-  return [...atendentes].sort((a, b) => {
-    const notaA = a.nota_media ?? -1;
-    const notaB = b.nota_media ?? -1;
-    if (notaB !== notaA) return notaB - notaA;
-    if (b.atendimentos !== a.atendimentos) return b.atendimentos - a.atendimentos;
-    return (a.tma ?? 0) - (b.tma ?? 0);
-  });
+  return [...atendentes]
+    .filter((a) => (a.atendimentos ?? 0) >= RANKING_MIN_CALLS)
+    .sort((a, b) => {
+      const notaA = a.nota_media ?? -1;
+      const notaB = b.nota_media ?? -1;
+      if (notaB !== notaA) return notaB - notaA;
+      if (b.atendimentos !== a.atendimentos) return b.atendimentos - a.atendimentos;
+      return (a.tma ?? 0) - (b.tma ?? 0);
+    });
 }
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -103,13 +108,13 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
       </div>
 
       {/* Ranking de Técnicos */}
-      {ranking.length > 0 && (
+      {(ranking.length > 0 || atendentes.length > 0) && (
         <div className="rounded-xl border bg-card p-4">
           <div className="flex items-center gap-2 mb-4">
             <Trophy className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-semibold text-foreground">Ranking de Técnicos</span>
             <span className="text-xs text-muted-foreground ml-1">
-              — 1º melhor nota · 2º maior volume · 3º menor TMA
+              — mín. {RANKING_MIN_CALLS} chamados · 1º melhor nota · 2º maior volume · 3º menor TMA
             </span>
           </div>
 
@@ -121,6 +126,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
             <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Chamados</span>
             <span className="text-xs font-semibold text-muted-foreground uppercase text-center">TMA</span>
           </div>
+
+          {ranking.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhum técnico atingiu o mínimo de <strong>{RANKING_MIN_CALLS} chamados</strong> no período para entrar no ranking.
+            </p>
+          )}
 
           <div className="space-y-1">
             {ranking.map((a: AiMetricas, i: number) => {
