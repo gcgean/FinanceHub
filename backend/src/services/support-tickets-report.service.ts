@@ -224,6 +224,19 @@ export function calcularMetricasDetalhadas(
     .slice(0, 20)
     .map(t => ({ cliente: t.nomeCli?.trim() ?? "—", tecnico: t.usuAtend?.trim() ?? "—", nota: t.nota, obs: t.obsAtendimento!.trim().slice(0, 300) }));
 
+  // Distribuição de notas: contagem por valor (1–10) + sem avaliação
+  const notaDistMap = new Map<number, number>();
+  let semNota = 0;
+  tickets.forEach(t => {
+    if (t.nota == null) { semNota++; return; }
+    const v = Math.round(t.nota);
+    notaDistMap.set(v, (notaDistMap.get(v) ?? 0) + 1);
+  });
+  const distribuicao_notas = [
+    ...Array.from({ length: 10 }, (_, i) => ({ nota: i + 1, count: notaDistMap.get(i + 1) ?? 0 })),
+    { nota: 0, count: semNota }, // 0 = sem avaliação
+  ];
+
   return {
     periodo: { de: dateFrom, ate: dateTo },
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
@@ -231,6 +244,7 @@ export function calcularMetricasDetalhadas(
     fila, procedimentos, titulares, operadores, atendentes,
     atendentes_por_tma: atendentesPorTMA, clientes_pior_nota: clientesPiorNota,
     obs_amostra: obsAmostra, clientes_novos: [...clientesNovos].slice(0, 10),
+    distribuicao_notas,
   };
 }
 

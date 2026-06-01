@@ -373,6 +373,77 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
           </div>
         </ChartCard>
       </div>
+
+      {/* Distribuição por Nota */}
+      {(m.distribuicao_notas ?? []).some((n: AiMetricas) => n.count > 0) && (
+        <ChartCard icon={<Star className="w-4 h-4 text-yellow-500" />} title="Distribuição por Nota">
+          <div className="space-y-2">
+            {/* Notas 1–10 (só exibe as que têm atendimentos) */}
+            {(m.distribuicao_notas ?? [])
+              .filter((n: AiMetricas) => n.nota > 0 && n.count > 0)
+              .sort((a: AiMetricas, b: AiMetricas) => b.nota - a.nota)
+              .map((n: AiMetricas) => {
+                const totalComNota = (m.distribuicao_notas ?? []).filter((x: AiMetricas) => x.nota > 0).reduce((s: number, x: AiMetricas) => s + x.count, 0);
+                const pct      = totalComNota > 0 ? Math.round((n.count / m.total_atendimentos) * 100) : 0;
+                const maxCount = Math.max(...(m.distribuicao_notas ?? []).map((x: AiMetricas) => x.count));
+                const barWidth = maxCount > 0 ? Math.round((n.count / maxCount) * 100) : 0;
+                const cor = n.nota >= 8 ? "#10b981"   // verde
+                          : n.nota >= 6 ? "#f59e0b"   // amarelo
+                          : n.nota >= 4 ? "#f97316"   // laranja
+                          : "#ef4444";                 // vermelho
+                return (
+                  <div key={n.nota} className="space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium shrink-0 w-24 flex items-center gap-1">
+                        {"★".repeat(Math.min(n.nota, 5))}
+                        <span className="text-muted-foreground ml-1">Nota {n.nota}</span>
+                      </span>
+                      <div className="flex-1 mx-2">
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${barWidth}%`, backgroundColor: cor }} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-muted-foreground w-8 text-right">{n.count}</span>
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded w-12 text-center"
+                          style={{ backgroundColor: cor + "22", color: cor }}>
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {/* Sem avaliação */}
+            {(m.distribuicao_notas ?? []).find((n: AiMetricas) => n.nota === 0)?.count > 0 && (() => {
+              const semNota = (m.distribuicao_notas ?? []).find((n: AiMetricas) => n.nota === 0);
+              const pct     = m.total_atendimentos > 0 ? Math.round((semNota.count / m.total_atendimentos) * 100) : 0;
+              const maxCount = Math.max(...(m.distribuicao_notas ?? []).map((x: AiMetricas) => x.count));
+              const barWidth = maxCount > 0 ? Math.round((semNota.count / maxCount) * 100) : 0;
+              return (
+                <div className="space-y-0.5 pt-1 border-t mt-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground shrink-0 w-24">Sem avaliação</span>
+                    <div className="flex-1 mx-2">
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-muted-foreground/40 transition-all" style={{ width: `${barWidth}%` }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground w-8 text-right">{semNota.count}</span>
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded w-12 text-center bg-muted text-muted-foreground">
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">% calculado sobre o total de atendimentos do período ({m.total_atendimentos})</p>
+        </ChartCard>
+      )}
     </div>
   );
 }
