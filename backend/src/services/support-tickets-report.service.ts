@@ -25,9 +25,10 @@ type TicketMetrics = {
   obsAtendimento: string | null;
 };
 
-// ── prompt IA ─────────────────────────────────────────────────────────────────
+// ── prompts IA ────────────────────────────────────────────────────────────────
 
-const PROMPT_ANALISE = `Você é um analista sênior de suporte de uma empresa de software.
+// Prompt para relatório GERAL da equipe
+const PROMPT_ANALISE_EQUIPE = `Você é um analista sênior de suporte de uma empresa de software.
 Analise os dados abaixo e escreva um relatório direto e honesto para o gestor da equipe.
 Fale como se estivesse conversando pessoalmente com o gestor — sem rodeios, sem elogios desnecessários.
 
@@ -60,6 +61,46 @@ Regras:
 - Não repita os números do relatório estruturado — foque em interpretação e alertas.
 - Não invente informações que não estejam nos dados.
 - Finalize sempre com 1 ação prática e urgente que o gestor deveria tomar agora.`;
+
+// Prompt para relatório INDIVIDUAL de um técnico específico
+function buildPromptIndividual(nomeTecnico: string): string {
+  return `Você é um analista sênior de suporte de uma empresa de software.
+Os dados abaixo são EXCLUSIVAMENTE dos atendimentos do técnico ${nomeTecnico}.
+Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO é um relatório da equipe.
+NÃO mencione que "todos os dados são de um único técnico" como se fosse um problema ou anomalia — isso é INTENCIONAL porque o relatório é filtrado para ${nomeTecnico}.
+
+Escreva um relatório direto e honesto analisando o desempenho INDIVIDUAL de ${nomeTecnico}.
+Fale como se estivesse conversando com o gestor sobre esse técnico especificamente.
+
+ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes):
+
+1. 📊 VOLUME E PRODUTIVIDADE
+   - Total de chamados atendidos no período e se o volume é considerado alto, normal ou baixo.
+   - TMA (Tempo Médio de Atendimento) — está acima ou abaixo do esperado?
+
+2. ⭐ QUALIDADE DO ATENDIMENTO
+   - Nota média de ${nomeTecnico} — está boa, regular ou preocupante?
+   - Clientes que deram as piores notas para este técnico.
+
+3. 🟡 CLIENTES RECORRENTES
+   - Quais clientes abriram mais chamados com ${nomeTecnico}?
+   - Algum cliente se repete de forma preocupante?
+
+4. 🔧 PROCEDIMENTOS MAIS REALIZADOS
+   - Em quais tipos de procedimento ${nomeTecnico} está mais concentrado?
+   - Isso é positivo (especialização) ou negativo (acúmulo indevido)?
+
+5. 💬 PADRÕES NAS OBSERVAÇÕES
+   - Identifique reclamações repetidas, problemas recorrentes nos atendimentos.
+   - Não transcreva as observações — resuma os padrões.
+
+Regras:
+- Fale sempre sobre ${nomeTecnico} diretamente, não sobre "o técnico" ou "o atendente".
+- Seja específico — cite clientes reais, notas reais, números reais dos dados.
+- Frases curtas e objetivas.
+- Não invente informações que não estejam nos dados.
+- Finalize com 1 ação prática que o gestor deveria tomar em relação a ${nomeTecnico}.`;
+}
 
 // ── cálculo de métricas ───────────────────────────────────────────────────────
 
@@ -290,13 +331,21 @@ export async function generateSupportTicketsAIReport(
       procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
     }, null, 2);
 
-    const promptAdicional = (reportTypeLower === "weekly" || reportTypeLower === "monthly")
+    // Escolhe o prompt base dependendo se é relatório individual (usuAtend) ou geral
+    const isIndividual = !!(usuAtend && usuAtend.trim());
+    const nomeTecnico = isIndividual ? usuAtend!.trim().toUpperCase() : "";
+    const promptBase = isIndividual
+      ? buildPromptIndividual(nomeTecnico)
+      : PROMPT_ANALISE_EQUIPE;
+
+    // Instrução extra para relatórios semanais/mensais GERAIS (avaliação individual de cada técnico)
+    const promptAdicional = (!isIndividual && (reportTypeLower === "weekly" || reportTypeLower === "monthly"))
       ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportTypeLower === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com volume, TMA, nota e veredicto: ✅ Bom / ⚠️ Atenção / 🔴 Preocupante`
       : "";
 
-    // Contexto para a IA:
-    // 1. Se há instruções específicas do destinatário, usa elas (relatório individual de rotina)
-    // 2. Se não, busca o contexto global da equipe cadastrado no sistema
+    // Contexto adicional:
+    // 1. Se há instruções específicas do destinatário (rotina), usa elas
+    // 2. Se não, busca o contexto global da equipe
     let contextoIA = "";
     if (aiInstructions && aiInstructions.trim()) {
       contextoIA = `\n\n---\nINSTRUÇÕES DO GESTOR SOBRE ESTE TÉCNICO/DESTINATÁRIO:\n${aiInstructions.trim()}\n---`;
@@ -304,12 +353,15 @@ export async function generateSupportTicketsAIReport(
       const aiContextRecord = await prisma.supportAIContext.findUnique({ where: { companyId } });
       const gestorContexto = aiContextRecord?.context?.trim() ?? "";
       if (gestorContexto) {
-        contextoIA = `\n\n---\nCONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):\n${gestorContexto}\n---`;
+        const label = isIndividual
+          ? `CONTEXTO DO TÉCNICO ${nomeTecnico} (fornecido pelo gestor):`
+          : "CONTEXTO DA EQUIPE (fornecido pelo gestor — use para personalizar a análise):";
+        contextoIA = `\n\n---\n${label}\n${gestorContexto}\n---`;
       }
     }
 
     const aiResponse = await provider.generateResponse([
-      { role: "system", content: PROMPT_ANALISE + contextoIA + promptAdicional },
+      { role: "system", content: promptBase + contextoIA + promptAdicional },
       { role: "user", content: resumoMetricas },
     ]);
     analiseIA = aiResponse.content ?? "";
