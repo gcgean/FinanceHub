@@ -215,11 +215,20 @@ export async function routinesRoutes(app: FastifyInstance) {
       const baseDate = routine.previousDay
         ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
         : now;
-      const dateTo   = new Date(baseDate); dateTo.setHours(23, 59, 59, 999);
+      let dateTo: Date;
       const dateFrom = new Date(baseDate);
-      if (type === "DAILY")        { dateFrom.setHours(0, 0, 0, 0); }
-      else if (type === "WEEKLY")  { dateFrom.setDate(baseDate.getDate() - 6); dateFrom.setHours(0, 0, 0, 0); }
-      else                         { dateFrom.setDate(1); dateFrom.setHours(0, 0, 0, 0); }
+      if (type === "DAILY") {
+        dateFrom.setHours(0, 0, 0, 0);
+        dateTo = new Date(baseDate); dateTo.setHours(23, 59, 59, 999);
+      } else if (type === "WEEKLY") {
+        dateFrom.setDate(baseDate.getDate() - 6); dateFrom.setHours(0, 0, 0, 0);
+        dateTo = new Date(baseDate); dateTo.setHours(23, 59, 59, 999);
+      } else {
+        // Mensal: mês completo do dia de referência
+        dateFrom.setDate(1); dateFrom.setHours(0, 0, 0, 0);
+        dateTo = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
+        dateTo.setHours(23, 59, 59, 999);
+      }
 
       // Filtros por papel do destinatário
       // Prioridade: departamentos da rotina > departamentos do destinatário > todos

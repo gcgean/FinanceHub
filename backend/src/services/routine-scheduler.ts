@@ -72,18 +72,26 @@ function getPeriod(type: "DAILY" | "WEEKLY" | "MONTHLY", now: Date, previousDay 
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     : now;
 
-  const dateTo = new Date(baseDate);
-  dateTo.setHours(23, 59, 59, 999);
-
   const dateFrom = new Date(baseDate);
+  let dateTo: Date;
+
   if (type === "DAILY") {
+    // Diário: apenas o dia de referência
     dateFrom.setHours(0, 0, 0, 0);
+    dateTo = new Date(baseDate);
+    dateTo.setHours(23, 59, 59, 999);
   } else if (type === "WEEKLY") {
+    // Semanal: últimos 7 dias até o dia de referência
     dateFrom.setDate(baseDate.getDate() - 6);
     dateFrom.setHours(0, 0, 0, 0);
+    dateTo = new Date(baseDate);
+    dateTo.setHours(23, 59, 59, 999);
   } else {
+    // Mensal: mês completo do dia de referência (1º ao último dia)
     dateFrom.setDate(1);
     dateFrom.setHours(0, 0, 0, 0);
+    dateTo = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
+    dateTo.setHours(23, 59, 59, 999);
   }
   return { dateFrom, dateTo };
 }

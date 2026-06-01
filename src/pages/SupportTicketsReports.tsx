@@ -394,21 +394,26 @@ export default function SupportTicketsReports() {
     );
   };
 
-  // ── IA — calcula período por tipo ────────────────────────────────────────
+  // ── IA — calcula período por tipo baseado nas datas do filtro ───────────
   const resolveReportDates = (type: "daily" | "weekly" | "monthly") => {
     const fmt = (d: Date) => format(d, "yyyy-MM-dd");
-    const todayDate = new Date();
+    // Base: usa a data final do filtro como referência
+    const toDate = new Date(`${dateToInput}T12:00:00`);
+
     if (type === "daily") {
+      // Diário: exatamente o intervalo selecionado no filtro
       return { from: dateFromInput, to: dateToInput };
     }
     if (type === "weekly") {
-      const from = new Date(todayDate);
-      from.setDate(from.getDate() - 6); // últimos 7 dias (hoje incluso)
-      return { from: fmt(from), to: fmt(todayDate) };
+      // Semanal: 7 dias anteriores à data final do filtro
+      const from = new Date(toDate);
+      from.setDate(from.getDate() - 6);
+      return { from: fmt(from), to: dateToInput };
     }
-    // monthly: do dia 1 do mês corrente até hoje
-    const from = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
-    return { from: fmt(from), to: fmt(todayDate) };
+    // Mensal: mês completo da data final do filtro (dia 1 até último dia)
+    const firstDay = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+    const lastDay  = new Date(toDate.getFullYear(), toDate.getMonth() + 1, 0);
+    return { from: fmt(firstDay), to: fmt(lastDay) };
   };
 
   // ── IA — relatório ────────────────────────────────────────────────────────
