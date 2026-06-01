@@ -51,10 +51,6 @@ ANALISE OBRIGATORIAMENTE os seguintes pontos (apenas se houver dados suficientes
 5. 🟡 PROCEDIMENTOS DOMINANTES
    - Se um tipo de procedimento representa a maioria dos chamados.
 
-6. 💬 OBSERVAÇÕES DOS ATENDIMENTOS
-   - Identifique padrões nas observações: reclamações repetidas, problemas recorrentes.
-   - Não transcreva as observações — resuma os padrões que encontrou.
-
 Regras:
 - Seja específico — cite nomes reais dos dados fornecidos.
 - Frases curtas e objetivas.
@@ -100,10 +96,6 @@ Gere um relatório COMPLETO e DETALHADO no seguinte formato EXATO (use markdown 
 - Se houver procedimento fora do escopo (ex: pré-venda para N2 de suporte), alerte o gestor.
 - Especialização positiva ou acúmulo indevido?
 
-## 💬 5. PADRÕES NAS OBSERVAÇÕES
-- Se houver observações, identifique padrões: reclamações repetidas, problemas recorrentes. Resuma — não transcreva.
-- Se NÃO houver observações registradas, mencione explicitamente e avalie se isso é normal ou indica falta de registro.
-
 ## 🔍 ANÁLISE COMPLEMENTAR
 Inclua obrigatoriamente estas subseções se os dados permitirem:
 - **Chamados encerrados por falta de interação:** há indícios de encerramento indevido para melhorar métricas?
@@ -117,7 +109,6 @@ Inclua obrigatoriamente estas linhas:
 - TMA → 🟢 / 🟡 / 🔴
 - Nota média → 🟢 / 🟡 / 🔴
 - Notas críticas (< 5) → quantidade ou "Nenhuma"
-- Observações registradas → quantidade ou "Ausência preocupante"
 - Atendimentos fora do escopo → "Nenhum" ou descrição
 - Clientes Curva A atendidos → quantidade ou "—"
 
@@ -359,7 +350,6 @@ export async function generateSupportTicketsAIReport(
       todos_tecnicos: metricas.atendentes.map(a => ({ nome: a.nome, atendimentos: a.atendimentos, tma_minutos: a.tma, nota_media: a.nota_media })),
       clientes_recorrentes: metricas.titulares.slice(0, 15),
       clientes_pior_nota: metricas.clientes_pior_nota,
-      observacoes_atendimentos: metricas.obs_amostra,
       procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
     }, null, 2);
 
