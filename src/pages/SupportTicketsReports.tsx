@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Filter, Search, Brain,
+  Filter, Search, Brain, Settings,
   CalendarDays, CalendarRange, Calendar, Copy, Check, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, MessageSquare, X, Bell,
   BookOpen, Save, Headphones, Clock, Star,
