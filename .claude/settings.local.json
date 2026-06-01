@@ -65,7 +65,9 @@
       "Bash(npm pack:*)",
       "Bash(tar -tzf qrcode-1.5.3.tgz)",
       "Bash(npm install:*)",
-      "Bash(npx esbuild:*)"
+      "Bash(npx esbuild:*)",
+      "PowerShell(Get-ChildItem \"C:\\\\Projetos\\\\dev\\\\NoSigilo\\\\src\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName)",
+      "Bash(node -e ' *)"
     ]
   }
 }
