@@ -91,7 +91,8 @@
       "Bash(curl -s \"https://nosigilo.baselider.com.br/assets/index-CxcvfVi4.js\" -o /tmp/prod-bundle.js)",
       "Read(//tmp/**)",
       "Bash(echo \"exit: $?\")",
-      "Bash(echo \"exit\\(grep\\): $?  — vazio acima = sem erros nos meus arquivos\")"
+      "Bash(echo \"exit\\(grep\\): $?  — vazio acima = sem erros nos meus arquivos\")",
+      "Bash(echo \"exit\\(grep\\): $? — vazio = sem erros nos meus arquivos\")"
     ]
   }
 }
