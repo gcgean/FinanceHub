@@ -391,9 +391,9 @@ export async function generateSupportTicketsAIReport(
     // Escolhe o prompt base dependendo se é relatório individual (usuAtend) ou geral
     const isIndividual = !!(usuAtend && usuAtend.trim());
     const nomeTecnico = isIndividual ? usuAtend!.trim().toUpperCase() : "";
-    // Título com o período por extenso. No individual já vai no cabeçalho do prompt;
-    // no geral, instruímos a IA a abrir o relatório com o título do período.
-    const tituloInstrucao = `\n\n---\nTÍTULO OBRIGATÓRIO:\nComece o relatório com um título markdown na PRIMEIRA linha, exatamente neste formato:\n# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\nLogo abaixo escreva em itálico: *Período analisado: ${periodoExtenso}*\nNUNCA invente nem altere as datas: use exatamente "${periodoExtenso}".`;
+    // No relatório geral o cabeçalho com o período é inserido pelo CÓDIGO (determinístico),
+    // então pedimos à IA para NÃO criar seu próprio título nem linha de período.
+    const tituloInstrucao = `\n\n---\nIMPORTANTE: NÃO escreva um título principal (ex.: "RELATÓRIO SEMANAL...") nem uma linha de "Período" no início — eles já são inseridos automaticamente acima da sua resposta. Comece direto pela primeira seção da análise.`;
 
     const promptBase = isIndividual
       ? buildPromptIndividual(nomeTecnico, tipoLabelPt, periodoExtenso)
@@ -428,6 +428,14 @@ export async function generateSupportTicketsAIReport(
     analiseIA = aiResponse.content ?? "";
   } catch {
     analiseIA = "(Análise IA indisponível no momento)";
+  }
+
+  // Cabeçalho determinístico com o período por extenso no relatório GERAL.
+  // (No individual o período já vai no cabeçalho gerado pela IA.)
+  const isIndividualReport = !!(usuAtend && usuAtend.trim());
+  if (!isIndividualReport && analiseIA && !analiseIA.startsWith("(")) {
+    const cabecalhoPeriodo = `# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\n*Período analisado: ${periodoExtenso}*`;
+    analiseIA = `${cabecalhoPeriodo}\n\n---\n\n${analiseIA}`;
   }
 
   const content = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
