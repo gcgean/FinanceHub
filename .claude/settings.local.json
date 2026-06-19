@@ -89,7 +89,8 @@
       "Bash(grep -n \"webhook\\\\|callback\\\\|billing\\\\|payment\\\\|hubBilling\\\\|resolveAccess\\\\|checkout\" /srv/sites/nosigilo/deploy/../../../Projetos/dev/NoSigilo/backend/src/app.ts 2>/dev/null | head -60)",
       "Bash(git status *)",
       "Bash(curl -s \"https://nosigilo.baselider.com.br/assets/index-CxcvfVi4.js\" -o /tmp/prod-bundle.js)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

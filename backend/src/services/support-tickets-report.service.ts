@@ -25,6 +25,23 @@ type TicketMetrics = {
   obsAtendimento: string | null;
 };
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const MESES_PT = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+/** Descreve o período por extenso em pt-BR (ex.: "12 a 18 de junho de 2026"). */
+export function formatPeriodoExtenso(de: Date, ate: Date): string {
+  const d1 = de.getDate(), m1 = de.getMonth(), y1 = de.getFullYear();
+  const d2 = ate.getDate(), m2 = ate.getMonth(), y2 = ate.getFullYear();
+  if (d1 === d2 && m1 === m2 && y1 === y2) return `${d1} de ${MESES_PT[m1]} de ${y1}`;
+  if (y1 !== y2) return `${d1} de ${MESES_PT[m1]} de ${y1} a ${d2} de ${MESES_PT[m2]} de ${y2}`;
+  if (m1 !== m2) return `${d1} de ${MESES_PT[m1]} a ${d2} de ${MESES_PT[m2]} de ${y2}`;
+  return `${d1} a ${d2} de ${MESES_PT[m1]} de ${y1}`;
+}
+
 // ── prompts IA ────────────────────────────────────────────────────────────────
 
 // Prompt para relatório GERAL da equipe
@@ -59,7 +76,7 @@ Regras:
 - Finalize sempre com 1 ação prática e urgente que o gestor deveria tomar agora.`;
 
 // Prompt para relatório INDIVIDUAL de um técnico específico
-function buildPromptIndividual(nomeTecnico: string): string {
+function buildPromptIndividual(nomeTecnico: string, tipoLabel: string, periodoExtenso: string): string {
   return `Você é um analista sênior de suporte de uma empresa de software.
 Os dados abaixo são EXCLUSIVAMENTE dos atendimentos de ${nomeTecnico}.
 Este é um relatório de DESEMPENHO INDIVIDUAL — NÃO comente que os dados são de um único técnico como anomalia, isso é intencional.
@@ -69,7 +86,8 @@ Gere um relatório COMPLETO e DETALHADO no seguinte formato EXATO (use markdown 
 ---
 
 # 📋 Relatório de Desempenho Individual — ${nomeTecnico}
-**Período:** [Diário/Semanal/Mensal conforme tipo_relatorio] | **Cargo:** [extraia do contexto se disponível] | **Especialidade:** [extraia do contexto se disponível]
+**Período:** ${tipoLabel} — ${periodoExtenso} | **Cargo:** [extraia do contexto se disponível] | **Especialidade:** [extraia do contexto se disponível]
+> Use EXATAMENTE o período informado acima ("${periodoExtenso}") — nunca invente ou altere as datas.
 
 ---
 
@@ -339,6 +357,8 @@ export async function generateSupportTicketsAIReport(
   const segmentoEmpresa = company?.segmento ?? null;
 
   const userName = recipientName.split(" ")[0].toUpperCase();
+  const periodoExtenso = formatPeriodoExtenso(dateFrom, dateTo);
+  const tipoLabelPt = reportTypeLower === "weekly" ? "SEMANAL" : reportTypeLower === "monthly" ? "MENSAL" : "DIÁRIO";
 
   // 3. Métricas
   const metricas = calcularMetricasDetalhadas(tickets, dateFromStr, dateToStr, deptNameMap, dateFrom);
@@ -359,6 +379,7 @@ export async function generateSupportTicketsAIReport(
 
     const resumoMetricas = JSON.stringify({
       tipo_relatorio: reportTypeLower,
+      periodo_analisado: periodoExtenso,
       resumo_geral: { total_chamados: metricas.total_atendimentos, tma_equipe_minutos: metricas.tma_geral, ids: metricas.ids, classificacao: metricas.classificacao, atendentes_ativos: metricas.atendentes_ativos, media_chamados_por_tecnico: mediaAtendPorTecnico, nota_media_geral: metricas.nota_media, segmento_empresa: segmentoEmpresa, clientes_novos_ultimos_90_dias: metricas.clientes_novos },
       alertas_tecnicos: { possivelmente_escorando_menos_50pct_media: tecnicosAbaixoMedia, sobrecarregados_acima_150pct_media: tecnicosSobrecarregados, nota_baixa_abaixo_3: tecnicosNotaBaixa, tma_alto_acima_150pct_media: tecnicosTMAAlto },
       todos_tecnicos: metricas.atendentes.map(a => ({ nome: a.nome, atendimentos: a.atendimentos, tma_minutos: a.tma, nota_media: a.nota_media })),
@@ -370,9 +391,13 @@ export async function generateSupportTicketsAIReport(
     // Escolhe o prompt base dependendo se é relatório individual (usuAtend) ou geral
     const isIndividual = !!(usuAtend && usuAtend.trim());
     const nomeTecnico = isIndividual ? usuAtend!.trim().toUpperCase() : "";
+    // Título com o período por extenso. No individual já vai no cabeçalho do prompt;
+    // no geral, instruímos a IA a abrir o relatório com o título do período.
+    const tituloInstrucao = `\n\n---\nTÍTULO OBRIGATÓRIO:\nComece o relatório com um título markdown na PRIMEIRA linha, exatamente neste formato:\n# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\nLogo abaixo escreva em itálico: *Período analisado: ${periodoExtenso}*\nNUNCA invente nem altere as datas: use exatamente "${periodoExtenso}".`;
+
     const promptBase = isIndividual
-      ? buildPromptIndividual(nomeTecnico)
-      : PROMPT_ANALISE_EQUIPE;
+      ? buildPromptIndividual(nomeTecnico, tipoLabelPt, periodoExtenso)
+      : PROMPT_ANALISE_EQUIPE + tituloInstrucao;
 
     // Instrução extra para relatórios semanais/mensais GERAIS (avaliação individual de cada técnico)
     const promptAdicional = (!isIndividual && (reportTypeLower === "weekly" || reportTypeLower === "monthly"))
@@ -407,9 +432,8 @@ export async function generateSupportTicketsAIReport(
 
   const content = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
 
-  const fmtDate = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   const labels: Record<string, string> = { DAILY: "Diário", WEEKLY: "Semanal", MONTHLY: "Mensal" };
-  const title = `Relatório ${labels[reportType]} de Atendimentos — ${fmtDate(dateFrom)}`;
+  const title = `Relatório ${labels[reportType]} de Atendimentos — ${periodoExtenso}`;
 
   return { content, title, periodFrom: dateFrom, periodTo: dateTo, metricas };
 }

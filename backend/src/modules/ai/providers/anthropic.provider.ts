@@ -23,7 +23,9 @@ export class AnthropicProvider implements LLMProvider {
       model,
       system: systemMessage,
       messages: chatMessages,
-      max_tokens: 4096,
+      // 8192 evita o corte de relatórios longos (semanal/mensal com muitos técnicos),
+      // onde 4096 estourava no meio da última seção.
+      max_tokens: 8192,
     });
 
     const content = response.content[0].type === "text" ? response.content[0].text : "";
