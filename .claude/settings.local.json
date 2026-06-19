@@ -67,7 +67,29 @@
       "Bash(npm install:*)",
       "Bash(npx esbuild:*)",
       "PowerShell(Get-ChildItem \"C:\\\\Projetos\\\\dev\\\\NoSigilo\\\\src\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(Get-Content \"C:\\\\Projetos\\\\dev\\\\NoSigilo\\\\src\\\\pages\\\\Admin.tsx\")",
+      "Bash(Measure-Object -Line)",
+      "Bash(Select-Object Lines)",
+      "Bash(cd /mnt/c/Projetos/dev/NoSigilo && npx tsc --noEmit 2>&1 | head -40)",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "PowerShell($ports = @\\(5173,3000,4173,8080\\); foreach \\($p in $ports\\) { $r = Test-NetConnection -ComputerName localhost -Port $p -WarningAction SilentlyContinue -InformationLevel Quiet; Write-Output \"Port $p : $r\" })",
+      "mcp__Claude_in_Chrome__resize_window",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "Bash(grep -v \"^.*:.*//\\\\|SELECT\\\\|INSERT\\\\|DELETE\\\\|COUNT\\\\|FROM\\\\|WHERE\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npm run *)",
+      "Bash(grep -iA15 \"postgres:\" docker-compose.yml)",
+      "Bash(curl -sS -m 25 -o - -w \"\\\\n[HTTP %{http_code}]\\\\n\" -X POST \"https://pagamentos.baselider.com.br/api/v1/auth/login\" -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"gcgean@hotmail.com\\\\\",\\\\\"password\\\\\":\\\\\"Command%\\\\$#@!\\\\\"}\")",
+      "Bash(curl -sS -m 25 -o - -w \"\\\\n[HTTP %{http_code}]\\\\n\" -X POST \"https://pagamentos.baselider.com.br/api/v1/access/resolve\" -H \"Content-Type: application/json\" -H \"X-API-Key: hub_live_83273e6926fd708c55dbc9bfc60039d1ec99ef7a9ee4acd1\" -d \"{\\\\\"email\\\\\":\\\\\"gcgean@hotmail.com\\\\\",\\\\\"name\\\\\":\\\\\"Teste Conexao\\\\\"}\")",
+      "Bash(grep -n \"webhook\\\\|callback\\\\|billing\\\\|payment\\\\|hubBilling\\\\|resolveAccess\\\\|checkout\" /srv/sites/nosigilo/deploy/../../../Projetos/dev/NoSigilo/backend/src/app.ts 2>/dev/null | head -60)",
+      "Bash(git status *)",
+      "Bash(curl -s \"https://nosigilo.baselider.com.br/assets/index-CxcvfVi4.js\" -o /tmp/prod-bundle.js)",
+      "Read(//tmp/**)"
     ]
   }
 }
