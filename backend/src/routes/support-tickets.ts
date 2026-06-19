@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireCompanyScope } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
+import { formatPeriodoExtenso } from "../services/support-tickets-report.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers de métricas para relatório IA — formato estruturado
@@ -767,10 +768,14 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
         }, null, 2);
 
+        // No relatório geral o cabeçalho com o período é inserido pelo CÓDIGO (determinístico),
+        // então pedimos à IA para NÃO criar seu próprio título nem linha de período.
+        const tituloInstrucao = `\n\n---\nIMPORTANTE: NÃO escreva um título principal (ex.: "RELATÓRIO SEMANAL...") nem uma linha de "Período" no início — eles já são inseridos automaticamente acima da sua resposta. Comece direto pela primeira seção da análise.`;
+
         // Escolhe prompt base: individual (quando filtrado por técnico) ou geral da equipe
         const promptBase = isIndividual
           ? buildPromptIndividual(nomeTecnico)
-          : PROMPT_ANALISE;
+          : PROMPT_ANALISE + tituloInstrucao;
 
         // Instrução extra para semanal/mensal GERAIS
         const promptAdicional = (!isIndividual && (reportType === "weekly" || reportType === "monthly"))
@@ -799,6 +804,15 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         const msg = aiErr instanceof Error ? aiErr.message : String(aiErr);
         console.error("[ai-report] Falha ao chamar IA:", msg);
         analiseIA = `(Análise IA indisponível no momento — ${msg})`;
+      }
+
+      // Cabeçalho determinístico com o período por extenso no relatório GERAL.
+      // (No individual o período já vai no cabeçalho gerado pela IA.)
+      if (!isIndividual && analiseIA && !analiseIA.startsWith("(")) {
+        const periodoExtenso = formatPeriodoExtenso(new Date(dateFrom), new Date(dateTo));
+        const tipoLabelPt = reportType === "weekly" ? "SEMANAL" : reportType === "monthly" ? "MENSAL" : "DIÁRIO";
+        const cabecalhoPeriodo = `# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\n*Período analisado: ${periodoExtenso}*`;
+        analiseIA = `${cabecalhoPeriodo}\n\n---\n\n${analiseIA}`;
       }
 
       const relatorioFinal = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
