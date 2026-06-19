@@ -64,13 +64,13 @@ function calcularMetricasDetalhadas(
   });
   const fila = [...filaMap.entries()].sort((a, b) => b[1] - a[1]).map(([nome, count]) => ({ nome, count }));
 
-  // Procedimentos (nomesProcedimento é CSV)
+  // Procedimentos: agrupa pelo NOME COMPLETO (como aparece nos itens).
+  // NÃO dividir por vírgula — o próprio nome do procedimento contém vírgulas
+  // (ex.: "NFE - EMISSÃO, CANCELAMENTO, ESTORNO, DUVIDAS E CONFIGURAÇÕES").
   const procMap = new Map<string, number>();
   tickets.forEach(t => {
-    (t.nomesProcedimento ?? "").split(",").forEach(p => {
-      const nome = p.trim();
-      if (nome) procMap.set(nome, (procMap.get(nome) ?? 0) + 1);
-    });
+    const nome = (t.nomesProcedimento ?? "").trim();
+    if (nome) procMap.set(nome, (procMap.get(nome) ?? 0) + 1);
   });
   const procedimentos = [...procMap.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, 10).map(([nome, count]) => ({ nome, count }));
