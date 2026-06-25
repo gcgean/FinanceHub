@@ -80,6 +80,11 @@ export function RecipientDialog({ open, onClose, onSave, saving, recipient }: Pr
 
   const handleSave = () => {
     if (!name.trim()) return;
+    // Atendente sem usuAtend faria o relatório cobrir a equipe inteira (ver routine-scheduler).
+    if (role === "ATTENDANT" && !usuAtend.trim()) {
+      alert('Para um Atendente é obrigatório preencher "Nome no Sistema de Atendimento" — sem ele o relatório cobriria a equipe inteira.');
+      return;
+    }
 
     const deptArray = departamentos
       .split(",")

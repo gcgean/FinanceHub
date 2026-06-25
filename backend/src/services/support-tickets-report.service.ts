@@ -179,12 +179,18 @@ export function calcularMetricasDetalhadas(
   // Agrupa pelo NOME COMPLETO do procedimento (como aparece nos itens).
   // Não dividir por vírgula: o próprio nome contém vírgulas
   // (ex.: "NFE - EMISSÃO, CANCELAMENTO, ESTORNO, DUVIDAS E CONFIGURAÇÕES").
-  const procMap = new Map<string, number>();
-  tickets.forEach(t => {
+  const procMap = new Map<string, { count: number; tempos: number[] }>();
+  tickets.forEach((t, i) => {
     const nome = (t.nomesProcedimento ?? "").trim();
-    if (nome) procMap.set(nome, (procMap.get(nome) ?? 0) + 1);
+    if (!nome) return;
+    if (!procMap.has(nome)) procMap.set(nome, { count: 0, tempos: [] });
+    const e = procMap.get(nome)!;
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
   });
-  const procedimentos = [...procMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([nome, count]) => ({ nome, count }));
+  const procedimentos = [...procMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count).slice(0, 10)
+    .map(([nome, d]) => ({ nome, count: d.count, tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0 }));
 
   const titularMap = new Map<string, number>();
   tickets.forEach(t => { const nome = t.nomeCli?.trim(); if (nome) titularMap.set(nome, (titularMap.get(nome) ?? 0) + 1); });

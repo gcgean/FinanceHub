@@ -67,7 +67,7 @@ type AiMetricas = {
   ids: number;
   classificacao: string;
   fila:           { nome: string; count: number }[];
-  procedimentos:  { nome: string; count: number }[];
+  procedimentos:  { nome: string; count: number; tma: number }[];
   titulares:      { nome: string; count: number }[];
   atendentes:     { nome: string; atendimentos: number; tma: number; nota_media: number | null }[];
   atendentes_por_tma: { nome: string; tma: number }[];

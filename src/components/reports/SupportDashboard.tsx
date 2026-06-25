@@ -309,6 +309,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
                       {p.nome}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {p.tma > 0 && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-0.5" title="Tempo médio do procedimento">
+                          <Clock className="w-3 h-3" />
+                          {p.tma} min
+                        </span>
+                      )}
                       <span className="text-xs text-muted-foreground">{p.count}</span>
                       <span
                         className="text-xs font-bold px-1.5 py-0.5 rounded"

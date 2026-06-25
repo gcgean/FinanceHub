@@ -92,7 +92,13 @@
       "Read(//tmp/**)",
       "Bash(echo \"exit: $?\")",
       "Bash(echo \"exit\\(grep\\): $?  — vazio acima = sem erros nos meus arquivos\")",
-      "Bash(echo \"exit\\(grep\\): $? — vazio = sem erros nos meus arquivos\")"
+      "Bash(echo \"exit\\(grep\\): $? — vazio = sem erros nos meus arquivos\")",
+      "PowerShell(docker exec financehub_postgres_prod psql -U postgres -d financehub -c \"SELECT id, name, role, \\\\\"usuAtend\\\\\", \\\\\"telegramChatId\\\\\" IS NOT NULL AS has_telegram, departamentos FROM \\\\\"RoutineRecipient\\\\\" ORDER BY role, name;\")",
+      "Bash(grep -rA 14 \"CREATE TABLE.*promoter_commissions\" pg-migrations/)",
+      "Bash(echo \"backend grep exit: $? \\(vazio=ok nos meus arquivos\\)\")",
+      "Bash(echo \"frontend grep exit: $? \\(vazio=ok nos meus arquivos\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(git rev-list *)"
     ]
   }
 }

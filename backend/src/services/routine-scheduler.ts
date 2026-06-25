@@ -191,8 +191,17 @@ async function processRoutines() {
 
       // Filtros por papel do destinatário
       const usuAtendFilter = role === "ATTENDANT"
-        ? (routine.recipient?.usuAtend ?? undefined)
+        ? (routine.recipient?.usuAtend?.trim() || undefined)
         : undefined;
+
+      // GUARDA: um ATTENDANT SEM usuAtend não pode receber relatório — sem o filtro
+      // o relatório cobriria a EQUIPE INTEIRA e os números do time seriam entregues
+      // ao técnico como se fossem dele. Pula o envio em vez de mandar dado errado.
+      if (role === "ATTENDANT" && !usuAtendFilter) {
+        console.error(`[RoutineScheduler] ⚠️ Rotina ${routine.id} (${routine.name}): destinatário "${recipName}" é ATTENDANT mas não tem "usuAtend" preenchido. Envio PULADO para evitar relatório da equipe inteira. Configure o campo "Nome no Sistema de Atendimento" do destinatário.`);
+        await prisma.routine.update({ where: { id: routine.id }, data: { lastRunAt: now } });
+        continue;
+      }
       // Prioridade: departamentos da rotina > departamentos do destinatário > todos
       const departamentosFilter =
         (routine.departamentos?.length ?? 0) > 0

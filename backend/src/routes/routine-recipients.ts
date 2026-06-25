@@ -19,6 +19,15 @@ const RecipientBody = z.object({
   active:         z.boolean().optional().default(true),
 });
 
+// ATTENDANT sem usuAtend faria o relatório cobrir a equipe inteira (ver routine-scheduler).
+// Bloqueia esse estado já na criação/edição.
+function assertAttendantHasUsuAtend(role: RecipientRole, usuAtend?: string | null) {
+  if (role === "ATTENDANT" && !usuAtend?.trim()) {
+    return 'Atendente exige o campo "Nome no Sistema de Atendimento" (usuAtend) — sem ele o relatório cobriria a equipe inteira.';
+  }
+  return null;
+}
+
 const recipientSelect = {
   id: true, companyId: true, name: true, role: true,
   telegramChatId: true, email: true, whatsapp: true,
@@ -45,6 +54,8 @@ export async function routineRecipientsRoutes(app: FastifyInstance) {
   app.post("/", { preHandler: [requireAuth(app)] }, async (request, reply) => {
     const companyId = await resolveCompanyId(request);
     const data = RecipientBody.parse(request.body);
+    const err = assertAttendantHasUsuAtend(data.role, data.usuAtend);
+    if (err) { reply.status(400); return { error: err }; }
     const created = await prisma.routineRecipient.create({
       data: { companyId, ...data },
       select: recipientSelect,
@@ -61,6 +72,12 @@ export async function routineRecipientsRoutes(app: FastifyInstance) {
 
     const existing = await prisma.routineRecipient.findFirst({ where: { id, companyId } });
     if (!existing) { reply.status(404); return { error: "NOT_FOUND" }; }
+
+    // Valida o estado RESULTANTE (campos enviados sobrepõem os existentes).
+    const finalRole     = data.role     ?? existing.role;
+    const finalUsuAtend = data.usuAtend !== undefined ? data.usuAtend : existing.usuAtend;
+    const err = assertAttendantHasUsuAtend(finalRole, finalUsuAtend);
+    if (err) { reply.status(400); return { error: err }; }
 
     return prisma.routineRecipient.update({
       where: { id },
