@@ -556,10 +556,14 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth(app), requireCompanyScope()] },
     async (request, reply) => {
       const companyId = await resolveCompanyId(request);
-      const { dateFrom, dateTo, departamentos, usuAtend } = request.body as {
+      const { dateFrom, dateTo, departamentos, usuAtend, procedimento, nomeCli, notaMin, notaMax } = request.body as {
         dateFrom: string; dateTo: string;
         departamentos?: string[];
         usuAtend?: string;
+        procedimento?: string;
+        nomeCli?: string;
+        notaMin?: string | number;
+        notaMax?: string | number;
       };
       if (!dateFrom || !dateTo) return reply.status(400).send({ error: "dateFrom e dateTo são obrigatórios" });
 
@@ -569,6 +573,14 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       };
       if (departamentos?.length) where.departamento = departamentos.length === 1 ? departamentos[0] : { in: departamentos };
       if (usuAtend?.trim()) where.usuAtend = { contains: usuAtend.trim(), mode: "insensitive" };
+      if (procedimento?.toString().trim()) where.nomesProcedimento = { contains: procedimento.toString().trim(), mode: "insensitive" };
+      if (nomeCli?.toString().trim()) where.nomeCli = { contains: nomeCli.toString().trim(), mode: "insensitive" };
+      if (notaMin || notaMax) {
+        where.nota = {
+          ...(notaMin ? { gte: Number(notaMin) } : {}),
+          ...(notaMax ? { lte: Number(notaMax) } : {}),
+        };
+      }
 
       const tickets = await prisma.supportTicket.findMany({
         where,

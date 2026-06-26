@@ -43,13 +43,10 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
 }
 
 // ── Ranking composto ─────────────────────────────────────────────────────────
-// Mínimo de 200 chamados para participar
+// Ranking completo: todos os técnicos do período.
 // Critérios (em ordem): 1º nota_media desc · 2º atendimentos desc · 3º tma asc
-const RANKING_MIN_CALLS = 200;
-
 function buildRanking(atendentes: AiMetricas[]): AiMetricas[] {
   return [...atendentes]
-    .filter((a) => (a.atendimentos ?? 0) >= RANKING_MIN_CALLS)
     .sort((a, b) => {
       const notaA = a.nota_media ?? -1;
       const notaB = b.nota_media ?? -1;
@@ -113,7 +110,7 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
             <Trophy className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-semibold text-foreground">Ranking de Técnicos</span>
             <span className="text-xs text-muted-foreground ml-1">
-              — mín. {RANKING_MIN_CALLS} chamados · 1º melhor nota · 2º maior volume · 3º menor TMA
+              — todos os técnicos · 1º melhor nota · 2º maior volume · 3º menor TMA
             </span>
           </div>
 
@@ -128,7 +125,7 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
 
           {ranking.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhum técnico atingiu o mínimo de <strong>{RANKING_MIN_CALLS} chamados</strong> no período para entrar no ranking.
+              Nenhum técnico com atendimentos no período.
             </p>
           )}
 

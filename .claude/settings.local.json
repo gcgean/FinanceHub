@@ -98,7 +98,8 @@
       "Bash(echo \"backend grep exit: $? \\(vazio=ok nos meus arquivos\\)\")",
       "Bash(echo \"frontend grep exit: $? \\(vazio=ok nos meus arquivos\\)\")",
       "Bash(git check-ignore *)",
-      "Bash(git rev-list *)"
+      "Bash(git rev-list *)",
+      "Bash(git -c core.autocrlf=false diff HEAD --stat -- backend/src/routes/support-tickets.ts backend/src/services/support-tickets-report.service.ts src/components/reports/SupportDashboard.tsx src/pages/SupportTicketsReports.tsx)"
     ]
   }
 }
