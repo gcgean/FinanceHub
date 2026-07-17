@@ -1,6 +1,7 @@
 import React from "react";
-import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy } from "lucide-react";
+import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 export const CHART_COLORS = [
   "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6",
@@ -66,6 +67,55 @@ function notaStars(nota: number | null) {
     <span className={`text-xs font-bold ${color}`}>
       {"★".repeat(Math.min(full, 10))} {nota.toFixed(1)}
     </span>
+  );
+}
+
+// ── Gráfico de linha: desempenho diário (atendimentos por dia) ─────────────────
+function DailyLineChart({
+  icon, title, subtitle, serie,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  serie?: { keys: string[]; rows: AiMetricas[] };
+}) {
+  if (!serie?.rows?.length || !serie?.keys?.length) return null;
+  return (
+    <ChartCard icon={icon} title={title}>
+      <p className="text-xs text-muted-foreground -mt-2 mb-3">{subtitle}</p>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={serie.rows} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis
+              dataKey="dia" axisLine={false} tickLine={false}
+              interval="preserveStartEnd" minTickGap={18}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+            />
+            <YAxis
+              allowDecimals={false} axisLine={false} tickLine={false} width={30}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+            />
+            <Tooltip
+              contentStyle={{
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: 8, fontSize: 12,
+              }}
+              labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {serie.keys.map((k, i) => (
+              <Line
+                key={k} type="monotone" dataKey={k}
+                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                strokeWidth={2} dot={false} activeDot={{ r: 4 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
   );
 }
 
@@ -190,6 +240,20 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
           </div>
         </div>
       )}
+
+      {/* Desempenho diário — por setor e por atendente */}
+      <DailyLineChart
+        icon={<Activity className="w-4 h-4 text-emerald-500" />}
+        title="Desempenho Diário por Setor"
+        subtitle="Atendimentos por dia em cada departamento no período."
+        serie={m.serie_diaria_departamentos}
+      />
+      <DailyLineChart
+        icon={<Activity className="w-4 h-4 text-indigo-500" />}
+        title="Desempenho Diário por Atendente"
+        subtitle="Atendimentos por dia (top 8 atendentes por volume no período)."
+        serie={m.serie_diaria_atendentes}
+      />
 
       {/* Atendentes por Volume + Fila */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -262,8 +262,48 @@ export function calcularMetricasDetalhadas(
     { nota: 0, count: semNota }, // 0 = sem avaliação
   ];
 
+  // ── Série diária: atendimentos por dia, por departamento e por atendente ──
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const dayLabel = (k: string) => { const [, mo, dd] = k.split("-"); return `${dd}/${mo}`; };
+  const dias: string[] = [];
+  {
+    const start = new Date(`${dateFrom.split("T")[0]}T12:00:00`);
+    const end = new Date(`${dateTo.split("T")[0]}T12:00:00`);
+    for (let d = new Date(start); d <= end && dias.length < 92; d.setDate(d.getDate() + 1)) dias.push(dayKey(d));
+  }
+  const deptDayMap = new Map<string, Map<string, number>>();
+  const atendDayMap = new Map<string, Map<string, number>>();
+  tickets.forEach(t => {
+    if (!t.dataHoraFinalizacao) return;
+    const dk = dayKey(new Date(t.dataHoraFinalizacao));
+    const deptNome = t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila";
+    if (!deptDayMap.has(deptNome)) deptDayMap.set(deptNome, new Map());
+    const dm = deptDayMap.get(deptNome)!; dm.set(dk, (dm.get(dk) ?? 0) + 1);
+    const atend = t.usuAtend?.trim();
+    if (atend) {
+      if (!atendDayMap.has(atend)) atendDayMap.set(atend, new Map());
+      const am = atendDayMap.get(atend)!; am.set(dk, (am.get(dk) ?? 0) + 1);
+    }
+  });
+  const buildSerie = (map: Map<string, Map<string, number>>, limit: number | null) => {
+    const totals = [...map.entries()]
+      .map(([nome, dm]) => ({ nome, total: [...dm.values()].reduce((a, b) => a + b, 0) }))
+      .sort((a, b) => b.total - a.total);
+    const keys = (limit ? totals.slice(0, limit) : totals).map(t => t.nome);
+    const rows = dias.map(dk => {
+      const row: Record<string, string | number> = { dia: dayLabel(dk) };
+      keys.forEach(k => { row[k] = map.get(k)?.get(dk) ?? 0; });
+      return row;
+    });
+    return { keys, rows };
+  };
+  const serie_diaria_departamentos = buildSerie(deptDayMap, null);
+  const serie_diaria_atendentes = buildSerie(atendDayMap, 8);
+
   return {
     periodo: { de: dateFrom, ate: dateTo },
+    serie_diaria_departamentos, serie_diaria_atendentes,
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
     atendentes_ativos: atendentesAtivos, ids, classificacao,
     fila, procedimentos, titulares, operadores, atendentes,
