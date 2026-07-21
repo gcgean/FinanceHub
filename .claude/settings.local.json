@@ -260,7 +260,18 @@
       "Bash(curl -s http://localhost:3333/api/pipeline/implantacao/262/configuracao?processoId=2178 -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(JSON.stringify\\(j.cliente.observacoes\\)\\)}\\)\")",
       "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payload2.json)",
-      "Bash(taskkill //PID 20468 //T //F)"
+      "Bash(taskkill //PID 20468 //T //F)",
+      "Bash(grep -rn \"PUT.*clientes/\\\\|/clientes/\\\\${\" src --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @restore_payload.json -o restore_result.json)",
+      "Bash(node -e \"const j=require\\('./restore_result.json'\\); console.log\\('obsVenda len apos restauracao:', \\(j.obsVenda||''\\).length\\)\")",
+      "Bash(curl -s http://localhost:3333/api/clientes/1990 -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"const j=require\\('./sessaoA_load.json'\\); require\\('fs'\\).writeFileSync\\('sessaoA_baseline.txt', j.obsVenda, 'utf8'\\); console.log\\('baseline A len:', j.obsVenda.length\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payloadB.json -o resultB.json)",
+      "Bash(node -e \"const j=require\\('./resultB.json'\\); console.log\\('B: novo len:', \\(j.obsVenda||''\\).length\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payloadA.json -o resultA.json)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('len atual \\(deve ser 27514, o de B\\):', \\(j.obsVenda||''\\).length\\)}\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @cleanup_payload.json -o cleanup_result.json)",
+      "Bash(node -e \"const j=require\\('./cleanup_result.json'\\); console.log\\('len final:', \\(j.obsVenda||''\\).length\\)\")"
     ]
   }
 }

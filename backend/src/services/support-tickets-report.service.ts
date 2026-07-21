@@ -263,11 +263,15 @@ export function calcularMetricasDetalhadas(
   ];
 
   // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
+  // Ignora "clientes" genéricos/buckets que não representam um cliente real.
+  const normCli = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+  const CLIENTES_IGNORADOS_GARGALO = ["CERTIFICADO", "CONTADORES", "COMMAND SYSTEMS", "CLIENTE BALCAO"];
   const cliProcMap = new Map<string, { cliente: string; procedimento: string; count: number; tempos: number[]; notas: number[] }>();
   tickets.forEach((t, i) => {
     const cli = t.nomeCli?.trim();
     const proc = (t.nomesProcedimento ?? "").trim();
     if (!cli || !proc) return;
+    if (CLIENTES_IGNORADOS_GARGALO.some(x => normCli(cli).includes(x))) return;
     const key = `${cli}||${proc}`;
     if (!cliProcMap.has(key)) cliProcMap.set(key, { cliente: cli, procedimento: proc, count: 0, tempos: [], notas: [] });
     const e = cliProcMap.get(key)!;
