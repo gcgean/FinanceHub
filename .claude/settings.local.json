@@ -255,7 +255,12 @@
       "Bash(taskkill //PID 26172 //T //F)",
       "Bash(taskkill //PID 22624 //T //F)",
       "Bash(node -e *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payload.json)",
+      "Bash(curl -s http://localhost:3333/api/pipeline/implantacao/262/configuracao?processoId=2178 -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(JSON.stringify\\(j.cliente.observacoes\\)\\)}\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payload2.json)",
+      "Bash(taskkill //PID 20468 //T //F)"
     ]
   }
 }
