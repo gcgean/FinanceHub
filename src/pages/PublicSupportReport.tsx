@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { apiFetch } from "@/utils/api";
 import {
-  Filter, Search, Headphones, Clock, Star, Brain,
+  Filter, Search, Headphones, Clock, Star, Brain, BarChart2,
   CalendarDays, CalendarRange, Calendar, Copy, Check, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, MessageSquare, X,
   BookOpen, Save, Settings, AlertCircle,
@@ -111,6 +111,28 @@ export default function PublicSupportReport() {
     enabled: hasSearched && !!token,
     retry: 1,
   });
+
+  // ── métricas do período (dashboard completo) ───────────────────────────────
+  const { data: metricsData } = useQuery({
+    queryKey: ["public-metrics", token, appliedFilters],
+    queryFn: () => apiFetch<{ metricas: AiMetricas }>(`/public-support/${token}/metrics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dateFrom:      `${appliedFilters.dateFrom}T00:00:00`,
+        dateTo:        `${appliedFilters.dateTo}T23:59:59`,
+        departamentos: appliedFilters.departamentos.length > 0 ? appliedFilters.departamentos : undefined,
+        usuAtend:      appliedFilters.usuAtend.trim() || undefined,
+        procedimento:  appliedFilters.procedimento.trim() || undefined,
+        nomeCli:       appliedFilters.nomeCli.trim() || undefined,
+        notaMin:       appliedFilters.notaMin || undefined,
+        notaMax:       appliedFilters.notaMax || undefined,
+      }),
+    }),
+    enabled: hasSearched && !!token,
+    retry: 1,
+  });
+  const searchMetricas = metricsData?.metricas ?? null;
 
   const isLoading  = isPending && isFetching;
   const items      = data?.items ?? [];
@@ -271,6 +293,21 @@ export default function PublicSupportReport() {
             <Card><CardContent className="p-4 flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center"><Star className="w-5 h-5 text-yellow-500" /></div><div><p className="text-xs text-muted-foreground uppercase font-semibold">Nota Média</p><p className="text-2xl font-bold">{avgNota}</p></div></CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center"><Clock className="w-5 h-5 text-green-500" /></div><div><p className="text-xs text-muted-foreground uppercase font-semibold">Página {page} de {totalPages}</p><p className="text-2xl font-bold">{items.length} / {total}</p></div></CardContent></Card>
           </div>
+        )}
+
+        {/* Dashboard do Período — completo (métricas, gargalos, gráficos, ranking) */}
+        {searchMetricas && (
+          <Card className="border-muted">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-primary" />
+                Dashboard do Período
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SupportDashboard m={searchMetricas} />
+            </CardContent>
+          </Card>
         )}
 
         {/* Tabela */}

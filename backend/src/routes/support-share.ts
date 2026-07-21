@@ -126,6 +126,49 @@ export async function publicSupportRoutes(app: FastifyInstance) {
     return reply.send({ items, total, take, skip, departments });
   });
 
+  // POST /public-support/:token/metrics — dashboard completo do período (sem IA)
+  app.post("/:token/metrics", async (request, reply) => {
+    const { token } = request.params as { token: string };
+    const companyId = await resolveShareToken(token, reply);
+    if (!companyId) return;
+
+    const { dateFrom, dateTo, departamentos, usuAtend, nomeCli, procedimento, notaMin, notaMax } = request.body as {
+      dateFrom: string; dateTo: string;
+      departamentos?: string[]; usuAtend?: string; nomeCli?: string;
+      procedimento?: string; notaMin?: string | number; notaMax?: string | number;
+    };
+    if (!dateFrom || !dateTo) return reply.status(400).send({ error: "dateFrom e dateTo são obrigatórios" });
+
+    const where: Record<string, unknown> = {
+      companyId,
+      dataHoraFinalizacao: { gte: new Date(dateFrom), lte: new Date(dateTo) },
+    };
+    if (departamentos?.length) where.departamento = departamentos.length === 1 ? departamentos[0] : { in: departamentos };
+    if (usuAtend?.trim()) where.usuAtend = { contains: usuAtend.trim(), mode: "insensitive" };
+    if (procedimento?.toString().trim()) where.nomesProcedimento = { contains: procedimento.toString().trim(), mode: "insensitive" };
+    if (nomeCli?.toString().trim()) where.nomeCli = { contains: nomeCli.toString().trim(), mode: "insensitive" };
+    if (notaMin || notaMax) {
+      where.nota = { ...(notaMin ? { gte: Number(notaMin) } : {}), ...(notaMax ? { lte: Number(notaMax) } : {}) };
+    }
+
+    const tickets = await prisma.supportTicket.findMany({
+      where,
+      select: {
+        dataHoraAtendimento: true, dataHoraFinalizacao: true, tempoAtendimento: true,
+        usuAtend: true, nomeCli: true, nomeClienteAtendimento: true,
+        nota: true, departamento: true, nomesProcedimento: true,
+        pontoRevenda: true, cidRes: true, dataCadastroCliente: true, obsAtendimento: true,
+      },
+    });
+    if (tickets.length === 0) return reply.status(404).send({ error: "Nenhum atendimento no período." });
+
+    const departments = await prisma.department.findMany({ where: { companyId }, select: { erpCode: true, name: true } });
+    const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
+
+    const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+    return reply.send({ metricas });
+  });
+
   // POST /public-support/:token/ai-report
   app.post("/:token/ai-report", async (request, reply) => {
     const { token } = request.params as { token: string };
