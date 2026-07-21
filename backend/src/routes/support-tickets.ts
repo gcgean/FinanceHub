@@ -176,6 +176,31 @@ function calcularMetricasDetalhadas(
       obs: t.obsAtendimento!.trim().slice(0, 300), // limita tamanho
     }));
 
+  // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
+  const cliProcMap = new Map<string, { cliente: string; procedimento: string; count: number; tempos: number[]; notas: number[] }>();
+  tickets.forEach((t, i) => {
+    const cli = t.nomeCli?.trim();
+    const proc = (t.nomesProcedimento ?? "").trim();
+    if (!cli || !proc) return;
+    const key = `${cli}||${proc}`;
+    if (!cliProcMap.has(key)) cliProcMap.set(key, { cliente: cli, procedimento: proc, count: 0, tempos: [], notas: [] });
+    const e = cliProcMap.get(key)!;
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
+    if (t.nota != null) e.notas.push(t.nota);
+  });
+  const gargalos_recorrentes = [...cliProcMap.values()]
+    .filter(e => e.count > 5)
+    .map(e => ({
+      cliente: e.cliente,
+      procedimento: e.procedimento,
+      qtd: e.count,
+      tma: e.tempos.length ? Math.round(e.tempos.reduce((a, b) => a + b, 0) / e.tempos.length) : 0,
+      nota_media: e.notas.length ? +(e.notas.reduce((a, b) => a + b, 0) / e.notas.length).toFixed(1) : null,
+    }))
+    .sort((a, b) => b.qtd - a.qtd)
+    .slice(0, 30);
+
   // ── Série diária: atendimentos por dia, por departamento e por atendente ──
   const dayKey = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -219,6 +244,7 @@ function calcularMetricasDetalhadas(
     periodo: { de: dateFrom, ate: dateTo },
     serie_diaria_departamentos,
     serie_diaria_atendentes,
+    gargalos_recorrentes,
     total_atendimentos: total,
     tma_geral: tmaGeral,
     nota_media: notaMedia,

@@ -1,5 +1,5 @@
 import React from "react";
-import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy, Activity } from "lucide-react";
+import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy, Activity, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -152,6 +152,59 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
           <p className="text-xs text-muted-foreground leading-tight">{m.classificacao}</p>
         </div>
       </div>
+
+      {/* Gargalos recorrentes — mesmo cliente + procedimento repetido (>5x) */}
+      {(() => {
+        const gargalos: AiMetricas[] = m.gargalos_recorrentes ?? [];
+        return (
+          <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span className="text-sm font-semibold text-foreground">Gargalos Recorrentes</span>
+              <span className="text-xs text-muted-foreground ml-1">
+                — mesmo cliente abrindo o mesmo procedimento mais de 5× no período
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Padrões que indicam um problema não resolvido — trate a causa raiz para eliminar a recorrência.
+            </p>
+
+            {gargalos.length === 0 ? (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400 py-2 flex items-center gap-1.5">
+                ✅ Nenhum procedimento recorrente acima de 5× por cliente. Sem gargalos aparentes.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-[1fr_1.4fr_3.5rem_4rem_3.5rem] gap-x-3 px-2 mb-1">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Cliente</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Procedimento</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Vezes</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase text-center">TMA</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Nota</span>
+                </div>
+                <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                  {gargalos.map((g: AiMetricas, i: number) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-[1fr_1.4fr_3.5rem_4rem_3.5rem] gap-x-3 items-center px-2 py-1.5 rounded-lg hover:bg-amber-100/40 dark:hover:bg-amber-900/20"
+                    >
+                      <span className="text-sm font-medium truncate" title={g.cliente}>{g.cliente}</span>
+                      <span className="text-xs text-muted-foreground truncate" title={g.procedimento}>{g.procedimento}</span>
+                      <div className="text-center">
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${g.qtd >= 10 ? "bg-red-500/15 text-red-500" : "bg-amber-500/15 text-amber-600"}`}>
+                          {g.qtd}×
+                        </span>
+                      </div>
+                      <span className="text-xs text-center text-foreground">{g.tma > 0 ? `${g.tma} min` : "—"}</span>
+                      <span className="text-xs text-center text-foreground">{g.nota_media != null ? g.nota_media : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Ranking de Técnicos */}
       {(ranking.length > 0 || atendentes.length > 0) && (

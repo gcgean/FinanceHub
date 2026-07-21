@@ -232,7 +232,30 @@
       "Bash(taskkill //PID 17172 //T //F)",
       "Bash(git fetch *)",
       "Bash(git ls-tree *)",
-      "Read(//c/Cilos_Analytics/dist/**)"
+      "Read(//c/Cilos_Analytics/dist/**)",
+      "Read(//c/Projetos/dev/src/pages/dashboard/**)",
+      "Bash(awk '/model Atendimento/,/@@map/' prisma/schema.prisma)",
+      "Bash(awk '/model.*epart/,/@@map/' prisma/schema.prisma)",
+      "Bash(taskkill //PID 19972 //T //F)",
+      "Bash(taskkill //PID 20880 //T //F)",
+      "Bash(ls -la \"C:/Projetos/dev/NoSigilo\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "Bash(npx eslint *)",
+      "mcp__claude-in-chrome__computer",
+      "Bash(grep -i \"ico$\")",
+      "Bash(curl -sS -o /dev/null --max-time 20 -w \"status=%{http_code}  location=%{redirect_url}\\\\n\" \"https://nosigilo.net/invite/gnayf5tsij\")",
+      "Bash(curl -sS -o /dev/null --max-time 20 -w \"status=%{http_code}  tipo=%{content_type}\\\\n\" \"https://nosigilo.baselider.com.br/invite/gnayf5tsij\")",
+      "Bash(awk '/app.get\\\\\\(.\\\\/implantacao\\\\/:clienteId\\\\/configuracao/,0' src/routes/pipeline.ts)",
+      "Bash(curl -s -X POST http://localhost:3333/api/pipeline/implantacao/processos -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"clienteId\":262,\"tipo\":\"novo_servico\",\"titulo\":\"TREINAMENTO PLANO CONTROLE\",\"servicoId\":31}')",
+      "Bash(curl -s -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"processoId\":2178,\"servicoId\":6}')",
+      "Bash(curl -s -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"processoId\":2178,\"servicoId\":999999}')",
+      "Bash(npx tsx -e ' *)",
+      "Bash(curl -s -X PUT http://localhost:3333/api/pipeline/implantacao/262/configuracao -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"processoId\":2178,\"servicoId\":36}')",
+      "Bash(rm -f frontend_log.txt backend/backend_log.txt)",
+      "Bash(taskkill //PID 26172 //T //F)",
+      "Bash(taskkill //PID 22624 //T //F)",
+      "Bash(node -e *)",
+      "Bash(git stash *)"
     ]
   }
 }
