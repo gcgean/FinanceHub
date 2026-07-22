@@ -271,7 +271,10 @@
       "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @payloadA.json -o resultA.json)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('len atual \\(deve ser 27514, o de B\\):', \\(j.obsVenda||''\\).length\\)}\\)\")",
       "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1990/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @cleanup_payload.json -o cleanup_result.json)",
-      "Bash(node -e \"const j=require\\('./cleanup_result.json'\\); console.log\\('len final:', \\(j.obsVenda||''\\).length\\)\")"
+      "Bash(node -e \"const j=require\\('./cleanup_result.json'\\); console.log\\('len final:', \\(j.obsVenda||''\\).length\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' -X PUT http://localhost:3333/api/clientes/1989/prontuario -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data-binary @revert1989.json -o revert1989_result.json)",
+      "Bash(node -e \"const j=require\\('./revert1989_result.json'\\); console.log\\('len final \\(deve ser 200, igual ao original\\):', \\(j.obsVenda||''\\).length\\)\")",
+      "Bash(taskkill //PID 27804 //T //F)"
     ]
   }
 }
