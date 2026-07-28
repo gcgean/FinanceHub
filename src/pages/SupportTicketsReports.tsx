@@ -775,9 +775,9 @@ export default function SupportTicketsReports() {
                 <TableHead>Ponto de Venda</TableHead>
                 <TableHead>Departamento</TableHead>
                 <TableHead>Técnico</TableHead>
+                <TableHead className="w-[120px]">Nota</TableHead>
                 <TableHead>Procedimentos</TableHead>
                 <TableHead className="w-[80px]">Tempo</TableHead>
-                <TableHead className="w-[120px]">Nota</TableHead>
                 <TableHead className="min-w-[200px]">Observação</TableHead>
               </TableRow>
             </TableHeader>
@@ -827,6 +827,7 @@ export default function SupportTicketsReports() {
                       ) : "—"}
                     </TableCell>
                     <TableCell className="text-xs">{t.usuAtend || "—"}</TableCell>
+                    <TableCell>{renderNota(t.nota)}</TableCell>
                     <TableCell className="text-xs max-w-[180px]">
                       {t.nomesProcedimento ? (
                         <span className="truncate block" title={t.nomesProcedimento}>
@@ -835,7 +836,6 @@ export default function SupportTicketsReports() {
                       ) : "—"}
                     </TableCell>
                     <TableCell className="text-xs text-center">{t.tempoAtendimento || "—"}</TableCell>
-                    <TableCell>{renderNota(t.nota)}</TableCell>
                     <TableCell className="text-xs max-w-[240px]">
                       {t.obsAtendimento ? (
                         <span

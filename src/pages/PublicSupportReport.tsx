@@ -323,9 +323,9 @@ export default function PublicSupportReport() {
                   <TableHead>Ponto de Venda</TableHead>
                   <TableHead>Departamento</TableHead>
                   <TableHead>Técnico</TableHead>
+                  <TableHead className="w-[120px]">Nota</TableHead>
                   <TableHead>Procedimentos</TableHead>
                   <TableHead className="w-[80px]">Tempo</TableHead>
-                  <TableHead className="w-[120px]">Nota</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -344,9 +344,9 @@ export default function PublicSupportReport() {
                     <TableCell className="text-xs max-w-[120px] truncate">{t.pontoRevenda || "—"}</TableCell>
                     <TableCell>{t.departamento ? <Badge variant="outline" className="text-xs whitespace-nowrap">{deptMap.get(t.departamento) ?? t.departamento}</Badge> : "—"}</TableCell>
                     <TableCell className="text-xs">{t.usuAtend || "—"}</TableCell>
+                    <TableCell>{renderNota(t.nota)}</TableCell>
                     <TableCell className="text-xs max-w-[180px]"><span className="truncate block">{t.nomesProcedimento || "—"}</span></TableCell>
                     <TableCell className="text-xs text-center">{t.tempoAtendimento || "—"}</TableCell>
-                    <TableCell>{renderNota(t.nota)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
