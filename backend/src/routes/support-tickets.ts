@@ -949,7 +949,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
 
         // Instrução extra para semanal/mensal GERAIS
         const promptAdicional = (!isIndividual && (reportType === "weekly" || reportType === "monthly"))
-          ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportType === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com:\n- Volume de atendimentos (se acima ou abaixo da média da equipe)\n- TMA (se está dentro do esperado ou fora)\n- Nota média recebida pelos clientes (se tem ou não avaliações)\n- Veredicto: ✅ Bom desempenho / ⚠️ Atenção necessária / 🔴 Desempenho preocupante\n\nSeja direto. Cite o nome do técnico em negrito (**Nome**). Não invente dados.`
+          ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportType === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva NO MÁXIMO 2 frases curtas (nunca um parágrafo) cobrindo: volume vs. média, TMA, nota e veredicto: ✅ Bom / ⚠️ Atenção / 🔴 Preocupante. Times grandes têm orçamento de tokens limitado — seja telegráfico aqui para não cortar a lista no meio. Cite o nome do técnico em negrito (**Nome**). Não invente dados.`
           : "";
 
         // Contexto adicional:
@@ -989,12 +989,22 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           sendEvent("chunk", { text: delta });
         };
 
-        if (provider.generateResponseStream) {
-          await provider.generateResponseStream(messages, onChunk);
-        } else {
-          // Provider sem suporte a streaming: cai no modo bloqueante e emite tudo de uma vez.
-          const aiResponse = await provider.generateResponse(messages);
-          onChunk(aiResponse.content ?? "");
+        const aiResult = provider.generateResponseStream
+          ? await provider.generateResponseStream(messages, onChunk)
+          : await (async () => {
+              // Provider sem suporte a streaming: cai no modo bloqueante e emite tudo de uma vez.
+              const res = await provider.generateResponse(messages);
+              onChunk(res.content ?? "");
+              return res;
+            })();
+
+        // A análise foi cortada por limite de tokens (equipe grande demais para o orçamento
+        // de saída). Sinaliza isso explicitamente em vez de deixar o relatório parecer
+        // completo quando na verdade parou no meio (ex.: faltando técnicos na avaliação).
+        if (aiResult.truncated) {
+          const aviso = `\n\n⚠️ *Análise interrompida por limite de tamanho da IA — a equipe cresceu e o relatório geral não coube inteiro. Gere relatórios individuais por técnico para ver a avaliação completa de quem ficou de fora.*`;
+          analiseIA += aviso;
+          sendEvent("chunk", { text: aviso });
         }
       } catch (aiErr) {
         const msg = aiErr instanceof Error ? aiErr.message : String(aiErr);

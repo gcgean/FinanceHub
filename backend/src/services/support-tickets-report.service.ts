@@ -559,7 +559,7 @@ export async function generateSupportTicketsAIReport(
 
     // Instrução extra para relatórios semanais/mensais GERAIS (avaliação individual de cada técnico)
     const promptAdicional = (!isIndividual && (reportTypeLower === "weekly" || reportTypeLower === "monthly"))
-      ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportTypeLower === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva 1 parágrafo curto com volume, TMA, nota e veredicto: ✅ Bom / ⚠️ Atenção / 🔴 Preocupante`
+      ? `\n\n---\nINSTRUÇÃO ADICIONAL PARA RELATÓRIO ${reportTypeLower === "weekly" ? "SEMANAL" : "MENSAL"}:\n\nAo final da sua análise, inclua obrigatoriamente uma seção:\n\n📋 AVALIAÇÃO INDIVIDUAL DOS TÉCNICOS\n\nPara cada técnico em "todos_tecnicos", escreva NO MÁXIMO 2 frases curtas (nunca um parágrafo) com volume, TMA, nota e veredicto: ✅ Bom / ⚠️ Atenção / 🔴 Preocupante. Times grandes têm orçamento de tokens limitado — seja telegráfico para não cortar a lista no meio.`
       : "";
 
     // Contexto adicional:
@@ -584,6 +584,12 @@ export async function generateSupportTicketsAIReport(
       { role: "user", content: resumoMetricas },
     ]);
     analiseIA = aiResponse.content ?? "";
+    // Equipe grande demais para o orçamento de tokens de saída — a análise parou no meio
+    // (ex.: faltando técnicos na avaliação individual). Sinaliza em vez de mandar cortado
+    // e sem aviso — este relatório vai direto pro Telegram do gestor/técnico.
+    if (aiResponse.truncated) {
+      analiseIA += `\n\n⚠️ *Análise interrompida por limite de tamanho da IA — a equipe cresceu e o relatório geral não coube inteiro. Gere relatórios individuais por técnico para ver a avaliação completa de quem ficou de fora.*`;
+    }
   } catch {
     analiseIA = "(Análise IA indisponível no momento)";
   }

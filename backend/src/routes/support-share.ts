@@ -253,6 +253,9 @@ export async function publicSupportRoutes(app: FastifyInstance) {
         { role: "user",   content: resumoMetricas },
       ]);
       analiseIA = aiResponse.content ?? "";
+      if (aiResponse.truncated) {
+        analiseIA += `\n\n⚠️ *Análise interrompida por limite de tamanho da IA — a equipe cresceu e o relatório geral não coube inteiro.*`;
+      }
     } catch {
       analiseIA = "(Análise IA indisponível no momento)";
     }

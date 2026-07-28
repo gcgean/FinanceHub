@@ -22,6 +22,7 @@ export class OpenAIProvider implements LLMProvider {
     return {
       content: response.choices[0]?.message?.content || "",
       tokensUsed: response.usage?.total_tokens,
+      truncated: response.choices[0]?.finish_reason === "length",
     };
   }
 
@@ -37,14 +38,16 @@ export class OpenAIProvider implements LLMProvider {
     });
 
     let content = "";
+    let truncated = false;
     for await (const part of stream) {
       const delta = part.choices[0]?.delta?.content ?? "";
       if (delta) {
         content += delta;
         onChunk(delta);
       }
+      if (part.choices[0]?.finish_reason === "length") truncated = true;
     }
 
-    return { content };
+    return { content, truncated };
   }
 }

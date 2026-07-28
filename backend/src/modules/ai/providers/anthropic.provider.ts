@@ -2,6 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { LLMMessage, LLMProvider, LLMResponse } from "./llm.interface.js";
 import { env } from "../../../lib/env.js";
 
+// Relatórios gerais (semanal/mensal) pedem 1 parágrafo por técnico + interpretação
+// do dashboard inteiro — com equipes de 15+ técnicos isso passava de 8192 tokens e
+// cortava a análise no meio (ex.: parava depois do 4º técnico, sem aviso nenhum).
+const MAX_OUTPUT_TOKENS = 16000;
+
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
 
@@ -23,9 +28,7 @@ export class AnthropicProvider implements LLMProvider {
       model,
       system: systemMessage,
       messages: chatMessages,
-      // 8192 evita o corte de relatórios longos (semanal/mensal com muitos técnicos),
-      // onde 4096 estourava no meio da última seção.
-      max_tokens: 8192,
+      max_tokens: MAX_OUTPUT_TOKENS,
     });
 
     const content = response.content[0].type === "text" ? response.content[0].text : "";
@@ -33,6 +36,7 @@ export class AnthropicProvider implements LLMProvider {
     return {
       content,
       tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+      truncated: response.stop_reason === "max_tokens",
     };
   }
 
@@ -50,8 +54,7 @@ export class AnthropicProvider implements LLMProvider {
       model,
       system: systemMessage,
       messages: chatMessages,
-      // 8192 evita o corte de relatórios longos (semanal/mensal com muitos técnicos).
-      max_tokens: 8192,
+      max_tokens: MAX_OUTPUT_TOKENS,
     });
 
     stream.on("text", (delta) => onChunk(delta));
@@ -62,6 +65,7 @@ export class AnthropicProvider implements LLMProvider {
     return {
       content,
       tokensUsed: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
+      truncated: finalMessage.stop_reason === "max_tokens",
     };
   }
 }

@@ -6,6 +6,8 @@ export interface LLMMessage {
 export interface LLMResponse {
   content: string;
   tokensUsed?: number;
+  /** true quando a resposta foi cortada por atingir o limite de tokens de saída (max_tokens/length). */
+  truncated?: boolean;
 }
 
 export interface LLMProvider {
