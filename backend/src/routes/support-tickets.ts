@@ -4,6 +4,7 @@ import { requireAuth, requireCompanyScope } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
 import { formatPeriodoExtenso, buildResumoDashboard, PROMPT_USO_DASHBOARD } from "../services/support-tickets-report.service.js";
+import { env } from "../lib/env.js";
 
 // ---------------------------------------------------------------------------
 // Helpers de métricas para relatório IA — formato estruturado
@@ -850,12 +851,24 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       // Motivo: a chamada de IA para times grandes pode levar 60-90s+ (texto longo, um
       // parágrafo por técnico). Uma resposta bloqueante única fica perto/estoura o timeout
       // do túnel (~100s). Com SSE os bytes continuam fluindo e a dashboard aparece na hora.
+      //
+      // reply.hijack() faz o Fastify pular seu ciclo normal de resposta — inclusive o hook
+      // "onSend" do @fastify/cors que normalmente injeta Access-Control-Allow-Origin. Sem
+      // isso o navegador bloqueia a resposta (cross-origin app.* → api.*) com "NetworkError".
+      // Por isso replicamos aqui a mesma decisão de origem permitida do cors em index.ts.
       reply.hijack();
+      const origin = request.headers.origin;
+      const allowedOrigins = new Set([env.FRONTEND_ORIGIN, "http://localhost:3000", "http://127.0.0.1:3000"]);
+      const corsHeaders: Record<string, string> =
+        origin && (env.NODE_ENV !== "production" || allowedOrigins.has(origin))
+          ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Vary": "Origin" }
+          : {};
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
+        ...corsHeaders,
       });
       const sendEvent = (event: string, data: unknown) => {
         reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
