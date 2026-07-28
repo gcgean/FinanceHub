@@ -35,4 +35,33 @@ export class AnthropicProvider implements LLMProvider {
       tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
     };
   }
+
+  async generateResponseStream(
+    messages: LLMMessage[],
+    onChunk: (delta: string) => void,
+    model = "claude-sonnet-5"
+  ): Promise<LLMResponse> {
+    const systemMessage = messages.find((m) => m.role === "system")?.content;
+    const chatMessages = messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+    const stream = this.client.messages.stream({
+      model,
+      system: systemMessage,
+      messages: chatMessages,
+      // 8192 evita o corte de relatórios longos (semanal/mensal com muitos técnicos).
+      max_tokens: 8192,
+    });
+
+    stream.on("text", (delta) => onChunk(delta));
+
+    const finalMessage = await stream.finalMessage();
+    const content = finalMessage.content[0]?.type === "text" ? finalMessage.content[0].text : "";
+
+    return {
+      content,
+      tokensUsed: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
+    };
+  }
 }

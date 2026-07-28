@@ -262,6 +262,52 @@ export function calcularMetricasDetalhadas(
     { nota: 0, count: semNota }, // 0 = sem avaliação
   ];
 
+  // ── Notas baixas por QUANTIDADE: clientes insatisfeitos e técnicos mal avaliados ──
+  // Escala 1–10: ≥7 é considerada boa; ≤6 insatisfatória; ≤4 crítica.
+  const NOTA_BAIXA_MAX = 6;
+  const NOTA_CRITICA_MAX = 4;
+  const buildNotasBaixas = (keyFn: (t: TicketMetrics) => string | null) => {
+    const map = new Map<string, { avaliados: number; baixas: number; criticas: number; soma: number }>();
+    tickets.forEach(t => {
+      const nome = keyFn(t)?.trim();
+      if (!nome || t.nota == null) return;
+      if (!map.has(nome)) map.set(nome, { avaliados: 0, baixas: 0, criticas: 0, soma: 0 });
+      const e = map.get(nome)!;
+      e.avaliados++;
+      e.soma += t.nota;
+      if (t.nota <= NOTA_BAIXA_MAX) e.baixas++;
+      if (t.nota <= NOTA_CRITICA_MAX) e.criticas++;
+    });
+    return [...map.entries()]
+      .filter(([, d]) => d.baixas > 0)
+      .map(([nome, d]) => ({
+        nome,
+        qtd_baixas: d.baixas,
+        qtd_criticas: d.criticas,
+        avaliados: d.avaliados,
+        nota_media: +(d.soma / d.avaliados).toFixed(1),
+        pct_baixas: Math.round((d.baixas / d.avaliados) * 100),
+      }))
+      .sort((a, b) => b.qtd_baixas - a.qtd_baixas || a.nota_media - b.nota_media)
+      .slice(0, 15);
+  };
+  const clientes_notas_baixas = buildNotasBaixas(t => t.nomeCli);
+  const tecnicos_notas_baixas = buildNotasBaixas(t => t.usuAtend);
+
+  // Amostra de atendimentos mal avaliados (com a observação) — o "porquê" da nota baixa
+  const atendimentos_nota_baixa = tickets
+    .filter(t => t.nota != null && t.nota <= NOTA_BAIXA_MAX)
+    .sort((a, b) => (a.nota ?? 0) - (b.nota ?? 0))
+    .slice(0, 15)
+    .map(t => ({
+      cliente: t.nomeCli?.trim() ?? "—",
+      tecnico: t.usuAtend?.trim() ?? "—",
+      nota: t.nota,
+      procedimento: (t.nomesProcedimento ?? "").trim() || "—",
+      data: t.dataHoraFinalizacao ?? null,
+      obs: (t.obsAtendimento ?? "").trim().slice(0, 240),
+    }));
+
   // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
   // Ignora "clientes" genéricos/buckets que não representam um cliente real.
   const normCli = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
@@ -333,6 +379,7 @@ export function calcularMetricasDetalhadas(
   return {
     periodo: { de: dateFrom, ate: dateTo },
     serie_diaria_departamentos, serie_diaria_atendentes, gargalos_recorrentes,
+    clientes_notas_baixas, tecnicos_notas_baixas, atendimentos_nota_baixa,
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
     atendentes_ativos: atendentesAtivos, ids, classificacao,
     fila, procedimentos, titulares, operadores, atendentes,
@@ -372,6 +419,40 @@ export function formatarRelatorioEstruturado(m: ReturnType<typeof calcularMetric
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AiMetricas = Record<string, any>;
+
+/**
+ * Bloco do DASHBOARD enviado à IA — dá a ela exatamente a mesma visão que o gestor
+ * tem na tela (filas, procedimentos com TMA, distribuição de notas, gargalos
+ * recorrentes, satisfação por cliente/técnico e evolução diária), para que a
+ * análise seja assertiva e ancorada nos mesmos números que o gestor está vendo.
+ */
+export function buildResumoDashboard(m: AiMetricas) {
+  return {
+    filas_por_departamento: m.fila,
+    procedimentos_top_com_tma: m.procedimentos,
+    distribuicao_notas: m.distribuicao_notas,
+    gargalos_recorrentes_cliente_procedimento: m.gargalos_recorrentes,
+    clientes_insatisfeitos_por_qtd_notas_baixas: m.clientes_notas_baixas,
+    tecnicos_pior_avaliados_por_qtd_notas_baixas: m.tecnicos_notas_baixas,
+    amostra_atendimentos_nota_baixa: m.atendimentos_nota_baixa,
+    evolucao_diaria_por_departamento: m.serie_diaria_departamentos,
+    evolucao_diaria_por_atendente: m.serie_diaria_atendentes,
+  };
+}
+
+/** Instrução que ensina a IA a usar o bloco `dashboard` do payload. */
+export const PROMPT_USO_DASHBOARD = `
+
+---
+DADOS DO DASHBOARD (campo "dashboard" do JSON):
+Você recebe exatamente os mesmos números que o gestor está vendo na tela. Use-os para embasar a análise:
+- "gargalos_recorrentes_cliente_procedimento": mesmo cliente abrindo o mesmo procedimento mais de 5× no período. Trate como problema não resolvido: aponte a provável causa raiz e a ação preventiva.
+- "clientes_insatisfeitos_por_qtd_notas_baixas" e "tecnicos_pior_avaliados_por_qtd_notas_baixas": ordenados por QUANTIDADE de notas baixas (≤6). Considere "qtd_baixas" junto de "avaliados" e "pct_baixas" — 10 notas baixas em 12 avaliações é grave; 10 em 400 não é.
+- "amostra_atendimentos_nota_baixa": traz a observação registrada nos piores atendimentos. Use para explicar POR QUE a nota foi baixa, citando o caso.
+- "evolucao_diaria_por_departamento" / "evolucao_diaria_por_atendente": série por dia. Aponte picos, quedas e dias críticos.
+- "procedimentos_top_com_tma": volume e tempo médio por procedimento. Procedimento de alto volume com TMA alto é candidato a automação/documentação.
+- "distribuicao_notas": inclui nota 0 = "sem avaliação". Se a maioria não avalia, sinalize que a nota média tem baixa confiabilidade.
+Não repita as tabelas cruas — interprete, priorize e transforme em ação.`;
 
 export type SupportTicketsReportResult = {
   content: string;
@@ -462,6 +543,7 @@ export async function generateSupportTicketsAIReport(
       clientes_recorrentes: metricas.titulares.slice(0, 15),
       clientes_pior_nota: metricas.clientes_pior_nota,
       procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
+      dashboard: buildResumoDashboard(metricas),
     }, null, 2);
 
     // Escolhe o prompt base dependendo se é relatório individual (usuAtend) ou geral
@@ -471,9 +553,9 @@ export async function generateSupportTicketsAIReport(
     // então pedimos à IA para NÃO criar seu próprio título nem linha de período.
     const tituloInstrucao = `\n\n---\nIMPORTANTE: NÃO escreva um título principal (ex.: "RELATÓRIO SEMANAL...") nem uma linha de "Período" no início — eles já são inseridos automaticamente acima da sua resposta. Comece direto pela primeira seção da análise.`;
 
-    const promptBase = isIndividual
+    const promptBase = (isIndividual
       ? buildPromptIndividual(nomeTecnico, tipoLabelPt, periodoExtenso)
-      : PROMPT_ANALISE_EQUIPE + tituloInstrucao;
+      : PROMPT_ANALISE_EQUIPE + tituloInstrucao) + PROMPT_USO_DASHBOARD;
 
     // Instrução extra para relatórios semanais/mensais GERAIS (avaliação individual de cada técnico)
     const promptAdicional = (!isIndividual && (reportTypeLower === "weekly" || reportTypeLower === "monthly"))

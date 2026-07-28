@@ -67,6 +67,7 @@ type
     FApiBaseUrl: string;
     FEntityConfigs: TEntitySyncConfigs;
     FIsSyncing: Boolean;
+    FLastReconnectAttempt: TDateTime;
     procedure Log(const AMsg: string);
     procedure CarregarEmpresas;
     procedure SetProgress(const AMsg: string; ACurrent, ATotal: Integer);
@@ -75,6 +76,7 @@ type
     procedure SaveSettings;
     procedure SyncEntityAuto(AEntityIndex: Integer);
     procedure UpdateAutoSyncStatus;
+    procedure TryAutoReconnect;
   public
     { Public declarations }
   end;
@@ -136,6 +138,7 @@ var
 begin
   FApiBaseUrl := 'https://api.gestorfacil.ia.br';
   FIsSyncing  := False;
+  FLastReconnectAttempt := 0;
   LoadSettings;
 
   FAPI := TFinanceHubAPI.Create(FApiBaseUrl);
@@ -477,6 +480,54 @@ begin
   SaveSyncSchedule(FEntityConfigs);
 end;
 
+procedure TfrmMain.TryAutoReconnect;
+const
+  RECONNECT_INTERVAL_HOURS = 1.0;
+var
+  LElapsedHours: Double;
+begin
+  // Nada a fazer se as duas conexões estão saudáveis
+  if DM.fdConCommand.Connected and DM.fdConMySQL.Connected then
+    Exit;
+
+  // Throttle: só tenta reconectar de novo depois de 1h da última tentativa
+  // (a primeira tentativa, com FLastReconnectAttempt = 0, é sempre imediata).
+  if FLastReconnectAttempt > 0 then
+  begin
+    LElapsedHours := (Now - FLastReconnectAttempt) * 24.0;
+    if LElapsedHours < RECONNECT_INTERVAL_HOURS then
+      Exit;
+  end;
+
+  FLastReconnectAttempt := Now;
+
+  if not DM.fdConCommand.Connected then
+  begin
+    Log('[Auto] Conexão com o banco Firebird caiu. Tentando reconectar...');
+    try
+      DM.ConfigurarConexaoCommand;
+      DM.fdConCommand.Connected := True;
+      Log('[Auto] Reconectado ao Firebird com sucesso!');
+    except
+      on E: Exception do
+        Log('[Auto] Falha ao reconectar Firebird (nova tentativa em 1h): ' + E.Message);
+    end;
+  end;
+
+  if not DM.fdConMySQL.Connected then
+  begin
+    Log('[Auto] Conexão com o MySQL Analytics caiu. Tentando reconectar...');
+    try
+      DM.ConfigurarConexaoMySQL;
+      DM.fdConMySQL.Connected := True;
+      Log('[Auto] Reconectado ao MySQL Analytics com sucesso!');
+    except
+      on E: Exception do
+        Log('[Auto] Falha ao reconectar MySQL Analytics (nova tentativa em 1h): ' + E.Message);
+    end;
+  end;
+end;
+
 procedure TfrmMain.tmrAutoSyncTimer(Sender: TObject);
 var
   I: Integer;
@@ -486,6 +537,10 @@ var
 begin
   // Pré-condições para qualquer auto-sync
   if FIsSyncing then Exit;
+
+  // Detecta conexão caída e tenta reconectar sozinho (throttle de 1h entre tentativas)
+  TryAutoReconnect;
+
   if not DM.fdConCommand.Connected then Exit;
   if FAPI.Token = '' then Exit;
 
@@ -521,7 +576,17 @@ begin
           Log(Format('[Auto] OK: %s', [ENTITY_NAMES[I]]));
         except
           on E: Exception do
+          begin
             Log(Format('[Auto] Erro em %s: %s', [ENTITY_NAMES[I], E.Message]));
+            // Erro de I/O na conexão (queda de rede/timeout): força o estado
+            // "desconectado" para que TryAutoReconnect detecte e tente religar
+            // sozinho a cada 1h, em vez de ficar preso num estado inconsistente.
+            if Pos('[FireDAC][Phys]', E.Message) > 0 then
+            begin
+              try DM.fdConCommand.Connected := False; except end;
+              try DM.fdConMySQL.Connected   := False; except end;
+            end;
+          end;
         end;
         Application.ProcessMessages;
       end;

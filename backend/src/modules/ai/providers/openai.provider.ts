@@ -24,4 +24,27 @@ export class OpenAIProvider implements LLMProvider {
       tokensUsed: response.usage?.total_tokens,
     };
   }
+
+  async generateResponseStream(
+    messages: LLMMessage[],
+    onChunk: (delta: string) => void,
+    model = "gpt-4-turbo"
+  ): Promise<LLMResponse> {
+    const stream = await this.client.chat.completions.create({
+      model,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      stream: true,
+    });
+
+    let content = "";
+    for await (const part of stream) {
+      const delta = part.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        content += delta;
+        onChunk(delta);
+      }
+    }
+
+    return { content };
+  }
 }

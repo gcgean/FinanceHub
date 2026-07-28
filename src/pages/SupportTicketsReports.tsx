@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, getApiBaseUrl } from "@/utils/api";
+import { useAuthStore } from "@/stores/authStore";
 import { listDepartments } from "@/api/departments";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import { supportShareApi, type SupportShareLink } from "@/api/support-share";
 import { Textarea } from "@/components/ui/textarea";
 import { DateInputPicker } from "@/components/ui/DateInputPicker";
 import { RoutinePanel } from "@/components/routines/RoutinePanel";
-import { SupportDashboard, type AiMetricas } from "@/components/reports/SupportDashboard";
+import { SupportDashboard } from "@/components/reports/SupportDashboard";
 
 const PAGE_SIZE = 50;
 
@@ -108,8 +109,7 @@ export default function SupportTicketsReports() {
 
   // ── IA — relatório ────────────────────────────────────────────────────────
   const [aiReport,    setAiReport]    = useState<string | null>(null);   // texto completo (para copiar)
-  const [aiAnalise,   setAiAnalise]   = useState<string | null>(null);   // só o texto da IA
-  const [aiMetricas,  setAiMetricas]  = useState<AiMetricas | null>(null);
+  const [aiAnalise,   setAiAnalise]   = useState<string | null>(null);   // só o texto da IA (vai sendo preenchido via streaming)
   const [aiLoading,   setAiLoading]   = useState(false);
   const [aiError,     setAiError]     = useState<string | null>(null);
   const [aiType,      setAiType]      = useState<"daily" | "weekly" | "monthly" | null>(null);
@@ -307,35 +307,80 @@ export default function SupportTicketsReports() {
   };
 
   // ── IA — relatório ────────────────────────────────────────────────────────
+  // Consome o endpoint via Server-Sent Events: para times grandes a IA pode levar
+  // 60-90s+ para escrever o relatório inteiro (um parágrafo por técnico). Uma
+  // resposta bloqueante única fica perto/estoura o timeout do túnel (~100s) e
+  // o pedido parece "não gerar nada". Com streaming o texto vai aparecendo aos
+  // poucos e a conexão nunca fica parada esperando o corpo inteiro de uma vez.
   const generateAIReport = async (type: "daily" | "weekly" | "monthly") => {
     setAiLoading(true);
     setAiError(null);
     setAiReport(null);
     setAiAnalise(null);
-    setAiMetricas(null);
     setAiType(type);
     setAiExpanded(true);
     setChatMessages([]);
     setChatOpen(false);
     const { from, to } = resolveReportDates(type);
+
+    const { token, companyId } = useAuthStore.getState();
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (token) headers.set("authorization", `Bearer ${token}`);
+    if (companyId) headers.set("x-company-id", companyId);
+
     try {
-      const result = await apiFetch<{ report: string; analise: string; metricas: AiMetricas }>(
-        "/support-tickets/ai-report",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            dateFrom:      `${from}T00:00:00`,
-            dateTo:        `${to}T23:59:59`,
-            reportType:    type,
-            departamentos: selectedDepts.length > 0 ? selectedDepts : undefined,
-            usuAtend:      usuAtendInput.trim() || undefined,
-          }),
+      const res = await fetch(`${getApiBaseUrl()}/support-tickets/ai-report`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          dateFrom:      `${from}T00:00:00`,
+          dateTo:        `${to}T23:59:59`,
+          reportType:    type,
+          departamentos: selectedDepts.length > 0 ? selectedDepts : undefined,
+          usuAtend:      usuAtendInput.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok || !res.body) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? `Erro ao gerar relatório (HTTP ${res.status})`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let analiseAcc = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIdx: number;
+        while ((sepIdx = buffer.indexOf("\n\n")) >= 0) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+
+          let eventName = "message";
+          let dataStr = "";
+          for (const line of rawEvent.split("\n")) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          const data = JSON.parse(dataStr);
+
+          if (eventName === "chunk") {
+            analiseAcc += data.text ?? "";
+            setAiAnalise(analiseAcc);
+          } else if (eventName === "done") {
+            setAiReport(data.report ?? null);
+            setAiAnalise(data.analise ?? analiseAcc);
+          } else if (eventName === "error") {
+            throw new Error(data.message ?? "Erro ao gerar relatório");
+          }
         }
-      );
-      setAiReport(result.report);
-      setAiAnalise(result.analise);
-      setAiMetricas(result.metricas ?? null);
+      }
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : "Erro ao gerar relatório");
     } finally {
@@ -996,12 +1041,8 @@ export default function SupportTicketsReports() {
             </div>
           )}
 
-          {/* Dashboard de métricas (gerada pelos dados, não pela IA) */}
-          {aiMetricas && !aiLoading && aiExpanded && (
-            <SupportDashboard m={aiMetricas} />
-          )}
-
           {/* Análise textual da IA */}
+          {/* A dashboard já aparece uma vez no topo ("Dashboard do Período") — não repetir aqui. */}
           {aiAnalise && !aiLoading && aiExpanded && (
             <div className="rounded-lg border bg-muted/30 p-5">
               <div className="flex items-center gap-2 mb-3 pb-3 border-b">

@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireCompanyScope } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
-import { formatPeriodoExtenso } from "../services/support-tickets-report.service.js";
+import { formatPeriodoExtenso, buildResumoDashboard, PROMPT_USO_DASHBOARD } from "../services/support-tickets-report.service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers de métricas para relatório IA — formato estruturado
@@ -176,6 +176,52 @@ function calcularMetricasDetalhadas(
       obs: t.obsAtendimento!.trim().slice(0, 300), // limita tamanho
     }));
 
+  // ── Notas baixas por QUANTIDADE: clientes insatisfeitos e técnicos mal avaliados ──
+  // Escala 1–10: ≥7 é considerada boa; ≤6 insatisfatória; ≤4 crítica.
+  const NOTA_BAIXA_MAX = 6;
+  const NOTA_CRITICA_MAX = 4;
+  const buildNotasBaixas = (keyFn: (t: TicketMetrics) => string | null) => {
+    const map = new Map<string, { avaliados: number; baixas: number; criticas: number; soma: number }>();
+    tickets.forEach(t => {
+      const nome = keyFn(t)?.trim();
+      if (!nome || t.nota == null) return;
+      if (!map.has(nome)) map.set(nome, { avaliados: 0, baixas: 0, criticas: 0, soma: 0 });
+      const e = map.get(nome)!;
+      e.avaliados++;
+      e.soma += t.nota;
+      if (t.nota <= NOTA_BAIXA_MAX) e.baixas++;
+      if (t.nota <= NOTA_CRITICA_MAX) e.criticas++;
+    });
+    return [...map.entries()]
+      .filter(([, d]) => d.baixas > 0)
+      .map(([nome, d]) => ({
+        nome,
+        qtd_baixas: d.baixas,
+        qtd_criticas: d.criticas,
+        avaliados: d.avaliados,
+        nota_media: +(d.soma / d.avaliados).toFixed(1),
+        pct_baixas: Math.round((d.baixas / d.avaliados) * 100),
+      }))
+      .sort((a, b) => b.qtd_baixas - a.qtd_baixas || a.nota_media - b.nota_media)
+      .slice(0, 15);
+  };
+  const clientes_notas_baixas = buildNotasBaixas(t => t.nomeCli);
+  const tecnicos_notas_baixas = buildNotasBaixas(t => t.usuAtend);
+
+  // Amostra de atendimentos mal avaliados (com a observação) — o "porquê" da nota baixa
+  const atendimentos_nota_baixa = tickets
+    .filter(t => t.nota != null && t.nota <= NOTA_BAIXA_MAX)
+    .sort((a, b) => (a.nota ?? 0) - (b.nota ?? 0))
+    .slice(0, 15)
+    .map(t => ({
+      cliente: t.nomeCli?.trim() ?? "—",
+      tecnico: t.usuAtend?.trim() ?? "—",
+      nota: t.nota,
+      procedimento: (t.nomesProcedimento ?? "").trim() || "—",
+      data: t.dataHoraFinalizacao ?? null,
+      obs: (t.obsAtendimento ?? "").trim().slice(0, 240),
+    }));
+
   // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
   // Ignora "clientes" genéricos/buckets que não representam um cliente real.
   const normCli = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
@@ -249,6 +295,9 @@ function calcularMetricasDetalhadas(
     serie_diaria_departamentos,
     serie_diaria_atendentes,
     gargalos_recorrentes,
+    clientes_notas_baixas,
+    tecnicos_notas_baixas,
+    atendimentos_nota_baixa,
     total_atendimentos: total,
     tma_geral: tmaGeral,
     nota_media: notaMedia,
@@ -797,8 +846,27 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       // 5. Gerar parte estruturada (código TypeScript — não depende de IA)
       const estruturado = formatarRelatorioEstruturado(metricas, reportType, userName);
 
+      // ── SSE: a partir daqui a resposta é transmitida em pedaços (Server-Sent Events).
+      // Motivo: a chamada de IA para times grandes pode levar 60-90s+ (texto longo, um
+      // parágrafo por técnico). Uma resposta bloqueante única fica perto/estoura o timeout
+      // do túnel (~100s). Com SSE os bytes continuam fluindo e a dashboard aparece na hora.
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      const sendEvent = (event: string, data: unknown) => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      // Dashboard/estruturado já pode ser exibido imediatamente — não depende da IA.
+      sendEvent("init", { metricas, estruturado });
+
       // 6. Chamar IA apenas para análise interpretativa breve
       let analiseIA = "";
+      let streamedAny = false;
       try {
         const provider = await chatService.getProvider(companyId);
         // Calcula média de atendimentos por técnico para identificar desbalanceamento
@@ -854,6 +922,7 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           clientes_recorrentes: metricas.titulares.slice(0, 15),
           clientes_pior_nota: metricas.clientes_pior_nota,
           procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
+          dashboard: buildResumoDashboard(metricas),
         }, null, 2);
 
         // No relatório geral o cabeçalho com o período é inserido pelo CÓDIGO (determinístico),
@@ -861,9 +930,9 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         const tituloInstrucao = `\n\n---\nIMPORTANTE: NÃO escreva um título principal (ex.: "RELATÓRIO SEMANAL...") nem uma linha de "Período" no início — eles já são inseridos automaticamente acima da sua resposta. Comece direto pela primeira seção da análise.`;
 
         // Escolhe prompt base: individual (quando filtrado por técnico) ou geral da equipe
-        const promptBase = isIndividual
+        const promptBase = (isIndividual
           ? buildPromptIndividual(nomeTecnico)
-          : PROMPT_ANALISE + tituloInstrucao;
+          : PROMPT_ANALISE + tituloInstrucao) + PROMPT_USO_DASHBOARD;
 
         // Instrução extra para semanal/mensal GERAIS
         const promptAdicional = (!isIndividual && (reportType === "weekly" || reportType === "monthly"))
@@ -883,33 +952,48 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           contextoIA = `\n\n---\n${label}\n${gestorContexto}\n---`;
         }
 
-        const aiResponse = await provider.generateResponse([
-          { role: "system", content: promptBase + contextoIA + promptAdicional },
-          { role: "user",   content: resumoMetricas },
-        ]);
-        analiseIA = aiResponse.content ?? "";
+        const messages = [
+          { role: "system" as const, content: promptBase + contextoIA + promptAdicional },
+          { role: "user" as const,   content: resumoMetricas },
+        ];
+
+        // Cabeçalho determinístico com o período por extenso no relatório GERAL,
+        // emitido só quando a IA de fato começa a responder (evita header antes de um erro).
+        // (No individual o período já vai no cabeçalho gerado pela própria IA.)
+        const onChunk = (delta: string) => {
+          if (!delta) return;
+          if (!streamedAny) {
+            streamedAny = true;
+            if (!isIndividual) {
+              const periodoExtenso = formatPeriodoExtenso(new Date(dateFrom), new Date(dateTo));
+              const tipoLabelPt = reportType === "weekly" ? "SEMANAL" : reportType === "monthly" ? "MENSAL" : "DIÁRIO";
+              const cabecalhoPeriodo = `# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\n*Período analisado: ${periodoExtenso}*\n\n---\n\n`;
+              analiseIA += cabecalhoPeriodo;
+              sendEvent("chunk", { text: cabecalhoPeriodo });
+            }
+          }
+          analiseIA += delta;
+          sendEvent("chunk", { text: delta });
+        };
+
+        if (provider.generateResponseStream) {
+          await provider.generateResponseStream(messages, onChunk);
+        } else {
+          // Provider sem suporte a streaming: cai no modo bloqueante e emite tudo de uma vez.
+          const aiResponse = await provider.generateResponse(messages);
+          onChunk(aiResponse.content ?? "");
+        }
       } catch (aiErr) {
         const msg = aiErr instanceof Error ? aiErr.message : String(aiErr);
         console.error("[ai-report] Falha ao chamar IA:", msg);
-        analiseIA = `(Análise IA indisponível no momento — ${msg})`;
-      }
-
-      // Cabeçalho determinístico com o período por extenso no relatório GERAL.
-      // (No individual o período já vai no cabeçalho gerado pela IA.)
-      if (!isIndividual && analiseIA && !analiseIA.startsWith("(")) {
-        const periodoExtenso = formatPeriodoExtenso(new Date(dateFrom), new Date(dateTo));
-        const tipoLabelPt = reportType === "weekly" ? "SEMANAL" : reportType === "monthly" ? "MENSAL" : "DIÁRIO";
-        const cabecalhoPeriodo = `# 📊 RELATÓRIO ${tipoLabelPt} DE SUPORTE — ${periodoExtenso}\n*Período analisado: ${periodoExtenso}*`;
-        analiseIA = `${cabecalhoPeriodo}\n\n---\n\n${analiseIA}`;
+        const fallback = `(Análise IA indisponível no momento — ${msg})`;
+        analiseIA += fallback;
+        sendEvent("chunk", { text: fallback });
       }
 
       const relatorioFinal = `${estruturado}\n\n💡 ANÁLISE\n\n${analiseIA}`;
-
-      return reply.send({
-        report:   relatorioFinal,  // texto completo para copiar/compartilhar
-        analise:  analiseIA,       // só o texto da IA (para exibir separado da dashboard)
-        metricas,
-      });
+      sendEvent("done", { report: relatorioFinal, analise: analiseIA });
+      reply.raw.end();
     }
   );
 

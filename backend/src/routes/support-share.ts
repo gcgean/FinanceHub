@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
-import { calcularMetricasDetalhadas, formatarRelatorioEstruturado } from "../services/support-tickets-report.service.js";
+import { calcularMetricasDetalhadas, formatarRelatorioEstruturado, buildResumoDashboard, PROMPT_USO_DASHBOARD } from "../services/support-tickets-report.service.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
 
 // ── helpers reutilizados do support-tickets (WHERE builder) ───────────────────
@@ -242,13 +242,14 @@ export async function publicSupportRoutes(app: FastifyInstance) {
         clientes_pior_nota: metricas.clientes_pior_nota,
         observacoes_atendimentos: metricas.obs_amostra,
         procedimentos_dominantes: metricas.procedimentos.slice(0, 8),
+        dashboard: buildResumoDashboard(metricas),
       }, null, 2);
 
       const gestorContexto = aiContextRow?.context?.trim() ?? "";
       const contextoIA = gestorContexto ? `\n\n---\nCONTEXTO DA EQUIPE:\n${gestorContexto}\n---` : "";
 
       const aiResponse = await provider.generateResponse([
-        { role: "system", content: `Você é um analista sênior de suporte. Analise os dados e escreva um relatório direto para o gestor.${contextoIA}` },
+        { role: "system", content: `Você é um analista sênior de suporte. Analise os dados e escreva um relatório direto para o gestor.${contextoIA}${PROMPT_USO_DASHBOARD}` },
         { role: "user",   content: resumoMetricas },
       ]);
       analiseIA = aiResponse.content ?? "";
