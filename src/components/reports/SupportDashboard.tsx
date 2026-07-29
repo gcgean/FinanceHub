@@ -1,5 +1,5 @@
 import React from "react";
-import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy, Activity, AlertTriangle, Frown, UserX, MessageSquare } from "lucide-react";
+import { Headphones, Clock, Star, Users, TrendingUp, BarChart2, ListOrdered, Award, Trophy, Activity, AlertTriangle, Frown, Smile, UserX, UserCheck, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -119,22 +119,30 @@ function DailyLineChart({
   );
 }
 
-// ── Notas baixas (por quantidade) — clientes insatisfeitos / técnicos mal avaliados ──
-function NotasBaixasCard({
-  icon, title, subtitle, itens, emptyMsg,
+// ── Satisfação por quantidade — detratores (tone="ruim") / promotores (tone="boa") ──
+function NotasCard({
+  icon, title, subtitle, itens, emptyMsg, tone,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   itens: AiMetricas[];
   emptyMsg: string;
+  tone: "ruim" | "boa";
 }) {
-  const max = Math.max(1, ...itens.map((x: AiMetricas) => x.qtd_baixas ?? 0));
+  const positivo = tone === "boa";
+  const max = Math.max(1, ...itens.map((x: AiMetricas) => x.qtd ?? 0));
+  const corBarra = positivo ? "bg-emerald-500" : "bg-red-500";
+  const corQtd = positivo ? "bg-emerald-500/15 text-emerald-600" : "bg-red-500/15 text-red-500";
+  const corDestaque = positivo ? "border-emerald-400 text-emerald-600" : "border-red-400 text-red-500";
+
   return (
     <ChartCard icon={icon} title={title}>
       <p className="text-xs text-muted-foreground -mt-2 mb-3">{subtitle}</p>
       {itens.length === 0 ? (
-        <p className="text-sm text-emerald-600 dark:text-emerald-400 py-2">✅ {emptyMsg}</p>
+        <p className={`text-sm py-2 ${positivo ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400"}`}>
+          {positivo ? "—" : "✅"} {emptyMsg}
+        </p>
       ) : (
         <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
           {itens.map((x: AiMetricas, i: number) => (
@@ -144,31 +152,33 @@ function NotasBaixasCard({
                   <span className="text-muted-foreground mr-1.5">{i + 1}.</span>{x.nome}
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {x.qtd_criticas > 0 && (
+                  {x.qtd_destaque > 0 && (
                     <Badge
                       variant="outline"
-                      className="text-xs px-1.5 py-0 border-red-400 text-red-500"
-                      title="Notas críticas (≤ 4)"
+                      className={`text-xs px-1.5 py-0 ${corDestaque}`}
+                      title={positivo ? "Notas máximas (10)" : "Notas críticas (≤ 4)"}
                     >
-                      {x.qtd_criticas} crítica{x.qtd_criticas > 1 ? "s" : ""}
+                      {positivo
+                        ? `${x.qtd_destaque}× nota 10`
+                        : `${x.qtd_destaque} crítica${x.qtd_destaque > 1 ? "s" : ""}`}
                     </Badge>
                   )}
                   <Badge variant="outline" className="text-xs px-1.5 py-0 border-yellow-400 text-yellow-600">
                     ★ {Number(x.nota_media).toFixed(1)}
                   </Badge>
-                  <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 whitespace-nowrap">
-                    {x.qtd_baixas} de {x.avaliados}
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${corQtd}`}>
+                    {x.qtd} de {x.avaliados}
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden flex-1">
                   <div
-                    className="h-full rounded-full bg-red-500 transition-all"
-                    style={{ width: `${Math.round(((x.qtd_baixas ?? 0) / max) * 100)}%` }}
+                    className={`h-full rounded-full transition-all ${corBarra}`}
+                    style={{ width: `${Math.round(((x.qtd ?? 0) / max) * 100)}%` }}
                   />
                 </div>
-                <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{x.pct_baixas}%</span>
+                <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{x.pct}%</span>
               </div>
             </div>
           ))}
@@ -265,21 +275,39 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         );
       })()}
 
-      {/* Satisfação — quem está insatisfeito e quem está sendo mal avaliado */}
+      {/* Satisfação — detratores e promotores, lado a lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <NotasBaixasCard
+        <NotasCard
+          tone="ruim"
           icon={<Frown className="w-4 h-4 text-red-500" />}
           title="Clientes Insatisfeitos"
-          subtitle="Clientes que mais deram notas baixas (≤ 6), ordenados por quantidade."
+          subtitle="Clientes que mais deram notas baixas (≤ 6), por quantidade."
           itens={m.clientes_notas_baixas ?? []}
           emptyMsg="Nenhum cliente registrou avaliação baixa no período."
         />
-        <NotasBaixasCard
+        <NotasCard
+          tone="boa"
+          icon={<Smile className="w-4 h-4 text-emerald-500" />}
+          title="Clientes Promotores"
+          subtitle="Clientes mais satisfeitos — deram notas acima do padrão (≥ 8), por quantidade."
+          itens={m.clientes_promotores ?? []}
+          emptyMsg="Nenhum cliente deu nota acima do padrão (7) no período."
+        />
+        <NotasCard
+          tone="ruim"
           icon={<UserX className="w-4 h-4 text-red-500" />}
           title="Técnicos com Piores Avaliações"
-          subtitle="Técnicos que mais receberam notas baixas (≤ 6), ordenados por quantidade."
+          subtitle="Técnicos que mais receberam notas baixas (≤ 6), por quantidade."
           itens={m.tecnicos_notas_baixas ?? []}
           emptyMsg="Nenhum técnico recebeu avaliação baixa no período."
+        />
+        <NotasCard
+          tone="boa"
+          icon={<UserCheck className="w-4 h-4 text-emerald-500" />}
+          title="Técnicos Mais Elogiados"
+          subtitle="Técnicos que mais receberam notas acima do padrão (≥ 8), por quantidade."
+          itens={m.tecnicos_promotores ?? []}
+          emptyMsg="Nenhum técnico recebeu nota acima do padrão (7) no período."
         />
       </div>
 

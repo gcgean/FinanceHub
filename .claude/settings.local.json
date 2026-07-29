@@ -334,7 +334,13 @@
       "Bash(tee /tmp/tscout.txt)",
       "Bash(npx prisma *)",
       "Bash(npx vite *)",
-      "Bash(git --no-pager diff --stat)"
+      "Bash(git --no-pager diff --stat)",
+      "Read(//c/Projetos/prod/FinanceHub/**)",
+      "Bash(curl -s 'http://localhost:3333/api/clientes?page=1&limit=3&ativo=S&bloqueado=N' -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('total \\(sem maquininha\\):',j.total\\)}\\)\")",
+      "Bash(curl -s 'http://localhost:3333/api/clientes?page=1&limit=2000&ativo=S&bloqueado=N&semMaquininha=true' -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('1990 esta na lista?', j.data.some\\(c=>c.id===1990\\), '| total:', j.total\\)}\\)\")",
+      "Bash(taskkill //PID 25296 //T //F)"
     ]
   }
 }

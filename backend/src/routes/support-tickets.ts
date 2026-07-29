@@ -42,7 +42,11 @@ function calcularMetricasDetalhadas(
     ? Math.round(temposValidos.reduce((a, b) => a + b, 0) / temposValidos.length) : 0;
 
   // Notas
-  const notasArr = tickets.filter(t => t.nota != null).map(t => t.nota as number);
+  // No sistema de origem, nota 0 (e NULL) significam "SEM AVALIAÇÃO" — não são nota ruim.
+  // Contá-las como zero distorceria a média e encheria os painéis de insatisfação
+  // com atendimentos que simplesmente nunca foram avaliados.
+  const temNota = (n: number | null): n is number => n != null && n > 0;
+  const notasArr = tickets.filter(t => temNota(t.nota)).map(t => t.nota as number);
   const notaMedia = notasArr.length ? +(notasArr.reduce((a, b) => a + b, 0) / notasArr.length).toFixed(1) : null;
 
   // Atendentes ativos
@@ -111,7 +115,7 @@ function calcularMetricasDetalhadas(
     if (!cliNotaMap.has(nome)) cliNotaMap.set(nome, { notas: [], count: 0 });
     const e = cliNotaMap.get(nome)!;
     e.count++;
-    if (t.nota != null) e.notas.push(t.nota);
+    if (temNota(t.nota)) e.notas.push(t.nota);
   });
   // Clientes com nota média mais baixa (mín. 1 avaliação), ordenados do pior para o melhor
   const clientesPiorNota = [...cliNotaMap.entries()]
@@ -142,7 +146,7 @@ function calcularMetricasDetalhadas(
     const e = tecDataMap.get(nome)!;
     e.count++;
     if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
-    if (t.nota != null) e.notas.push(t.nota);
+    if (temNota(t.nota)) e.notas.push(t.nota);
   });
   const atendentes = [...tecDataMap.entries()]
     .map(([nome, d]) => ({
@@ -177,41 +181,53 @@ function calcularMetricasDetalhadas(
       obs: t.obsAtendimento!.trim().slice(0, 300), // limita tamanho
     }));
 
-  // ── Notas baixas por QUANTIDADE: clientes insatisfeitos e técnicos mal avaliados ──
-  // Escala 1–10: ≥7 é considerada boa; ≤6 insatisfatória; ≤4 crítica.
-  const NOTA_BAIXA_MAX = 6;
-  const NOTA_CRITICA_MAX = 4;
-  const buildNotasBaixas = (keyFn: (t: TicketMetrics) => string | null) => {
-    const map = new Map<string, { avaliados: number; baixas: number; criticas: number; soma: number }>();
+  // ── Satisfação por QUANTIDADE: detratores (insatisfeitos) e promotores ──
+  // 7 é a nota padrão do sistema de origem (neutra). Abaixo dela = insatisfação real;
+  // acima dela = elogio real. Notas 0/NULL já foram descartadas por temNota().
+  const NOTA_BAIXA_MAX = 6;   // ≤6 → insatisfeito
+  const NOTA_CRITICA_MAX = 4; // ≤4 → crítico
+  const NOTA_ALTA_MIN = 8;    // ≥8 → promotor (acima do padrão 7)
+  const NOTA_MAXIMA = 10;     // 10  → nota máxima
+  const buildRankingNotas = (keyFn: (t: TicketMetrics) => string | null, faixa: "baixa" | "alta") => {
+    const map = new Map<string, { avaliados: number; naFaixa: number; destaque: number; soma: number }>();
     tickets.forEach(t => {
       const nome = keyFn(t)?.trim();
-      if (!nome || t.nota == null) return;
-      if (!map.has(nome)) map.set(nome, { avaliados: 0, baixas: 0, criticas: 0, soma: 0 });
+      if (!nome || !temNota(t.nota)) return;
+      if (!map.has(nome)) map.set(nome, { avaliados: 0, naFaixa: 0, destaque: 0, soma: 0 });
       const e = map.get(nome)!;
       e.avaliados++;
       e.soma += t.nota;
-      if (t.nota <= NOTA_BAIXA_MAX) e.baixas++;
-      if (t.nota <= NOTA_CRITICA_MAX) e.criticas++;
+      if (faixa === "baixa") {
+        if (t.nota <= NOTA_BAIXA_MAX) e.naFaixa++;
+        if (t.nota <= NOTA_CRITICA_MAX) e.destaque++;
+      } else {
+        if (t.nota >= NOTA_ALTA_MIN) e.naFaixa++;
+        if (t.nota >= NOTA_MAXIMA) e.destaque++;
+      }
     });
     return [...map.entries()]
-      .filter(([, d]) => d.baixas > 0)
+      .filter(([, d]) => d.naFaixa > 0)
       .map(([nome, d]) => ({
         nome,
-        qtd_baixas: d.baixas,
-        qtd_criticas: d.criticas,
+        qtd: d.naFaixa,
+        qtd_destaque: d.destaque,
         avaliados: d.avaliados,
         nota_media: +(d.soma / d.avaliados).toFixed(1),
-        pct_baixas: Math.round((d.baixas / d.avaliados) * 100),
+        pct: Math.round((d.naFaixa / d.avaliados) * 100),
       }))
-      .sort((a, b) => b.qtd_baixas - a.qtd_baixas || a.nota_media - b.nota_media)
+      .sort((a, b) => faixa === "baixa"
+        ? (b.qtd - a.qtd || a.nota_media - b.nota_media)
+        : (b.qtd - a.qtd || b.nota_media - a.nota_media))
       .slice(0, 15);
   };
-  const clientes_notas_baixas = buildNotasBaixas(t => t.nomeCli);
-  const tecnicos_notas_baixas = buildNotasBaixas(t => t.usuAtend);
+  const clientes_notas_baixas = buildRankingNotas(t => t.nomeCli, "baixa");
+  const tecnicos_notas_baixas = buildRankingNotas(t => t.usuAtend, "baixa");
+  const clientes_promotores   = buildRankingNotas(t => t.nomeCli, "alta");
+  const tecnicos_promotores   = buildRankingNotas(t => t.usuAtend, "alta");
 
   // Amostra de atendimentos mal avaliados (com a observação) — o "porquê" da nota baixa
   const atendimentos_nota_baixa = tickets
-    .filter(t => t.nota != null && t.nota <= NOTA_BAIXA_MAX)
+    .filter(t => temNota(t.nota) && t.nota <= NOTA_BAIXA_MAX)
     .sort((a, b) => (a.nota ?? 0) - (b.nota ?? 0))
     .slice(0, 15)
     .map(t => ({
@@ -238,7 +254,7 @@ function calcularMetricasDetalhadas(
     const e = cliProcMap.get(key)!;
     e.count++;
     if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
-    if (t.nota != null) e.notas.push(t.nota);
+    if (temNota(t.nota)) e.notas.push(t.nota);
   });
   const gargalos_recorrentes = [...cliProcMap.values()]
     .filter(e => e.count > 5)
@@ -299,6 +315,8 @@ function calcularMetricasDetalhadas(
     clientes_notas_baixas,
     tecnicos_notas_baixas,
     atendimentos_nota_baixa,
+    clientes_promotores,
+    tecnicos_promotores,
     total_atendimentos: total,
     tma_geral: tmaGeral,
     nota_media: notaMedia,
