@@ -353,7 +353,9 @@
       "Bash(grep -n \"resetProduct\\({ trialDays: product.trialDays ?? 0, gatewayName: product.gatewayName ?? '' }\\)\" \"packages/web/src/app/\\(dashboard\\)/products/[id]/page.tsx\")",
       "Bash(echo \"EXIT:$?\")",
       "Bash(echo \"BE_EXIT:$?\")",
-      "Bash(echo \"FE_EXIT:$?\")"
+      "Bash(echo \"FE_EXIT:$?\")",
+      "Read(//c/Projetos/dev/SisLotes/**)",
+      "Bash(cd \"C:/Projetos/dev/SisLotes\" && grep -rln \"hubBilling\\\\|HUB_BILLING\\\\|hub_customer_id\\\\|pagamentos.baselider\" --include=*.ts --include=*.tsx --include=*.yml --include=*.md . 2>/dev/null | grep -v node_modules | head -20)"
     ]
   }
 }
