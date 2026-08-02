@@ -349,7 +349,11 @@
       "Bash(taskkill //PID 21136 //T //F)",
       "Bash(taskkill //PID 19728 //T //F)",
       "Bash(npm view *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(grep -n \"resetProduct\\({ trialDays: product.trialDays ?? 0, gatewayName: product.gatewayName ?? '' }\\)\" \"packages/web/src/app/\\(dashboard\\)/products/[id]/page.tsx\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(echo \"BE_EXIT:$?\")",
+      "Bash(echo \"FE_EXIT:$?\")"
     ]
   }
 }
