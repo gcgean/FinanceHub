@@ -2501,6 +2501,10 @@ begin
 
     // FASE 1: Carrega para memória
     Q.Open;
+    // RecordCount só reflete o lote já buscado (padrão do FireDAC = 50 linhas),
+    // o que fazia o log informar "50" mesmo com centenas de registros.
+    // FetchAll traz todos antes de contar, deixando log e barra de progresso corretos.
+    Q.FetchAll;
     LTotal := Q.RecordCount;
     Log(Format('Atendimentos encontrados: %d', [LTotal]));
 

@@ -46,6 +46,9 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
 // ── Ranking composto ─────────────────────────────────────────────────────────
 // Ranking completo: todos os técnicos do período.
 // Critérios (em ordem): 1º nota_media desc · 2º atendimentos desc · 3º tma asc
+// Volume mínimo para o filtro opcional do ranking (não afeta a ordenação).
+const RANKING_MIN_CALLS = 200;
+
 function buildRanking(atendentes: AiMetricas[]): AiMetricas[] {
   return [...atendentes]
     .sort((a, b) => {
@@ -190,7 +193,13 @@ function NotasCard({
 
 export function SupportDashboard({ m }: { m: AiMetricas }) {
   const atendentes = m.atendentes ?? [];
-  const ranking    = buildRanking(atendentes);
+  // Filtro local do ranking: técnicos de volume muito baixo distorcem a leitura por nota
+  // (ex.: 24 chamados com nota alta liderando quem atendeu 400). A ordenação não muda.
+  const [rankingSoVolume, setRankingSoVolume] = React.useState(false);
+  const rankingBase = buildRanking(atendentes);
+  const ranking = rankingSoVolume
+    ? rankingBase.filter((a: AiMetricas) => (a.atendimentos ?? 0) >= RANKING_MIN_CALLS)
+    : rankingBase;
 
   const atendentesChart = atendentes.slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.atendimentos }));
   const tmaChart = [...(m.atendentes_por_tma ?? [])].sort((a: AiMetricas, b: AiMetricas) => b.tma - a.tma).slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.tma }));
@@ -352,12 +361,35 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
       {/* Ranking de Técnicos */}
       {(ranking.length > 0 || atendentes.length > 0) && (
         <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Trophy className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-semibold text-foreground">Ranking de Técnicos</span>
             <span className="text-xs text-muted-foreground ml-1">
-              — todos os técnicos · 1º melhor nota · 2º maior volume · 3º menor TMA
+              — {rankingSoVolume ? `mín. ${RANKING_MIN_CALLS} chamados` : "todos os técnicos"} · 1º melhor nota · 2º maior volume · 3º menor TMA
             </span>
+            <div className="flex items-center gap-1 ml-auto shrink-0">
+              <button
+                onClick={() => setRankingSoVolume(false)}
+                className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                  !rankingSoVolume
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setRankingSoVolume(true)}
+                title={`Exibe apenas técnicos com ${RANKING_MIN_CALLS} ou mais chamados no período`}
+                className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                  rankingSoVolume
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                ≥ {RANKING_MIN_CALLS} chamados
+              </button>
+            </div>
           </div>
 
           {/* Header */}
@@ -371,7 +403,9 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
 
           {ranking.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhum técnico com atendimentos no período.
+              {rankingSoVolume
+                ? <>Nenhum técnico atingiu <strong>{RANKING_MIN_CALLS} chamados</strong> no período. Use <strong>Todos</strong> para ver o ranking completo.</>
+                : "Nenhum técnico com atendimentos no período."}
             </p>
           )}
 

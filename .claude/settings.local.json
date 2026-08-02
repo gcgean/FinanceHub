@@ -340,7 +340,16 @@
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('total \\(sem maquininha\\):',j.total\\)}\\)\")",
       "Bash(curl -s 'http://localhost:3333/api/clientes?page=1&limit=2000&ativo=S&bloqueado=N&semMaquininha=true' -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('1990 esta na lista?', j.data.some\\(c=>c.id===1990\\), '| total:', j.total\\)}\\)\")",
-      "Bash(taskkill //PID 25296 //T //F)"
+      "Bash(taskkill //PID 25296 //T //F)",
+      "Bash(curl -s http://localhost:3333/api/lembretes-fixos -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\('regras:', j.regras.length\\); console.log\\(j.regras\\); console.log\\('legado grupos:', j.legado.length\\)}\\)\")",
+      "Bash(curl -s -X PUT http://localhost:3333/api/lembretes-fixos/1 -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"diaMes\":30}')",
+      "Bash(curl -s -X POST http://localhost:3333/api/lembretes-fixos/processar-agora -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json')",
+      "Bash(curl -s -X POST http://localhost:3333/api/lembretes-fixos/processar-agora -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(taskkill //PID 21136 //T //F)",
+      "Bash(taskkill //PID 19728 //T //F)",
+      "Bash(npm view *)",
+      "Bash(npm install *)"
     ]
   }
 }

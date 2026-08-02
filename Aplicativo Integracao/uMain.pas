@@ -68,6 +68,7 @@ type
     FEntityConfigs: TEntitySyncConfigs;
     FIsSyncing: Boolean;
     FLastReconnectAttempt: TDateTime;
+    FStaleWarned: Boolean;
     procedure Log(const AMsg: string);
     procedure CarregarEmpresas;
     procedure SetProgress(const AMsg: string; ACurrent, ATotal: Integer);
@@ -139,6 +140,7 @@ begin
   FApiBaseUrl := 'https://api.gestorfacil.ia.br';
   FIsSyncing  := False;
   FLastReconnectAttempt := 0;
+  FStaleWarned := False;
   LoadSettings;
 
   FAPI := TFinanceHubAPI.Create(FApiBaseUrl);
@@ -398,19 +400,82 @@ begin
 end;
 
 procedure TfrmMain.UpdateAutoSyncStatus;
+const
+  // Considera "parado" quando passou 2,5x o intervalo configurado sem rodar.
+  ATRASO_ALERTA_FATOR = 2.5;
 var
   I, LAtivos: Integer;
+  LCfg: TEntitySyncConfig;
+  LAtrasoMin, LPiorAtrasoMin: Double;
+  LPiorNome: string;
+  LPiorUltima: TDateTime;
+
+  function FormatarAtraso(AMin: Double): string;
+  begin
+    if AMin < 60 then
+      Result := Format('%.0f min', [AMin])
+    else if AMin < 1440 then
+      Result := Format('%.1fh', [AMin / 60])
+    else
+      Result := Format('%.1f dias', [AMin / 1440]);
+  end;
+
 begin
-  LAtivos := 0;
+  LAtivos        := 0;
+  LPiorAtrasoMin := 0;
+  LPiorNome      := '';
+  LPiorUltima    := 0;
+
   for I := 0 to ENTITY_COUNT - 1 do
-    if FEntityConfigs[I].Enabled then
-      Inc(LAtivos);
+  begin
+    LCfg := FEntityConfigs[I];
+    if not LCfg.Enabled then Continue;
+    Inc(LAtivos);
+    if LCfg.IntervalMinutes <= 0 then Continue;
+    if LCfg.LastSyncAt <= 0 then Continue; // ainda nao rodou nenhuma vez
+
+    LAtrasoMin := (Now - LCfg.LastSyncAt) * 1440.0;
+    if (LAtrasoMin > LCfg.IntervalMinutes * ATRASO_ALERTA_FATOR) and
+       (LAtrasoMin > LPiorAtrasoMin) then
+    begin
+      LPiorAtrasoMin := LAtrasoMin;
+      LPiorNome      := ENTITY_NAMES[I];
+      LPiorUltima    := LCfg.LastSyncAt;
+    end;
+  end;
 
   if LAtivos > 0 then
-    btnAgendamento.Caption :=
-      Format('Agendamento (%d ativos)', [LAtivos])
+    btnAgendamento.Caption := Format('Agendamento (%d ativos)', [LAtivos])
   else
     btnAgendamento.Caption := 'Agendamento';
+
+  if LPiorNome <> '' then
+  begin
+    // O agendamento esta ativo, mas parou de rodar: avisa de forma visivel.
+    btnAgendamento.Caption := btnAgendamento.Caption + ' - PARADO';
+    if not FIsSyncing then
+    begin
+      lblProgress.Font.Color := clRed;
+      lblProgress.Caption := Format(
+        'ATENCAO: sync automatico parado ha %s (%s) - ultima execucao em %s',
+        [FormatarAtraso(LPiorAtrasoMin), LPiorNome,
+         FormatDateTime('dd/mm hh:nn', LPiorUltima)]);
+    end;
+    if not FStaleWarned then
+    begin
+      FStaleWarned := True;
+      Log(Format('[Alerta] Sync automatico de %s parado ha %s (ultima execucao: %s).',
+        [LPiorNome, FormatarAtraso(LPiorAtrasoMin),
+         FormatDateTime('dd/mm/yyyy hh:nn', LPiorUltima)]));
+    end;
+  end
+  else if FStaleWarned then
+  begin
+    FStaleWarned := False;
+    lblProgress.Font.Color := clWindowText;
+    lblProgress.Caption := '';
+    Log('[Alerta] Sync automatico normalizado - voltou a rodar no intervalo esperado.');
+  end;
 end;
 
 procedure TfrmMain.SyncEntityAuto(AEntityIndex: Integer);
@@ -503,7 +568,7 @@ begin
 
   if not DM.fdConCommand.Connected then
   begin
-    Log('[Auto] Conexão com o banco Firebird caiu. Tentando reconectar...');
+    Log('[Auto] Conexao com o banco Firebird caiu. Tentando reconectar...');
     try
       DM.ConfigurarConexaoCommand;
       DM.fdConCommand.Connected := True;
@@ -516,7 +581,7 @@ begin
 
   if not DM.fdConMySQL.Connected then
   begin
-    Log('[Auto] Conexão com o MySQL Analytics caiu. Tentando reconectar...');
+    Log('[Auto] Conexao com o MySQL Analytics caiu. Tentando reconectar...');
     try
       DM.ConfigurarConexaoMySQL;
       DM.fdConMySQL.Connected := True;
@@ -540,6 +605,10 @@ begin
 
   // Detecta conexão caída e tenta reconectar sozinho (throttle de 1h entre tentativas)
   TryAutoReconnect;
+
+  // Reavalia o atraso a cada tick — precisa vir ANTES dos Exit abaixo, pois é
+  // exatamente quando o sync está travado que o alerta precisa aparecer.
+  UpdateAutoSyncStatus;
 
   if not DM.fdConCommand.Connected then Exit;
   if FAPI.Token = '' then Exit;
