@@ -355,7 +355,20 @@
       "Bash(echo \"BE_EXIT:$?\")",
       "Bash(echo \"FE_EXIT:$?\")",
       "Read(//c/Projetos/dev/SisLotes/**)",
-      "Bash(cd \"C:/Projetos/dev/SisLotes\" && grep -rln \"hubBilling\\\\|HUB_BILLING\\\\|hub_customer_id\\\\|pagamentos.baselider\" --include=*.ts --include=*.tsx --include=*.yml --include=*.md . 2>/dev/null | grep -v node_modules | head -20)"
+      "Bash(cd \"C:/Projetos/dev/SisLotes\" && grep -rln \"hubBilling\\\\|HUB_BILLING\\\\|hub_customer_id\\\\|pagamentos.baselider\" --include=*.ts --include=*.tsx --include=*.yml --include=*.md . 2>/dev/null | grep -v node_modules | head -20)",
+      "Bash(sed -n '1,30p' \"C:/Projetos/dev/Central_pagamentos/packages/core/src/modules/licenses/entities/\"*.ts)",
+      "Bash(node --experimental-vm-modules -e ' *)",
+      "Bash(grep -n \"inviteUrl ? \\\\`\" src/email.ts)",
+      "Bash(cd \"C:/Projetos/dev/GerenciadorConnections/GerenciadorConnections-main\" && find . -maxdepth 2 -not -path \"*/node_modules*\" -not -path \"*/.git*\" | sort)",
+      "Bash(python3 -c \"import paramiko; print\\('paramiko ok'\\)\")",
+      "Bash(where plink.exe)",
+      "Bash(where.exe plink *)",
+      "Bash(where.exe python *)",
+      "Bash(npx --yes prisma db execute --stdin)",
+      "Bash(node checkcols.cjs)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(node --env-file=.env -e \"console.log\\(process.env.SERVIDOR_MONITOR_API_USERNAME\\)\")"
     ]
   }
 }
