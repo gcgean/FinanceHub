@@ -83,6 +83,26 @@ function calcularMetricasDetalhadas(
   });
   const fila = [...filaMap.entries()].sort((a, b) => b[1] - a[1]).map(([nome, count]) => ({ nome, count }));
 
+  // Tempo medio (TMA) por fila/departamento — onde o tempo esta sendo gasto.
+  // Ordena do mais lento para o mais rapido; guarda o volume para ponderar
+  // (fila lenta com 3 chamados pesa menos que uma media com 2000).
+  const filaTmaMap = new Map<string, { count: number; tempos: number[] }>();
+  tickets.forEach((t, i) => {
+    const nome = (t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila");
+    if (!filaTmaMap.has(nome)) filaTmaMap.set(nome, { count: 0, tempos: [] });
+    const e = filaTmaMap.get(nome)!;
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
+  });
+  const tma_fila = [...filaTmaMap.entries()]
+    .map(([nome, d]) => ({
+      nome,
+      count: d.count,
+      tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0,
+    }))
+    .filter(x => x.tma > 0)
+    .sort((a, b) => b.tma - a.tma);
+
   // Procedimentos: agrupa pelo NOME COMPLETO (como aparece nos itens).
   // NÃO dividir por vírgula — o próprio nome do procedimento contém vírgulas
   // (ex.: "NFE - EMISSÃO, CANCELAMENTO, ESTORNO, DUVIDAS E CONFIGURAÇÕES").
@@ -337,6 +357,7 @@ function calcularMetricasDetalhadas(
     ids,
     classificacao,
     fila,
+    tma_fila,
     procedimentos,
     titulares,
     operadores,

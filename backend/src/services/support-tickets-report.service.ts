@@ -193,6 +193,26 @@ export function calcularMetricasDetalhadas(
   });
   const fila = [...filaMap.entries()].sort((a, b) => b[1] - a[1]).map(([nome, count]) => ({ nome, count }));
 
+  // Tempo medio (TMA) por fila/departamento — onde o tempo esta sendo gasto.
+  // Ordena do mais lento para o mais rapido; guarda o volume para ponderar
+  // (fila lenta com 3 chamados pesa menos que uma media com 2000).
+  const filaTmaMap = new Map<string, { count: number; tempos: number[] }>();
+  tickets.forEach((t, i) => {
+    const nome = (t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila");
+    if (!filaTmaMap.has(nome)) filaTmaMap.set(nome, { count: 0, tempos: [] });
+    const e = filaTmaMap.get(nome)!;
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
+  });
+  const tma_fila = [...filaTmaMap.entries()]
+    .map(([nome, d]) => ({
+      nome,
+      count: d.count,
+      tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0,
+    }))
+    .filter(x => x.tma > 0)
+    .sort((a, b) => b.tma - a.tma);
+
   // Agrupa pelo NOME COMPLETO do procedimento (como aparece nos itens).
   // Não dividir por vírgula: o próprio nome contém vírgulas
   // (ex.: "NFE - EMISSÃO, CANCELAMENTO, ESTORNO, DUVIDAS E CONFIGURAÇÕES").
@@ -412,7 +432,7 @@ export function calcularMetricasDetalhadas(
     clientes_promotores, tecnicos_promotores,
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
     atendentes_ativos: atendentesAtivos, ids, classificacao,
-    fila, procedimentos, titulares, operadores, atendentes,
+    fila, tma_fila, procedimentos, titulares, operadores, atendentes,
     atendentes_por_tma: atendentesPorTMA, clientes_pior_nota: clientesPiorNota,
     obs_amostra: obsAmostra, clientes_novos: [...clientesNovos].slice(0, 10),
     distribuicao_notas,
@@ -471,6 +491,7 @@ type TicketGrupo = {
   departamento: string | null;
   nomesProcedimento: string | null;
   nomeCli: string | null;
+  tempoAtendimento?: string | null;
 };
 
 /**
@@ -483,15 +504,25 @@ export function contagensPorGrupo(tickets: TicketGrupo[], deptNameMap: Map<strin
   const fila = new Map<string, number>();
   const procedimentos = new Map<string, number>();
   const titulares = new Map<string, number>();
+  const tmaAcc = new Map<string, { soma: number; n: number }>();
   tickets.forEach(t => {
     const dep = t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila";
     fila.set(dep, (fila.get(dep) ?? 0) + 1);
+    const min = parseInt(t.tempoAtendimento ?? "");
+    if (!isNaN(min) && min > 0) {
+      const acc = tmaAcc.get(dep) ?? { soma: 0, n: 0 };
+      acc.soma += min; acc.n++;
+      tmaAcc.set(dep, acc);
+    }
     const proc = (t.nomesProcedimento ?? "").trim();
     if (proc) procedimentos.set(proc, (procedimentos.get(proc) ?? 0) + 1);
     const cli = t.nomeCli?.trim();
     if (cli) titulares.set(cli, (titulares.get(cli) ?? 0) + 1);
   });
-  return { fila, procedimentos, titulares };
+  const tmaFila = new Map<string, number>(
+    [...tmaAcc.entries()].map(([k, v]) => [k, Math.round(v.soma / v.n)]),
+  );
+  return { fila, procedimentos, titulares, tmaFila };
 }
 
 /**
@@ -513,6 +544,15 @@ export function aplicarComparativoMensal(
       };
     });
   m.fila = merge(m.fila, anteriores.fila);
+  // tma_fila compara o TEMPO MEDIO (nao o volume): alta = ficou mais lento.
+  m.tma_fila = (m.tma_fila ?? []).map((item: AiMetricas) => {
+    const ant = anteriores.tmaFila.get(item.nome) ?? 0;
+    return {
+      ...item,
+      anterior: ant,
+      variacao_pct: ant > 0 ? Math.round(((item.tma - ant) / ant) * 100) : null,
+    };
+  });
   m.procedimentos = merge(m.procedimentos, anteriores.procedimentos);
   m.titulares = merge(m.titulares, anteriores.titulares);
   return m;
@@ -536,7 +576,7 @@ export async function contagensMesAnterior(
         ...where,
         dataHoraFinalizacao: { gte: mesAnterior(dateFrom), lte: mesAnterior(dateTo) },
       },
-      select: { departamento: true, nomesProcedimento: true, nomeCli: true },
+      select: { departamento: true, nomesProcedimento: true, nomeCli: true, tempoAtendimento: true },
     });
     return contagensPorGrupo(ticketsAnt, deptNameMap);
   } catch {
@@ -553,6 +593,7 @@ export async function contagensMesAnterior(
 export function buildResumoDashboard(m: AiMetricas) {
   return {
     filas_por_departamento: m.fila,
+    tma_por_fila: m.tma_fila,
     procedimentos_top_com_tma: m.procedimentos,
     distribuicao_notas: m.distribuicao_notas,
     gargalos_recorrentes_cliente_procedimento: m.gargalos_recorrentes,
@@ -578,6 +619,7 @@ Você recebe exatamente os mesmos números que o gestor está vendo na tela. Use
 - "clientes_promotores_por_qtd_notas_altas" e "tecnicos_mais_elogiados_por_qtd_notas_altas": mesma estrutura, para notas ≥8 ("qtd_destaque" = notas 10). São os clientes mais satisfeitos (candidatos a depoimento/indicação) e os técnicos que mais encantam — reconheça-os e investigue o que fazem de diferente para replicar na equipe.
 - "amostra_atendimentos_nota_baixa": traz a observação registrada nos piores atendimentos. Use para explicar POR QUE a nota foi baixa, citando o caso.
 - "evolucao_diaria_por_departamento" / "evolucao_diaria_por_atendente": série por dia. Aponte picos, quedas e dias críticos.
+ - "tma_por_fila": tempo médio de atendimento por departamento, do mais lento para o mais rápido, com "count" (volume) e a variação vs. mês anterior. Fila lenta COM volume alto é gargalo operacional; fila lenta com 3 chamados é ruído. Se o TMA subiu, investigue o porquê (complexidade, falta de gente, escalonamento).
 - "procedimentos_top_com_tma": volume e tempo médio por procedimento. Procedimento de alto volume com TMA alto é candidato a automação/documentação.
 - TENDÊNCIA: em "filas_por_departamento", "procedimentos_top_com_tma" e nos clientes recorrentes, cada item traz "anterior" (mesmo período do mês passado) e "variacao_pct". Em suporte, ALTA de demanda é sinal de alerta e QUEDA é melhora. Destaque o que mais cresceu — é onde o problema está piorando — e reconheça o que caiu. "variacao_pct: null" significa que não existia no mês anterior (demanda nova, merece atenção). Ignore variações grandes sobre bases minúsculas (ex.: de 1 para 3 = +200%, mas irrelevante).
 - "distribuicao_notas": inclui nota 0 = "sem avaliação". Se a maioria não avalia, sinalize que a nota média tem baixa confiabilidade.

@@ -589,6 +589,50 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         </ChartCard>
       </div>
 
+      {/* TMA por Fila de Atendimento */}
+      {(m.tma_fila ?? []).length > 0 && (
+        <ChartCard icon={<Clock className="w-4 h-4 text-cyan-500" />} title="TMA por Fila de Atendimento">
+          <p className="text-xs text-muted-foreground -mt-2 mb-3">
+            Tempo medio de atendimento em cada departamento, da fila mais lenta para a mais rapida.
+            A variacao compara com o mesmo periodo do mes anterior.
+          </p>
+          <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+            {(m.tma_fila ?? []).map((f: AiMetricas, i: number) => {
+              const maxTma = (m.tma_fila?.[0]?.tma ?? 1);
+              const barWidth = maxTma > 0 ? Math.round((f.tma / maxTma) * 100) : 0;
+              const acimaMedia = (m.tma_geral ?? 0) > 0 && f.tma > (m.tma_geral ?? 0) * 1.3;
+              return (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-foreground font-medium truncate flex-1" title={f.nome}>
+                      {f.nome}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-muted-foreground">{f.count} chamados</span>
+                      <Variacao pct={f.variacao_pct} anterior={f.anterior} />
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                        acimaMedia ? "bg-red-500/15 text-red-500" : "bg-cyan-500/15 text-cyan-600"
+                      }`}>
+                        {f.tma} min
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${barWidth}%`, backgroundColor: CHART_COLORS[(i + 9) % CHART_COLORS.length] }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Valores em vermelho estao 30% acima da media geral ({m.tma_geral} min).
+          </p>
+        </ChartCard>
+      )}
+
       {/* TMA + Top Procedimentos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard icon={<Clock className="w-4 h-4 text-blue-500" />} title="TMA por Atendente (min)">
