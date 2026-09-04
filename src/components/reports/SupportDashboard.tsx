@@ -387,8 +387,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
                 <p className="text-xs text-muted-foreground truncate" title={a.procedimento}>
                   {a.procedimento}
                 </p>
-                {a.obs && (
+                {a.obs ? (
                   <p className="text-xs text-foreground mt-1 leading-relaxed">"{a.obs}"</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground/70 italic mt-1">
+                    Sem observacao registrada — consulte o atendimento no sistema de origem.
+                  </p>
                 )}
               </div>
             ))}
