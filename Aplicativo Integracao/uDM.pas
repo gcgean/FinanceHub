@@ -58,7 +58,7 @@ begin
     LUser     := Ini.ReadString('Database', 'User',     'SYSDBA');
     LPassword := Ini.ReadString('Database', 'Password', 'csqwe123');
     LDatabase := Ini.ReadString('Database', 'Database',
-      'C:\Windows\DataCloud\Connection - Command System\data\data.fdb');
+      'C:\Windows\DataCloud\Connection - Command\data\datacommand.fdb');
     LProtocol := Ini.ReadString('Database', 'Protocol', 'TCPIP');
     LCharset  := Ini.ReadString('Database', 'Charset',  'WIN1252');
   finally

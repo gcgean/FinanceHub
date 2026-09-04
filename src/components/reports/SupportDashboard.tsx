@@ -49,6 +49,41 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
 // Volume mínimo para o filtro opcional do ranking (não afeta a ordenação).
 const RANKING_MIN_CALLS = 200;
 
+// ── Variação vs. mesmo período do mês anterior ────────────────────────────────
+// Em suporte, MAIS demanda do mesmo item é sinal de alerta (vermelho) e MENOS é
+// melhora (verde) — por isso a cor não segue a convenção financeira de alta=bom.
+function Variacao({ pct, anterior }: { pct?: number | null; anterior?: number }) {
+  if (pct === undefined) return null;               // backend sem comparativo
+  if (pct === null) {
+    return (
+      <span
+        className="text-[10px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-500 whitespace-nowrap"
+        title="Não houve ocorrências no mesmo período do mês anterior"
+      >
+        novo
+      </span>
+    );
+  }
+  if (pct === 0) {
+    return (
+      <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={`Mês anterior: ${anterior}`}>
+        =
+      </span>
+    );
+  }
+  const subiu = pct > 0;
+  return (
+    <span
+      className={`text-[10px] px-1 py-0.5 rounded whitespace-nowrap ${
+        subiu ? "bg-red-500/15 text-red-500" : "bg-emerald-500/15 text-emerald-600"
+      }`}
+      title={`Mesmo período do mês anterior: ${anterior} — ${subiu ? "aumento" : "queda"} de ${Math.abs(pct)}%`}
+    >
+      {subiu ? "▲" : "▼"} {Math.abs(pct)}%
+    </span>
+  );
+}
+
 function buildRanking(atendentes: AiMetricas[]): AiMetricas[] {
   return [...atendentes]
     .sort((a, b) => {
@@ -204,7 +239,10 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
   const atendentesChart = atendentes.slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.atendimentos }));
   const tmaChart = [...(m.atendentes_por_tma ?? [])].sort((a: AiMetricas, b: AiMetricas) => b.tma - a.tma).slice(0, 13).map((a: AiMetricas) => ({ name: a.nome, value: a.tma }));
   const procChart = (m.procedimentos ?? []).slice(0, 8).map((p: AiMetricas) => ({ name: p.nome.length > 30 ? p.nome.slice(0, 30) + "…" : p.nome, value: p.count }));
-  const filaChart = (m.fila ?? []).map((f: AiMetricas) => ({ name: f.nome, value: f.count }));
+  // Mantém variacao_pct/anterior na derivação — são usados no selo comparativo.
+  const filaChart = (m.fila ?? []).map((f: AiMetricas) => ({
+    name: f.nome, value: f.count, variacao_pct: f.variacao_pct, anterior: f.anterior,
+  }));
   const titulares = m.titulares ?? [];
   // TMA lookup por nome (atendentes_por_tma pode ter mais detalhes)
   const tmaByName = new Map<string, number>(
@@ -528,6 +566,7 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
                       {f.name}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      <Variacao pct={f.variacao_pct} anterior={f.anterior} />
                       <span className="text-xs text-muted-foreground">{f.value}</span>
                       <span
                         className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -606,6 +645,7 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
                           {p.tma} min
                         </span>
                       )}
+                      <Variacao pct={p.variacao_pct} anterior={p.anterior} />
                       <span className="text-xs text-muted-foreground">{p.count}</span>
                       <span
                         className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -636,9 +676,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
               <div key={i} className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-5 text-right">{i + 1}.</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
+                  <div className="flex justify-between items-center mb-0.5 gap-2">
                     <span className="text-xs font-medium truncate">{t.nome}</span>
-                    <span className="text-xs font-bold ml-2 shrink-0">{t.count}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Variacao pct={t.variacao_pct} anterior={t.anterior} />
+                      <span className="text-xs font-bold">{t.count}</span>
+                    </div>
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${Math.round((t.count / (titulares[0]?.count ?? 1)) * 100)}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />

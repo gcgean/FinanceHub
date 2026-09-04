@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
-import { calcularMetricasDetalhadas, formatarRelatorioEstruturado, buildResumoDashboard, PROMPT_USO_DASHBOARD } from "../services/support-tickets-report.service.js";
+import { calcularMetricasDetalhadas, formatarRelatorioEstruturado, buildResumoDashboard, PROMPT_USO_DASHBOARD, aplicarComparativoMensal, contagensMesAnterior } from "../services/support-tickets-report.service.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
 
 // ── helpers reutilizados do support-tickets (WHERE builder) ───────────────────
@@ -166,6 +166,10 @@ export async function publicSupportRoutes(app: FastifyInstance) {
     const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
 
     const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+    aplicarComparativoMensal(
+      metricas,
+      await contagensMesAnterior(where, new Date(dateFrom), new Date(dateTo), deptNameMap),
+    );
     return reply.send({ metricas });
   });
 
@@ -222,6 +226,10 @@ export async function publicSupportRoutes(app: FastifyInstance) {
     ]);
 
     const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+    aplicarComparativoMensal(
+      metricas,
+      await contagensMesAnterior(aiWhere, new Date(dateFrom), new Date(dateTo), deptNameMap),
+    );
     const estruturado = formatarRelatorioEstruturado(metricas, reportType, "GESTOR");
 
     let analiseIA = "";

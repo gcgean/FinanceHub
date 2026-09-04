@@ -12,7 +12,7 @@ const
   DB_DEFAULT_PORT     = '3050';
   DB_DEFAULT_USER     = 'SYSDBA';
   DB_DEFAULT_PASSWORD = 'csqwe123';
-  DB_DEFAULT_DATABASE = 'C:\Windows\DataCloud\Connection - Command System\data\data.fdb';
+  DB_DEFAULT_DATABASE = 'C:\Windows\DataCloud\Connection - Command\data\datacommand.fdb';
   INI_SECTION_DB      = 'Database';
 
 type

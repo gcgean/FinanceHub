@@ -437,6 +437,100 @@ export function formatarRelatorioEstruturado(m: ReturnType<typeof calcularMetric
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AiMetricas = Record<string, any>;
 
+// ── Comparativo com o mesmo período do mês anterior ───────────────────────────
+
+/**
+ * Desloca uma data um mês para trás preservando o dia, com clamp no último dia
+ * do mês de destino (31/03 → 28/02, e não 03/03 como faria setMonth puro).
+ */
+export function mesAnterior(d: Date): Date {
+  const dia = d.getDate();
+  const r = new Date(d);
+  r.setDate(1);                       // evita rollover antes de trocar o mês
+  r.setMonth(r.getMonth() - 1);
+  const ultimoDia = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(dia, ultimoDia));
+  r.setHours(d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+  return r;
+}
+
+type TicketGrupo = {
+  departamento: string | null;
+  nomesProcedimento: string | null;
+  nomeCli: string | null;
+};
+
+/**
+ * Contagens COMPLETAS (sem corte de top N) por fila, procedimento e cliente.
+ * Precisa ser completa: um item que hoje está no top 10 pode não ter estado lá
+ * no mês anterior — usar a lista cortada marcaria como "novo" algo que existia.
+ * As regras de agrupamento espelham as de calcularMetricasDetalhadas.
+ */
+export function contagensPorGrupo(tickets: TicketGrupo[], deptNameMap: Map<string, string>) {
+  const fila = new Map<string, number>();
+  const procedimentos = new Map<string, number>();
+  const titulares = new Map<string, number>();
+  tickets.forEach(t => {
+    const dep = t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila";
+    fila.set(dep, (fila.get(dep) ?? 0) + 1);
+    const proc = (t.nomesProcedimento ?? "").trim();
+    if (proc) procedimentos.set(proc, (procedimentos.get(proc) ?? 0) + 1);
+    const cli = t.nomeCli?.trim();
+    if (cli) titulares.set(cli, (titulares.get(cli) ?? 0) + 1);
+  });
+  return { fila, procedimentos, titulares };
+}
+
+/**
+ * Anexa `anterior` e `variacao_pct` aos itens de fila/procedimentos/titulares.
+ * `variacao_pct = null` significa que não havia base no mês anterior (item novo).
+ */
+export function aplicarComparativoMensal(
+  m: AiMetricas,
+  anteriores: ReturnType<typeof contagensPorGrupo> | null,
+): AiMetricas {
+  if (!anteriores) return m;
+  const merge = (lista: AiMetricas[] | undefined, mapAnt: Map<string, number>) =>
+    (lista ?? []).map((item: AiMetricas) => {
+      const ant = mapAnt.get(item.nome) ?? 0;
+      return {
+        ...item,
+        anterior: ant,
+        variacao_pct: ant > 0 ? Math.round(((item.count - ant) / ant) * 100) : null,
+      };
+    });
+  m.fila = merge(m.fila, anteriores.fila);
+  m.procedimentos = merge(m.procedimentos, anteriores.procedimentos);
+  m.titulares = merge(m.titulares, anteriores.titulares);
+  return m;
+}
+
+/**
+ * Contagens do MESMO período, um mês antes, preservando todos os demais filtros
+ * (departamento, técnico, cliente, nota...) — só a faixa de datas é deslocada.
+ * Retorna null em caso de falha: o comparativo é complementar e nunca deve
+ * derrubar o dashboard.
+ */
+export async function contagensMesAnterior(
+  where: Record<string, unknown>,
+  dateFrom: Date,
+  dateTo: Date,
+  deptNameMap: Map<string, string>,
+) {
+  try {
+    const ticketsAnt = await prisma.supportTicket.findMany({
+      where: {
+        ...where,
+        dataHoraFinalizacao: { gte: mesAnterior(dateFrom), lte: mesAnterior(dateTo) },
+      },
+      select: { departamento: true, nomesProcedimento: true, nomeCli: true },
+    });
+    return contagensPorGrupo(ticketsAnt, deptNameMap);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Bloco do DASHBOARD enviado à IA — dá a ela exatamente a mesma visão que o gestor
  * tem na tela (filas, procedimentos com TMA, distribuição de notas, gargalos
@@ -472,6 +566,7 @@ Você recebe exatamente os mesmos números que o gestor está vendo na tela. Use
 - "amostra_atendimentos_nota_baixa": traz a observação registrada nos piores atendimentos. Use para explicar POR QUE a nota foi baixa, citando o caso.
 - "evolucao_diaria_por_departamento" / "evolucao_diaria_por_atendente": série por dia. Aponte picos, quedas e dias críticos.
 - "procedimentos_top_com_tma": volume e tempo médio por procedimento. Procedimento de alto volume com TMA alto é candidato a automação/documentação.
+- TENDÊNCIA: em "filas_por_departamento", "procedimentos_top_com_tma" e nos clientes recorrentes, cada item traz "anterior" (mesmo período do mês passado) e "variacao_pct". Em suporte, ALTA de demanda é sinal de alerta e QUEDA é melhora. Destaque o que mais cresceu — é onde o problema está piorando — e reconheça o que caiu. "variacao_pct: null" significa que não existia no mês anterior (demanda nova, merece atenção). Ignore variações grandes sobre bases minúsculas (ex.: de 1 para 3 = +200%, mas irrelevante).
 - "distribuicao_notas": inclui nota 0 = "sem avaliação". Se a maioria não avalia, sinalize que a nota média tem baixa confiabilidade.
 Não repita as tabelas cruas — interprete, priorize e transforme em ação.`;
 
@@ -540,6 +635,10 @@ export async function generateSupportTicketsAIReport(
 
   // 3. Métricas
   const metricas = calcularMetricasDetalhadas(tickets, dateFromStr, dateToStr, deptNameMap, dateFrom);
+  aplicarComparativoMensal(
+    metricas,
+    await contagensMesAnterior(ticketWhere as Record<string, unknown>, dateFrom, dateTo, deptNameMap),
+  );
 
   // 4. Parte estruturada
   const estruturado = formatarRelatorioEstruturado(metricas, reportTypeLower, userName);

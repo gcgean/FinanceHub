@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireCompanyScope } from "../lib/auth.js";
 import { resolveCompanyId } from "../lib/company.js";
 import { chatService } from "../modules/ai/services/chat.service.js";
-import { formatPeriodoExtenso, buildResumoDashboard, PROMPT_USO_DASHBOARD } from "../services/support-tickets-report.service.js";
+import { formatPeriodoExtenso, buildResumoDashboard, PROMPT_USO_DASHBOARD, aplicarComparativoMensal, contagensMesAnterior } from "../services/support-tickets-report.service.js";
 import { env } from "../lib/env.js";
 
 // ---------------------------------------------------------------------------
@@ -736,6 +736,10 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
       const deptNameMap = new Map(departments.map(d => [d.erpCode, d.name]));
 
       const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+      aplicarComparativoMensal(
+        metricas,
+        await contagensMesAnterior(where, new Date(dateFrom), new Date(dateTo), deptNameMap),
+      );
       return reply.send({ metricas });
     }
   );
@@ -861,6 +865,10 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
 
       // 4. Calcular métricas detalhadas
       const metricas = calcularMetricasDetalhadas(tickets, dateFrom, dateTo, deptNameMap, new Date(dateFrom));
+      aplicarComparativoMensal(
+        metricas,
+        await contagensMesAnterior(aiWhere, new Date(dateFrom), new Date(dateTo), deptNameMap),
+      );
 
       // 5. Gerar parte estruturada (código TypeScript — não depende de IA)
       const estruturado = formatarRelatorioEstruturado(metricas, reportType, userName);

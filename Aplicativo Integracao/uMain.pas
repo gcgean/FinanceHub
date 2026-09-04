@@ -479,8 +479,12 @@ begin
 end;
 
 procedure TfrmMain.SyncEntityAuto(AEntityIndex: Integer);
+const
+  // Teto de seguranca da recuperacao automatica: evita que uma parada muito longa
+  // dispare de uma vez uma consulta gigante no banco de origem.
+  MAX_CATCHUP_DAYS = 60;
 var
-  I, LCodEmp: Integer;
+  I, LCodEmp, LDiasParado: Integer;
   LDateFrom, LDateTo: TDate;
   LCfg: TEntitySyncConfig;
 begin
@@ -491,6 +495,22 @@ begin
   begin
     LDateTo   := Date;
     LDateFrom := Date - LCfg.LastDays;
+
+    // Auto-recuperacao: se ficou parado por mais tempo que a janela normal,
+    // amplia o periodo para cobrir todo o intervalo nao sincronizado. Assim o
+    // custo do dia a dia segue baixo e uma queda longa se resolve sozinha.
+    if LCfg.LastSyncAt > 0 then
+    begin
+      LDiasParado := Trunc(Date - Int(LCfg.LastSyncAt)) + 1;
+      if LDiasParado > MAX_CATCHUP_DAYS then
+        LDiasParado := MAX_CATCHUP_DAYS;
+      if LDiasParado > LCfg.LastDays then
+      begin
+        LDateFrom := Date - LDiasParado;
+        Log(Format('[Auto] %s: parado ha %d dia(s) - ampliando janela para recuperar o periodo.',
+          [ENTITY_NAMES[AEntityIndex], LDiasParado]));
+      end;
+    end;
   end
   else
   begin
