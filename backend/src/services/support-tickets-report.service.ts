@@ -162,6 +162,19 @@ export function calcularMetricasDetalhadas(
   // com atendimentos que simplesmente nunca foram avaliados.
   const temNota = (n: number | null): n is number => n != null && n > 0;
   const notasArr = tickets.filter(t => temNota(t.nota)).map(t => t.nota as number);
+
+  const TOP_N = 20; // itens exibidos nos rankings de procedimentos e clientes
+  // Normalizador (sem acento, maiúsculas) usado nas listas de exclusão abaixo.
+  const normTxt = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+  // Procedimentos que não representam trabalho de suporte e poluem a análise:
+  // agradecimentos, encerramento automático por inatividade e mensagens do robô.
+  const PROCEDIMENTOS_IRRELEVANTES = [
+    "AGRADECIMENTO DE CLIENTE",
+    "FALTA DE INTERACAO DO USUARIO",
+    "MENSAGEM AUTOMATICA DO CLIENTE",
+  ];
+  const procIrrelevante = (nome: string) =>
+    PROCEDIMENTOS_IRRELEVANTES.some(x => normTxt(nome).includes(x));
   const notaMedia = notasArr.length ? +(notasArr.reduce((a, b) => a + b, 0) / notasArr.length).toFixed(1) : null;
   const atendentesAtivos = new Set(tickets.map(t => t.usuAtend?.trim()).filter(Boolean)).size;
   const ticketsPorAtendente = atendentesAtivos > 0 ? total / atendentesAtivos : 0;
@@ -186,7 +199,7 @@ export function calcularMetricasDetalhadas(
   const procMap = new Map<string, { count: number; tempos: number[] }>();
   tickets.forEach((t, i) => {
     const nome = (t.nomesProcedimento ?? "").trim();
-    if (!nome) return;
+    if (!nome || procIrrelevante(nome)) return;
     if (!procMap.has(nome)) procMap.set(nome, { count: 0, tempos: [] });
     const e = procMap.get(nome)!;
     e.count++;
@@ -198,7 +211,7 @@ export function calcularMetricasDetalhadas(
 
   const titularMap = new Map<string, number>();
   tickets.forEach(t => { const nome = t.nomeCli?.trim(); if (nome) titularMap.set(nome, (titularMap.get(nome) ?? 0) + 1); });
-  const titulares = [...titularMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([nome, count]) => ({ nome, count }));
+  const titulares = [...titularMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map(([nome, count]) => ({ nome, count }));
 
   const novetyDias = new Date(periodoRef);
   novetyDias.setDate(novetyDias.getDate() - 90);
@@ -326,14 +339,14 @@ export function calcularMetricasDetalhadas(
 
   // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
   // Ignora "clientes" genéricos/buckets que não representam um cliente real.
-  const normCli = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
   const CLIENTES_IGNORADOS_GARGALO = ["CERTIFICADO", "CONTADORES", "COMMAND SYSTEMS", "CLIENTE BALCAO"];
   const cliProcMap = new Map<string, { cliente: string; procedimento: string; count: number; tempos: number[]; notas: number[] }>();
   tickets.forEach((t, i) => {
     const cli = t.nomeCli?.trim();
     const proc = (t.nomesProcedimento ?? "").trim();
     if (!cli || !proc) return;
-    if (CLIENTES_IGNORADOS_GARGALO.some(x => normCli(cli).includes(x))) return;
+    if (procIrrelevante(proc)) return;
+    if (CLIENTES_IGNORADOS_GARGALO.some(x => normTxt(cli).includes(x))) return;
     const key = `${cli}||${proc}`;
     if (!cliProcMap.has(key)) cliProcMap.set(key, { cliente: cli, procedimento: proc, count: 0, tempos: [], notas: [] });
     const e = cliProcMap.get(key)!;

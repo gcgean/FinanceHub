@@ -625,8 +625,8 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         </ChartCard>
 
         <ChartCard icon={<ListOrdered className="w-4 h-4 text-emerald-500" />} title="Top Procedimentos">
-          <div className="space-y-2">
-            {(m.procedimentos ?? []).slice(0, 8).map((p: AiMetricas, i: number) => {
+          <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+            {(m.procedimentos ?? []).slice(0, 20).map((p: AiMetricas, i: number) => {
               const pct = m.total_atendimentos > 0
                 ? Math.round((p.count / m.total_atendimentos) * 100)
                 : 0;
@@ -670,9 +670,9 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
 
       {/* Top Clientes + Pior Nota */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard icon={<Award className="w-4 h-4 text-orange-500" />} title="Top 10 Clientes (Volume)">
-          <div className="space-y-1.5">
-            {titulares.slice(0, 10).map((t: AiMetricas, i: number) => (
+        <ChartCard icon={<Award className="w-4 h-4 text-orange-500" />} title="Top 20 Clientes (Volume)">
+          <div className="space-y-1.5 max-h-[28rem] overflow-y-auto pr-1">
+            {titulares.slice(0, 20).map((t: AiMetricas, i: number) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-5 text-right">{i + 1}.</span>
                 <div className="flex-1 min-w-0">
