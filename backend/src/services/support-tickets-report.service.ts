@@ -356,7 +356,13 @@ export function calcularMetricasDetalhadas(
       nota: t.nota,
       procedimento: (t.nomesProcedimento ?? "").trim() || "—",
       data: t.dataHoraFinalizacao ?? null,
-      obs: (t.obsAtendimento ?? "").trim().slice(0, 240),
+      // A observacao so entra se explicar algo. Lancamentos automaticos
+      // ("LANCADO VIA EXCEL") nao sao motivo de nota baixa e faziam a IA
+      // tratar ruido como causa. O ticket continua na lista — o que importa
+      // e a nota; apenas nao apresentamos lixo como explicacao.
+      obs: OBS_IGNORADAS.test(t.obsAtendimento ?? "")
+        ? ""
+        : (t.obsAtendimento ?? "").trim().slice(0, 240),
     }));
 
   // ── Gargalos recorrentes: mesmo cliente + mesmo procedimento repetido (>5x) ──
