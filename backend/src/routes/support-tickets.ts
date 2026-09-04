@@ -1064,7 +1064,13 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         // de saída). Sinaliza isso explicitamente em vez de deixar o relatório parecer
         // completo quando na verdade parou no meio (ex.: faltando técnicos na avaliação).
         if (aiResult.truncated) {
-          const aviso = `\n\n⚠️ *Análise interrompida por limite de tamanho da IA — a equipe cresceu e o relatório geral não coube inteiro. Gere relatórios individuais por técnico para ver a avaliação completa de quem ficou de fora.*`;
+          const aviso = (analiseIA.trim()
+            ? `
+
+⚠️ *Análise interrompida pelo limite de saída da IA — o relatório não coube inteiro. Gere relatórios individuais por técnico para ver quem ficou de fora.*`
+            : `
+
+⚠️ *A IA consumiu todo o limite de saída sem chegar a escrever a análise. Se o modelo escolhido for de raciocínio (ex.: deepseek-reasoner), troque em Configurações para um modelo direto (ex.: deepseek-chat) — ou reduza o período do relatório.*`);
           analiseIA += aviso;
           sendEvent("chunk", { text: aviso });
         }

@@ -6,6 +6,18 @@ import { env } from "../../../lib/env.js";
  * DeepSeek expõe uma API compatível com a da OpenAI, então reaproveitamos o
  * mesmo SDK apenas trocando a baseURL — sem dependência nova.
  */
+/**
+ * Orcamento de saida por modelo.
+ * No deepseek-reasoner a cadeia de raciocinio conta DENTRO de completion_tokens
+ * (usage.completion_tokens_details.reasoning_tokens), entao um teto baixo faz o
+ * limite estourar durante o raciocinio e a resposta final voltar VAZIA. Ele
+ * aceita ate 65536, entao damos folga real. O deepseek-chat nao raciocina e
+ * usa todo o orcamento na resposta.
+ */
+function maxTokensPara(model: string): number {
+  return model.includes("reasoner") ? 64000 : 8192;
+}
+
 export class DeepSeekProvider implements LLMProvider {
   private client: OpenAI;
   private defaultModel: string;
@@ -20,11 +32,11 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async generateResponse(messages: LLMMessage[], model?: string): Promise<LLMResponse> {
+    const modelo = model || this.defaultModel;
     const response = await this.client.chat.completions.create({
-      model: model || this.defaultModel,
+      model: modelo,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      // 8192 evita o corte de relatórios longos (semanal/mensal com muitos técnicos).
-      max_tokens: 8192,
+      max_tokens: maxTokensPara(modelo),
     });
 
     return {
@@ -39,10 +51,11 @@ export class DeepSeekProvider implements LLMProvider {
     onChunk: (delta: string) => void,
     model?: string
   ): Promise<LLMResponse> {
+    const modelo = model || this.defaultModel;
     const stream = await this.client.chat.completions.create({
-      model: model || this.defaultModel,
+      model: modelo,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: 8192,
+      max_tokens: maxTokensPara(modelo),
       stream: true,
     });
 
