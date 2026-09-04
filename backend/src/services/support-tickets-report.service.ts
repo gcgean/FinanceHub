@@ -172,6 +172,8 @@ export function calcularMetricasDetalhadas(
     "AGRADECIMENTO DE CLIENTE",
     "FALTA DE INTERACAO DO USUARIO",
     "MENSAGEM AUTOMATICA DO CLIENTE",
+    "DOIS CONTATOS",
+    "AGENDAMENTO DE ATENDIMENTO",
   ];
   const procIrrelevante = (nome: string) =>
     PROCEDIMENTOS_IRRELEVANTES.some(x => normTxt(nome).includes(x));
