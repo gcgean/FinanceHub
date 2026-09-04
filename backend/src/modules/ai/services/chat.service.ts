@@ -3,6 +3,7 @@ import { LLMMessage, LLMProvider } from "../providers/llm.interface.js";
 import { OpenAIProvider } from "../providers/openai.provider.js";
 import { AnthropicProvider } from "../providers/anthropic.provider.js";
 import { GeminiProvider } from "../providers/gemini.provider.js";
+import { DeepSeekProvider } from "../providers/deepseek.provider.js";
 import { memoryService } from "./memory.service.js";
 import { insightsService } from "./insights.service.js";
 import { taskService } from "./task.service.js";
@@ -22,23 +23,34 @@ export class ChatService {
   public async getProvider(companyId: string): Promise<LLMProvider> {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { aiProvider: true, openaiApiKey: true, anthropicApiKey: true, geminiApiKey: true }
+      select: {
+        aiProvider: true, aiModel: true,
+        openaiApiKey: true, anthropicApiKey: true,
+        geminiApiKey: true, deepseekApiKey: true,
+      }
     });
 
     const providerName = company?.aiProvider || "openai";
-    
+    // Modelo escolhido pelo gestor nas Configuracoes. Vazio = padrao do provedor.
+    // Repassado no construtor para que TODOS os pontos que ja chamam
+    // generateResponse() sem informar modelo passem a usar a escolha automaticamente.
+    const model = company?.aiModel?.trim() || undefined;
+
     // Tenta usar a chave da empresa para o provedor escolhido. Se não tiver, cai pro .env
     if (providerName === "anthropic") {
       const key = company?.anthropicApiKey || env.ANTHROPIC_API_KEY;
-      if (key) return new AnthropicProvider(key);
+      if (key) return new AnthropicProvider(key, model);
     } else if (providerName === "gemini") {
       const key = company?.geminiApiKey || env.GEMINI_API_KEY;
-      if (key) return new GeminiProvider(key);
+      if (key) return new GeminiProvider(key, model);
+    } else if (providerName === "deepseek") {
+      const key = company?.deepseekApiKey || env.DEEPSEEK_API_KEY;
+      if (key) return new DeepSeekProvider(key, model);
     }
-    
+
     // Default: OpenAI
     const key = company?.openaiApiKey || env.OPENAI_API_KEY;
-    if (key) return new OpenAIProvider(key);
+    if (key) return new OpenAIProvider(key, model);
 
     return new FallbackProvider();
   }

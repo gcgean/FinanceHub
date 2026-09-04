@@ -4,6 +4,7 @@ import { z } from "zod";
 import { OpenAIProvider } from "../providers/openai.provider.js";
 import { AnthropicProvider } from "../providers/anthropic.provider.js";
 import { GeminiProvider } from "../providers/gemini.provider.js";
+import { DeepSeekProvider } from "../providers/deepseek.provider.js";
 import { resolveCompanyId } from "../../../lib/company.js";
 
 const UpdateProfileSchema = z.object({
@@ -14,6 +15,8 @@ const UpdateProfileSchema = z.object({
   openaiApiKey: z.string().optional().nullable(),
   anthropicApiKey: z.string().optional().nullable(),
   geminiApiKey: z.string().optional().nullable(),
+  deepseekApiKey: z.string().optional().nullable(),
+  aiModel: z.string().optional().nullable(),
   segmento: z.string().optional().nullable(),
 });
 
@@ -34,15 +37,20 @@ export class AIProfileController {
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { aiProvider: true, openaiApiKey: true, anthropicApiKey: true, geminiApiKey: true, segmento: true }
+      select: {
+        aiProvider: true, aiModel: true, openaiApiKey: true, anthropicApiKey: true,
+        geminiApiKey: true, deepseekApiKey: true, segmento: true,
+      }
     });
 
     return reply.send({
       ...profile,
       aiProvider: company?.aiProvider,
+      aiModel: company?.aiModel ?? null,
       openaiApiKey: company?.openaiApiKey,
       anthropicApiKey: company?.anthropicApiKey,
       geminiApiKey: company?.geminiApiKey,
+      deepseekApiKey: company?.deepseekApiKey,
       segmento: company?.segmento ?? null,
     });
   }
@@ -51,7 +59,7 @@ export class AIProfileController {
     const user = request.user as { companyId?: string; role?: string };
     const companyId = await resolveCompanyId(request);
 
-    const { aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento, ...body } = UpdateProfileSchema.parse(request.body as unknown);
+    const { aiProvider, aiModel, openaiApiKey, anthropicApiKey, geminiApiKey, deepseekApiKey, segmento, ...body } = UpdateProfileSchema.parse(request.body as unknown);
 
     const profile = await prisma.aIProfile.upsert({
       where: { companyId },
@@ -68,9 +76,11 @@ export class AIProfileController {
       where: { id: companyId },
       data: {
         aiProvider,
+        aiModel: aiModel?.trim() || null,
         openaiApiKey,
         anthropicApiKey,
         geminiApiKey,
+        deepseekApiKey,
         segmento,
       }
     });
@@ -78,9 +88,11 @@ export class AIProfileController {
     return reply.send({
       ...profile,
       aiProvider,
+      aiModel,
       openaiApiKey,
       anthropicApiKey,
       geminiApiKey,
+      deepseekApiKey,
       segmento,
     });
   }
@@ -88,19 +100,23 @@ export class AIProfileController {
   async testConnection(request: FastifyRequest, reply: FastifyReply) {
     const TestSchema = z.object({
       provider: z.string(),
-      apiKey: z.string()
+      apiKey: z.string(),
+      model: z.string().optional().nullable(),
     });
 
-    const { provider, apiKey } = TestSchema.parse(request.body);
+    const { provider, apiKey, model } = TestSchema.parse(request.body);
+    const modelo = model?.trim() || undefined;
 
     try {
       let llmProvider;
       if (provider === "openai") {
-        llmProvider = new OpenAIProvider(apiKey);
+        llmProvider = new OpenAIProvider(apiKey, modelo);
       } else if (provider === "anthropic") {
-        llmProvider = new AnthropicProvider(apiKey);
+        llmProvider = new AnthropicProvider(apiKey, modelo);
       } else if (provider === "gemini") {
-        llmProvider = new GeminiProvider(apiKey);
+        llmProvider = new GeminiProvider(apiKey, modelo);
+      } else if (provider === "deepseek") {
+        llmProvider = new DeepSeekProvider(apiKey, modelo);
       } else {
         return reply.send({ success: false, message: "Provedor desconhecido" });
       }

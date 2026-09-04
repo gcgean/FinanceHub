@@ -4,17 +4,19 @@ import { env } from "../../../lib/env.js";
 
 export class GeminiProvider implements LLMProvider {
   private client: GoogleGenerativeAI;
+  private defaultModel: string;
 
-  constructor(apiKey?: string) {
+  constructor(apiKey?: string, model?: string) {
     const key = apiKey || env.GEMINI_API_KEY;
     if (!key) {
       throw new Error("GEMINI_API_KEY not configured");
     }
     this.client = new GoogleGenerativeAI(key);
+    this.defaultModel = model?.trim() || "gemini-1.5-pro";
   }
 
-  async generateResponse(messages: LLMMessage[], model = "gemini-1.5-pro"): Promise<LLMResponse> {
-    const generativeModel = this.client.getGenerativeModel({ model });
+  async generateResponse(messages: LLMMessage[], model?: string): Promise<LLMResponse> {
+    const generativeModel = this.client.getGenerativeModel({ model: model || this.defaultModel });
 
     const history = messages.slice(0, -1).map((m) => ({
       role: m.role === "user" ? "user" : "model",

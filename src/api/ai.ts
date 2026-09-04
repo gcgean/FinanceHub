@@ -85,6 +85,8 @@ export interface AIProfile {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   geminiApiKey?: string;
+  deepseekApiKey?: string | null;
+  aiModel?: string | null;
 }
 
 export interface BackgroundJob {
@@ -129,10 +131,10 @@ export const aiApi = {
     });
   },
 
-  testConnection: async (provider: string, apiKey: string) => {
+  testConnection: async (provider: string, apiKey: string, model?: string) => {
     return apiFetch<{ success: boolean; message: string }>('/ai/profile/test-connection', {
       method: 'POST',
-      body: JSON.stringify({ provider, apiKey })
+      body: JSON.stringify({ provider, apiKey, model })
     });
   },
 

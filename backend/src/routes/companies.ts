@@ -185,6 +185,8 @@ export async function companiesRoutes(app: FastifyInstance) {
     openaiApiKey: z.string().optional().nullable(),
     anthropicApiKey: z.string().optional().nullable(),
     geminiApiKey: z.string().optional().nullable(),
+    deepseekApiKey: z.string().optional().nullable(),
+    aiModel: z.string().optional().nullable(),
     segmento: z.string().optional().nullable(),
   });
 
@@ -195,10 +197,10 @@ export async function companiesRoutes(app: FastifyInstance) {
       const companyId = request.user.companyId;
       if (!companyId) throw Object.assign(new Error("NOT_FOUND"), { statusCode: 404 });
 
-      const { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento } = parseBody(AiProfileBody, request.body);
+      const { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, aiModel, openaiApiKey, anthropicApiKey, geminiApiKey, deepseekApiKey, segmento } = parseBody(AiProfileBody, request.body);
       return prisma.company.update({
         where: { id: companyId },
-        data: { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey, segmento },
+        data: { aiPersona, aiDetailLevel, aiBusinessFocus, aiProvider, aiModel, openaiApiKey, anthropicApiKey, geminiApiKey, deepseekApiKey, segmento },
       });
     }
   );

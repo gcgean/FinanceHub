@@ -9,6 +9,15 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Brain } from "lucide-react";
 
+// Sugestoes por provedor — o campo aceita texto livre, entao um modelo novo
+// pode ser usado sem precisar de deploy.
+const MODELOS_SUGERIDOS: Record<string, string[]> = {
+  deepseek:  ["deepseek-chat", "deepseek-reasoner"],
+  anthropic: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"],
+  openai:    ["gpt-4-turbo", "gpt-4o", "gpt-4o-mini"],
+  gemini:    ["gemini-1.5-pro", "gemini-1.5-flash"],
+};
+
 export function AIProfileTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -22,6 +31,8 @@ export function AIProfileTab() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [deepseekApiKey, setDeepseekApiKey] = useState("");
+  const [aiModel, setAiModel] = useState("");
 
   const [isTesting, setIsTesting] = useState(false);
 
@@ -42,6 +53,8 @@ export function AIProfileTab() {
       setOpenaiApiKey(profile.openaiApiKey || "");
       setAnthropicApiKey(profile.anthropicApiKey || "");
       setGeminiApiKey(profile.geminiApiKey || "");
+      setDeepseekApiKey(profile.deepseekApiKey || "");
+      setAiModel(profile.aiModel || "");
     }
   }, [profile]);
 
@@ -57,7 +70,7 @@ export function AIProfileTab() {
   });
 
   const handleSave = () => {
-    updateMutation.mutate({ tone, level, segment, segmento: segmento || null, aiProvider, openaiApiKey, anthropicApiKey, geminiApiKey });
+    updateMutation.mutate({ tone, level, segment, segmento: segmento || null, aiProvider, aiModel: aiModel || null, openaiApiKey, anthropicApiKey, geminiApiKey, deepseekApiKey });
   };
 
   const handleTestConnection = async () => {
@@ -65,6 +78,7 @@ export function AIProfileTab() {
     if (aiProvider === "openai") keyToTest = openaiApiKey;
     if (aiProvider === "anthropic") keyToTest = anthropicApiKey;
     if (aiProvider === "gemini") keyToTest = geminiApiKey;
+    if (aiProvider === "deepseek") keyToTest = deepseekApiKey;
 
     if (!keyToTest) {
       toast({ title: "Por favor, insira uma chave para testar.", variant: "destructive" });
@@ -73,7 +87,7 @@ export function AIProfileTab() {
 
     setIsTesting(true);
     try {
-      const result = await aiApi.testConnection(aiProvider, keyToTest);
+      const result = await aiApi.testConnection(aiProvider, keyToTest, aiModel || undefined);
       if (result.success) {
         toast({ title: "Conexão bem sucedida!", description: result.message });
       } else {
@@ -178,6 +192,7 @@ export function AIProfileTab() {
               <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>
               <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
               <SelectItem value="gemini">Google (Gemini)</SelectItem>
+              <SelectItem value="deepseek">DeepSeek</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
@@ -229,6 +244,41 @@ export function AIProfileTab() {
             </p>
           </div>
         )}
+
+        {aiProvider === 'deepseek' && (
+          <div className="space-y-2">
+            <Label>Chave de API (DeepSeek)</Label>
+            <Input
+              type="password"
+              placeholder="sk-..."
+              value={deepseekApiKey}
+              onChange={(e) => setDeepseekApiKey(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Insira sua chave de API do DeepSeek (platform.deepseek.com). Deixe em branco para usar a chave padrão do servidor.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label>Modelo</Label>
+          <Input
+            list="ai-model-options"
+            placeholder={MODELOS_SUGERIDOS[aiProvider]?.[0] ?? "padrão do provedor"}
+            value={aiModel}
+            onChange={(e) => setAiModel(e.target.value)}
+          />
+          <datalist id="ai-model-options">
+            {(MODELOS_SUGERIDOS[aiProvider] ?? []).map((mdl) => (
+              <option key={mdl} value={mdl} />
+            ))}
+          </datalist>
+          <p className="text-xs text-muted-foreground">
+            Escolha o modelo do provedor selecionado. Deixe em branco para usar o padrão
+            (<strong>{MODELOS_SUGERIDOS[aiProvider]?.[0] ?? "definido pelo sistema"}</strong>).
+            Você pode digitar o nome de um modelo novo que ainda não esteja na lista.
+          </p>
+        </div>
 
         <div className="pt-4 flex justify-between items-center border-t mt-4">
           <Button type="button" variant="outline" onClick={handleTestConnection} disabled={isTesting}>

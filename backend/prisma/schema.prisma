@@ -139,10 +139,12 @@ model Company {
   aiBusinessFocus String?
   
   // Chaves de IA configuradas pelo cliente
-  aiProvider      String? @default("openai") // openai, anthropic, gemini
+  aiProvider      String? @default("openai") // openai, anthropic, gemini, deepseek
+  aiModel         String?  // modelo especifico do provedor; vazio = padrao do provedor
   openaiApiKey    String? 
   anthropicApiKey String?
   geminiApiKey    String?
+  deepseekApiKey  String?
 
   users         User[]
   userCompanies UserCompany[]

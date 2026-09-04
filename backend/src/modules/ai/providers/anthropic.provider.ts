@@ -9,23 +9,25 @@ const MAX_OUTPUT_TOKENS = 16000;
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
+  private defaultModel: string;
 
-  constructor(apiKey?: string) {
+  constructor(apiKey?: string, model?: string) {
     const key = apiKey || env.ANTHROPIC_API_KEY;
     if (!key) {
       throw new Error("ANTHROPIC_API_KEY not configured");
     }
     this.client = new Anthropic({ apiKey: key });
+    this.defaultModel = model?.trim() || "claude-sonnet-5";
   }
 
-  async generateResponse(messages: LLMMessage[], model = "claude-sonnet-5"): Promise<LLMResponse> {
+  async generateResponse(messages: LLMMessage[], model?: string): Promise<LLMResponse> {
     const systemMessage = messages.find((m) => m.role === "system")?.content;
     const chatMessages = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const response = await this.client.messages.create({
-      model,
+      model: model || this.defaultModel,
       system: systemMessage,
       messages: chatMessages,
       max_tokens: MAX_OUTPUT_TOKENS,
