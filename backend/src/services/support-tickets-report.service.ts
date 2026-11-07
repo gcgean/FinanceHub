@@ -152,6 +152,31 @@ export function calcularMetricasDetalhadas(
   deptNameMap: Map<string, string>,
   periodoRef: Date
 ) {
+  // ── Encerrados por inatividade ficam FORA de todas as metricas ──
+  // "FALTA DE INTERACAO DO USUARIO - CHAMADO FINALIZADO" nao e atendimento: o
+  // cliente nunca respondeu e o sistema fechou sozinho. Contar no total e no TMA
+  // distorce os indicadores operacionais.
+  // O volume continua sendo apurado a parte (falta_interacao) porque encerrar em
+  // massa por inatividade e justamente um sinal de manipulacao de metrica — se
+  // simplesmente sumisse, o gestor perderia a capacidade de detectar isso.
+  const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const ehFaltaInteracao = (t: TicketMetrics) =>
+    semAcento(t.nomesProcedimento ?? "").includes("FALTA DE INTERACAO DO USUARIO");
+  const ticketsInatividade = tickets.filter(ehFaltaInteracao);
+  const falta_interacao = {
+    total: ticketsInatividade.length,
+    por_tecnico: (() => {
+      const m = new Map<string, number>();
+      ticketsInatividade.forEach(t => {
+        const n = t.usuAtend?.trim();
+        if (n) m.set(n, (m.get(n) ?? 0) + 1);
+      });
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)
+        .map(([nome, count]) => ({ nome, count }));
+    })(),
+  };
+  tickets = tickets.filter(t => !ehFaltaInteracao(t));
+
   const total = tickets.length;
   const temposArr = tickets.map(t => { const n = parseInt(t.tempoAtendimento ?? ""); return isNaN(n) ? 0 : n; });
   const temposValidos = temposArr.filter(n => n > 0);
@@ -440,7 +465,7 @@ export function calcularMetricasDetalhadas(
     clientes_promotores, tecnicos_promotores,
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
     atendentes_ativos: atendentesAtivos, ids, classificacao,
-    fila, tma_fila, procedimentos, titulares, operadores, atendentes,
+    fila, tma_fila, falta_interacao, procedimentos, titulares, operadores, atendentes,
     atendentes_por_tma: atendentesPorTMA, clientes_pior_nota: clientesPiorNota,
     obs_amostra: obsAmostra, clientes_novos: [...clientesNovos].slice(0, 10),
     distribuicao_notas,
@@ -601,6 +626,7 @@ export async function contagensMesAnterior(
 export function buildResumoDashboard(m: AiMetricas) {
   return {
     filas_por_departamento: m.fila,
+    encerrados_por_inatividade: m.falta_interacao,
     tma_por_fila: m.tma_fila,
     procedimentos_top_com_tma: m.procedimentos,
     distribuicao_notas: m.distribuicao_notas,
@@ -628,6 +654,7 @@ Você recebe exatamente os mesmos números que o gestor está vendo na tela. Use
 - "amostra_atendimentos_nota_baixa": os piores atendimentos do período. ATENÇÃO: no sistema de origem a observação quase nunca é preenchida (a maioria é lançamento automático, que já foi descartado), então "obs" costuma vir vazio. Quando vier vazio, NÃO invente a causa nem conclua que não houve problema: aponte o cliente, o técnico e o procedimento envolvidos e recomende auditar aquele atendimento no sistema de origem. Quando houver texto, use-o para explicar a nota, citando o caso.
 - CARTEIRAS x CLIENTES: nomes como "CONTADORES", "CLIENTE BALCAO", "CERTIFICADO" e "COMMAND SYSTEMS" são agrupamentos/carteiras internas, não empresas únicas. Não os trate como um cliente insatisfeito individual nem sugira ação comercial direcionada a eles.
 - "evolucao_diaria_por_departamento" / "evolucao_diaria_por_atendente": série por dia. Aponte picos, quedas e dias críticos.
+- "encerrados_por_inatividade": chamados fechados automaticamente porque o cliente nao respondeu. Ja FORAM REMOVIDOS de todos os demais numeros (total, TMA, ranking, filas) — nao os some de volta. Use "por_tecnico" para checar manipulacao de metrica: um tecnico com volume de encerramento muito acima dos colegas pode estar fechando chamado cedo demais para inflar produtividade. Se a distribuicao for equilibrada, diga que nao ha indicio.
  - "tma_por_fila": tempo médio de atendimento por departamento, do mais lento para o mais rápido, com "count" (volume) e a variação vs. mês anterior. Fila lenta COM volume alto é gargalo operacional; fila lenta com 3 chamados é ruído. Se o TMA subiu, investigue o porquê (complexidade, falta de gente, escalonamento).
 - "procedimentos_top_com_tma": volume e tempo médio por procedimento. Procedimento de alto volume com TMA alto é candidato a automação/documentação.
 - TENDÊNCIA: em "filas_por_departamento", "procedimentos_top_com_tma" e nos clientes recorrentes, cada item traz "anterior" (mesmo período do mês passado) e "variacao_pct". Em suporte, ALTA de demanda é sinal de alerta e QUEDA é melhora. Destaque o que mais cresceu — é onde o problema está piorando — e reconheça o que caiu. "variacao_pct: null" significa que não existia no mês anterior (demanda nova, merece atenção). Ignore variações grandes sobre bases minúsculas (ex.: de 1 para 3 = +200%, mas irrelevante).

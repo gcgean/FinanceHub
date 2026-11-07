@@ -269,6 +269,39 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         </div>
       </div>
 
+      {/* Encerrados por inatividade — excluidos das metricas, mas visiveis */}
+      {(m.falta_interacao?.total ?? 0) > 0 && (
+        <div className="rounded-xl border border-dashed bg-muted/20 p-3">
+          <div className="flex items-start gap-2 flex-wrap">
+            <AlertTriangle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-foreground">
+                <strong>{m.falta_interacao.total}</strong> chamado(s) encerrado(s) por{" "}
+                <strong>falta de interação do usuário</strong> ficaram de fora de todos os números acima
+                (total, TMA, ranking e filas) — foram fechados automaticamente, sem atendimento real.
+              </p>
+              {(m.falta_interacao.por_tecnico ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {(m.falta_interacao.por_tecnico ?? []).slice(0, 12).map((t: AiMetricas, i: number) => (
+                    <span
+                      key={i}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                      title="Encerramentos por inatividade no periodo"
+                    >
+                      {t.nome}: <strong>{t.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Acompanhe esta lista: um volume muito acima dos colegas pode indicar encerramento
+                precoce para inflar métricas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gargalos recorrentes — mesmo cliente + procedimento repetido (>5x) */}
       {(() => {
         const gargalos: AiMetricas[] = m.gargalos_recorrentes ?? [];

@@ -33,6 +33,31 @@ function calcularMetricasDetalhadas(
   deptNameMap: Map<string, string>,
   periodoRef: Date
 ) {
+  // ── Encerrados por inatividade ficam FORA de todas as metricas ──
+  // "FALTA DE INTERACAO DO USUARIO - CHAMADO FINALIZADO" nao e atendimento: o
+  // cliente nunca respondeu e o sistema fechou sozinho. Contar no total e no TMA
+  // distorce os indicadores operacionais.
+  // O volume continua sendo apurado a parte (falta_interacao) porque encerrar em
+  // massa por inatividade e justamente um sinal de manipulacao de metrica — se
+  // simplesmente sumisse, o gestor perderia a capacidade de detectar isso.
+  const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const ehFaltaInteracao = (t: TicketMetrics) =>
+    semAcento(t.nomesProcedimento ?? "").includes("FALTA DE INTERACAO DO USUARIO");
+  const ticketsInatividade = tickets.filter(ehFaltaInteracao);
+  const falta_interacao = {
+    total: ticketsInatividade.length,
+    por_tecnico: (() => {
+      const m = new Map<string, number>();
+      ticketsInatividade.forEach(t => {
+        const n = t.usuAtend?.trim();
+        if (n) m.set(n, (m.get(n) ?? 0) + 1);
+      });
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)
+        .map(([nome, count]) => ({ nome, count }));
+    })(),
+  };
+  tickets = tickets.filter(t => !ehFaltaInteracao(t));
+
   const total = tickets.length;
 
   // Tempos por ticket
@@ -366,6 +391,7 @@ function calcularMetricasDetalhadas(
     classificacao,
     fila,
     tma_fila,
+    falta_interacao,
     procedimentos,
     titulares,
     operadores,
@@ -633,9 +659,22 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
         e.codigosProcedimento === next.codigosProcedimento &&
         e.nomesProcedimento === next.nomesProcedimento;
 
-      // 1. Se tem protocolo, ele é a chave de dedup principal (evita duplicatas quando o
-      //    sistema de origem reutiliza o mesmo UUID em múltiplos id_Atend).
-      if (next.protocolo) {
+      // 1. O protocolo dedupe quando a origem reutiliza o mesmo UUID em vários id_Atend —
+      //    mas só quando ele de fato identifica UM atendimento.
+      //
+      //    Na origem o campo também carrega marcadores que não identificam nada: "0" aparece
+      //    em 66 mil atendimentos, e alguns números se repetem às centenas. Tratando-os como
+      //    protocolo válido, cada importação sobrescrevia a anterior e dezenas de milhares de
+      //    atendimentos colapsariam num registro só. Em JavaScript a string "0" é truthy, por
+      //    isso o `if (next.protocolo)` antigo não os barrava.
+      const protocoloIdentifica = (valor: string | null | undefined) => {
+        const v = String(valor ?? "").trim();
+        if (v === "") return false;
+        // Só zeros não é número de protocolo, é campo não preenchido.
+        return !/^0+$/.test(v);
+      };
+
+      if (protocoloIdentifica(next.protocolo)) {
         const byProtocolo = await prisma.supportTicket.findFirst({
           where: { companyId, protocolo: next.protocolo },
           select: SELECT_FIELDS,
@@ -644,13 +683,17 @@ export async function supportTicketsRoutes(app: FastifyInstance) {
           if (isSame(byProtocolo)) {
             return reply.status(200).send({ id: byProtocolo.id, changed: false });
           }
-          // Atualiza o registro existente (inclusive externalId se mudou)
-          const updated = await prisma.supportTicket.update({
-            where: { id: byProtocolo.id },
-            data: { externalId, ...next },
-            select: { id: true },
-          });
-          return reply.status(200).send({ id: updated.id, changed: true });
+          // Mesmo protocolo e conteúdo diferente: só é o mesmo chamado quando o id de origem
+          // bate. Se vier de outro id_Atend, são dois atendimentos distintos que dividem um
+          // protocolo repetido — sobrescrever aqui apagaria o primeiro. Cai para o passo 2.
+          if (byProtocolo.externalId === externalId) {
+            const updated = await prisma.supportTicket.update({
+              where: { id: byProtocolo.id },
+              data: { externalId, ...next },
+              select: { id: true },
+            });
+            return reply.status(200).send({ id: updated.id, changed: true });
+          }
         }
       }
 
