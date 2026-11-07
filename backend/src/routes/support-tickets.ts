@@ -146,6 +146,34 @@ function calcularMetricasDetalhadas(
     .sort((a, b) => b[1].count - a[1].count).slice(0, TOP_N)
     .map(([nome, d]) => ({ nome, count: d.count, tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0 }));
 
+
+  // ── Media diaria por tecnico ──────────────────────────────────────────────
+  // A media e por DIA ATIVO (dias em que o tecnico de fato atendeu), nao por dia
+  // corrido do periodo: quem tirou ferias ou entrou no meio do mes apareceria
+  // artificialmente improdutivo. "dias_ativos" vai junto para o gestor enxergar
+  // quem trabalhou menos dias.
+  const diaDoTicket = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const tecDiaMap = new Map<string, { dias: Set<string>; count: number; tempos: number[] }>();
+  tickets.forEach((t, i) => {
+    const nome = t.usuAtend?.trim();
+    if (!nome || !t.dataHoraFinalizacao) return;
+    if (!tecDiaMap.has(nome)) tecDiaMap.set(nome, { dias: new Set<string>(), count: 0, tempos: [] });
+    const e = tecDiaMap.get(nome)!;
+    e.dias.add(diaDoTicket(new Date(t.dataHoraFinalizacao)));
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
+  });
+  const media_diaria_tecnicos = [...tecDiaMap.entries()]
+    .map(([nome, d]) => ({
+      nome,
+      total: d.count,
+      dias_ativos: d.dias.size,
+      media_dia: +(d.count / Math.max(1, d.dias.size)).toFixed(1),
+      tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0,
+    }))
+    .sort((a, b) => b.media_dia - a.media_dia);
+
   // Titulares (empresa/nomeCli)
   const titularMap = new Map<string, number>();
   tickets.forEach(t => {
@@ -391,6 +419,7 @@ function calcularMetricasDetalhadas(
     classificacao,
     fila,
     tma_fila,
+    media_diaria_tecnicos,
     falta_interacao,
     procedimentos,
     titulares,

@@ -256,6 +256,34 @@ export function calcularMetricasDetalhadas(
     .sort((a, b) => b[1].count - a[1].count).slice(0, 10)
     .map(([nome, d]) => ({ nome, count: d.count, tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0 }));
 
+
+  // ── Media diaria por tecnico ──────────────────────────────────────────────
+  // A media e por DIA ATIVO (dias em que o tecnico de fato atendeu), nao por dia
+  // corrido do periodo: quem tirou ferias ou entrou no meio do mes apareceria
+  // artificialmente improdutivo. "dias_ativos" vai junto para o gestor enxergar
+  // quem trabalhou menos dias.
+  const diaDoTicket = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const tecDiaMap = new Map<string, { dias: Set<string>; count: number; tempos: number[] }>();
+  tickets.forEach((t, i) => {
+    const nome = t.usuAtend?.trim();
+    if (!nome || !t.dataHoraFinalizacao) return;
+    if (!tecDiaMap.has(nome)) tecDiaMap.set(nome, { dias: new Set<string>(), count: 0, tempos: [] });
+    const e = tecDiaMap.get(nome)!;
+    e.dias.add(diaDoTicket(new Date(t.dataHoraFinalizacao)));
+    e.count++;
+    if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
+  });
+  const media_diaria_tecnicos = [...tecDiaMap.entries()]
+    .map(([nome, d]) => ({
+      nome,
+      total: d.count,
+      dias_ativos: d.dias.size,
+      media_dia: +(d.count / Math.max(1, d.dias.size)).toFixed(1),
+      tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0,
+    }))
+    .sort((a, b) => b.media_dia - a.media_dia);
+
   const titularMap = new Map<string, number>();
   tickets.forEach(t => { const nome = t.nomeCli?.trim(); if (nome) titularMap.set(nome, (titularMap.get(nome) ?? 0) + 1); });
   const titulares = [...titularMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_N).map(([nome, count]) => ({ nome, count }));
@@ -465,7 +493,7 @@ export function calcularMetricasDetalhadas(
     clientes_promotores, tecnicos_promotores,
     total_atendimentos: total, tma_geral: tmaGeral, nota_media: notaMedia,
     atendentes_ativos: atendentesAtivos, ids, classificacao,
-    fila, tma_fila, falta_interacao, procedimentos, titulares, operadores, atendentes,
+    fila, tma_fila, falta_interacao, media_diaria_tecnicos, procedimentos, titulares, operadores, atendentes,
     atendentes_por_tma: atendentesPorTMA, clientes_pior_nota: clientesPiorNota,
     obs_amostra: obsAmostra, clientes_novos: [...clientesNovos].slice(0, 10),
     distribuicao_notas,
@@ -525,6 +553,8 @@ type TicketGrupo = {
   nomesProcedimento: string | null;
   nomeCli: string | null;
   tempoAtendimento?: string | null;
+  usuAtend?: string | null;
+  dataHoraFinalizacao?: Date | null;
 };
 
 /**
@@ -538,7 +568,14 @@ export function contagensPorGrupo(tickets: TicketGrupo[], deptNameMap: Map<strin
   const procedimentos = new Map<string, number>();
   const titulares = new Map<string, number>();
   const tmaAcc = new Map<string, { soma: number; n: number }>();
-  tickets.forEach(t => {
+  const tecAcc = new Map<string, { dias: Set<string>; count: number; soma: number; n: number }>();
+  // MESMA regra do periodo atual: encerrados por inatividade ficam de fora.
+  // Sem isso o mes anterior contaria chamados que o atual nao conta, e toda
+  // variacao apareceria artificialmente negativa.
+  const semAcentoCmp = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  tickets
+    .filter(t => !semAcentoCmp(t.nomesProcedimento ?? "").includes("FALTA DE INTERACAO DO USUARIO"))
+    .forEach(t => {
     const dep = t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila";
     fila.set(dep, (fila.get(dep) ?? 0) + 1);
     const min = parseInt(t.tempoAtendimento ?? "");
@@ -551,11 +588,27 @@ export function contagensPorGrupo(tickets: TicketGrupo[], deptNameMap: Map<strin
     if (proc) procedimentos.set(proc, (procedimentos.get(proc) ?? 0) + 1);
     const cli = t.nomeCli?.trim();
     if (cli) titulares.set(cli, (titulares.get(cli) ?? 0) + 1);
+    const tec = t.usuAtend?.trim();
+    if (tec && t.dataHoraFinalizacao) {
+      const d = new Date(t.dataHoraFinalizacao);
+      const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const acc = tecAcc.get(tec) ?? { dias: new Set<string>(), count: 0, soma: 0, n: 0 };
+      acc.dias.add(dia); acc.count++;
+      const mt = parseInt(t.tempoAtendimento ?? "");
+      if (!isNaN(mt) && mt > 0) { acc.soma += mt; acc.n++; }
+      tecAcc.set(tec, acc);
+    }
   });
   const tmaFila = new Map<string, number>(
     [...tmaAcc.entries()].map(([k, v]) => [k, Math.round(v.soma / v.n)]),
   );
-  return { fila, procedimentos, titulares, tmaFila };
+  const mediaDiaTec = new Map<string, { media_dia: number; tma: number }>(
+    [...tecAcc.entries()].map(([k, v]) => [k, {
+      media_dia: +(v.count / Math.max(1, v.dias.size)).toFixed(1),
+      tma: v.n ? Math.round(v.soma / v.n) : 0,
+    }]),
+  );
+  return { fila, procedimentos, titulares, tmaFila, mediaDiaTec };
 }
 
 /**
@@ -578,6 +631,17 @@ export function aplicarComparativoMensal(
     });
   m.fila = merge(m.fila, anteriores.fila);
   // tma_fila compara o TEMPO MEDIO (nao o volume): alta = ficou mais lento.
+  // media_diaria_tecnicos compara DOIS eixos: volume/dia e TMA.
+  m.media_diaria_tecnicos = (m.media_diaria_tecnicos ?? []).map((item: AiMetricas) => {
+    const ant = anteriores.mediaDiaTec.get(item.nome);
+    return {
+      ...item,
+      anterior_media_dia: ant?.media_dia ?? 0,
+      variacao_pct: ant?.media_dia ? Math.round(((item.media_dia - ant.media_dia) / ant.media_dia) * 100) : null,
+      anterior_tma: ant?.tma ?? 0,
+      variacao_tma_pct: ant?.tma ? Math.round(((item.tma - ant.tma) / ant.tma) * 100) : null,
+    };
+  });
   m.tma_fila = (m.tma_fila ?? []).map((item: AiMetricas) => {
     const ant = anteriores.tmaFila.get(item.nome) ?? 0;
     return {
@@ -609,7 +673,10 @@ export async function contagensMesAnterior(
         ...where,
         dataHoraFinalizacao: { gte: mesAnterior(dateFrom), lte: mesAnterior(dateTo) },
       },
-      select: { departamento: true, nomesProcedimento: true, nomeCli: true, tempoAtendimento: true },
+      select: {
+        departamento: true, nomesProcedimento: true, nomeCli: true,
+        tempoAtendimento: true, usuAtend: true, dataHoraFinalizacao: true,
+      },
     });
     return contagensPorGrupo(ticketsAnt, deptNameMap);
   } catch {
@@ -626,6 +693,7 @@ export async function contagensMesAnterior(
 export function buildResumoDashboard(m: AiMetricas) {
   return {
     filas_por_departamento: m.fila,
+    media_diaria_por_tecnico: m.media_diaria_tecnicos,
     encerrados_por_inatividade: m.falta_interacao,
     tma_por_fila: m.tma_fila,
     procedimentos_top_com_tma: m.procedimentos,
@@ -655,6 +723,7 @@ Você recebe exatamente os mesmos números que o gestor está vendo na tela. Use
 - CARTEIRAS x CLIENTES: nomes como "CONTADORES", "CLIENTE BALCAO", "CERTIFICADO" e "COMMAND SYSTEMS" são agrupamentos/carteiras internas, não empresas únicas. Não os trate como um cliente insatisfeito individual nem sugira ação comercial direcionada a eles.
 - "evolucao_diaria_por_departamento" / "evolucao_diaria_por_atendente": série por dia. Aponte picos, quedas e dias críticos.
 - "encerrados_por_inatividade": chamados fechados automaticamente porque o cliente nao respondeu. Ja FORAM REMOVIDOS de todos os demais numeros (total, TMA, ranking, filas) — nao os some de volta. Use "por_tecnico" para checar manipulacao de metrica: um tecnico com volume de encerramento muito acima dos colegas pode estar fechando chamado cedo demais para inflar produtividade. Se a distribuicao for equilibrada, diga que nao ha indicio.
+- "media_diaria_por_tecnico": produtividade normalizada — "media_dia" e chamados por DIA ATIVO (nao por dia do mes), com "dias_ativos" ao lado. Compare tecnicos por aqui, nao pelo volume bruto: quem trabalhou menos dias nao e menos produtivo. "variacao_pct" e do volume/dia (alta = produziu mais) e "variacao_tma_pct" e do tempo medio (alta = ficou mais lento) — sao sinais OPOSTOS, nao os misture. Poucos dias_ativos com media alta pode indicar concentracao de esforco, nao superdesempenho.
  - "tma_por_fila": tempo médio de atendimento por departamento, do mais lento para o mais rápido, com "count" (volume) e a variação vs. mês anterior. Fila lenta COM volume alto é gargalo operacional; fila lenta com 3 chamados é ruído. Se o TMA subiu, investigue o porquê (complexidade, falta de gente, escalonamento).
 - "procedimentos_top_com_tma": volume e tempo médio por procedimento. Procedimento de alto volume com TMA alto é candidato a automação/documentação.
 - TENDÊNCIA: em "filas_por_departamento", "procedimentos_top_com_tma" e nos clientes recorrentes, cada item traz "anterior" (mesmo período do mês passado) e "variacao_pct". Em suporte, ALTA de demanda é sinal de alerta e QUEDA é melhora. Destaque o que mais cresceu — é onde o problema está piorando — e reconheça o que caiu. "variacao_pct: null" significa que não existia no mês anterior (demanda nova, merece atenção). Ignore variações grandes sobre bases minúsculas (ex.: de 1 para 3 = +200%, mas irrelevante).

@@ -433,6 +433,48 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
         </ChartCard>
       )}
 
+      {/* Media diaria por tecnico */}
+      {(m.media_diaria_tecnicos ?? []).length > 0 && (
+        <ChartCard icon={<Activity className="w-4 h-4 text-blue-500" />} title="Média Diária por Técnico">
+          <p className="text-xs text-muted-foreground -mt-2 mb-3">
+            Chamados por <strong>dia ativo</strong> (dias em que o técnico atendeu) e TMA, comparados
+            com o mesmo período do mês anterior. Quem tirou férias ou entrou no meio do mês não é
+            penalizado — veja a coluna de dias.
+          </p>
+          <div className="grid grid-cols-[1fr_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 px-2 mb-1">
+            <span className="text-xs font-semibold text-muted-foreground uppercase">Técnico</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Méd./dia</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Dias</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Total</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">TMA</span>
+          </div>
+          <div className="space-y-0.5 max-h-[28rem] overflow-y-auto pr-1">
+            {(m.media_diaria_tecnicos ?? []).map((t: AiMetricas, i: number) => (
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 items-center px-2 py-1.5 rounded-lg hover:bg-muted/40"
+              >
+                <span className="text-sm font-medium truncate" title={t.nome}>{t.nome}</span>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-xs font-bold text-foreground">{t.media_dia}</span>
+                  <Variacao pct={t.variacao_pct} anterior={t.anterior_media_dia} />
+                </div>
+                <span className="text-xs text-center text-muted-foreground">{t.dias_ativos}</span>
+                <span className="text-xs text-center text-muted-foreground">{t.total}</span>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-xs font-semibold text-foreground">{t.tma > 0 ? `${t.tma}m` : "—"}</span>
+                  <Variacao pct={t.variacao_tma_pct} anterior={t.anterior_tma} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Atenção: em <strong>Méd./dia</strong> a alta (▲) é positiva — mais produção. Em <strong>TMA</strong>
+            {" "}a alta é negativa — ficou mais lento.
+          </p>
+        </ChartCard>
+      )}
+
       {/* Ranking de Técnicos */}
       {(ranking.length > 0 || atendentes.length > 0) && (
         <div className="rounded-xl border bg-card p-4">
