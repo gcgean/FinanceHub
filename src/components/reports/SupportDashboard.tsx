@@ -49,6 +49,27 @@ export function ChartCard({ icon, title, children }: { icon: React.ReactNode; ti
 // Volume mínimo para o filtro opcional do ranking (não afeta a ordenação).
 const RANKING_MIN_CALLS = 200;
 
+// Mini-grafico de linha por tecnico. SVG inline de proposito: uma instancia de
+// recharts por linha da tabela (dezenas delas) pesaria muito mais do que isto.
+function Sparkline({ valores, cor = "#3b82f6" }: { valores?: number[]; cor?: string }) {
+  if (!valores?.length) return <span className="text-[10px] text-muted-foreground">—</span>;
+  const w = 86, h = 20, pad = 2;
+  const max = Math.max(1, ...valores);
+  const passo = valores.length > 1 ? (w - pad * 2) / (valores.length - 1) : 0;
+  const pontos = valores
+    .map((v, i) => `${(pad + i * passo).toFixed(1)},${(h - pad - (v / max) * (h - pad * 2)).toFixed(1)}`)
+    .join(" ");
+  const pico = valores.indexOf(max);
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img"
+      aria-label={`Atendimentos por dia; pico de ${max}`}>
+      <polyline points={pontos} fill="none" stroke={cor} strokeWidth="1.4"
+        strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={pad + pico * passo} cy={h - pad - (max / max) * (h - pad * 2)} r="1.8" fill={cor} />
+    </svg>
+  );
+}
+
 // ── Variação vs. mesmo período do mês anterior ────────────────────────────────
 // Em suporte, MAIS demanda do mesmo item é sinal de alerta (vermelho) e MENOS é
 // melhora (verde) — por isso a cor não segue a convenção financeira de alta=bom.
@@ -276,10 +297,19 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
             <AlertTriangle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-foreground">
-                <strong>{m.falta_interacao.total}</strong> chamado(s) encerrado(s) por{" "}
-                <strong>falta de interação do usuário</strong> ficaram de fora de todos os números acima
-                (total, TMA, ranking e filas) — foram fechados automaticamente, sem atendimento real.
+                <strong>{m.falta_interacao.excluidos_total ?? m.falta_interacao.total}</strong> chamado(s) de
+                tipos administrativos ficaram de fora de <strong>todas as seções e gráficos desta tela</strong>
+                {" "}— não representam atendimento de suporte. A listagem abaixo continua mostrando todos.
               </p>
+              {(m.falta_interacao.por_tipo ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {(m.falta_interacao.por_tipo ?? []).map((x: AiMetricas, i: number) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      {x.nome}: <strong>{x.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
               {(m.falta_interacao.por_tecnico ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {(m.falta_interacao.por_tecnico ?? []).slice(0, 12).map((t: AiMetricas, i: number) => (
@@ -293,10 +323,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
                   ))}
                 </div>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1.5">
-                Acompanhe esta lista: um volume muito acima dos colegas pode indicar encerramento
-                precoce para inflar métricas.
-              </p>
+              {(m.falta_interacao.por_tecnico ?? []).length > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-1.5">
+                  Acima, encerramentos por <strong>inatividade</strong> por técnico — volume muito acima
+                  dos colegas pode indicar encerramento precoce para inflar métricas.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -441,8 +473,9 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
             com o mesmo período do mês anterior. Quem tirou férias ou entrou no meio do mês não é
             penalizado — veja a coluna de dias.
           </p>
-          <div className="grid grid-cols-[1fr_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 px-2 mb-1">
+          <div className="grid grid-cols-[1fr_5.5rem_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 px-2 mb-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase">Técnico</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase text-center">No período</span>
             <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Méd./dia</span>
             <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Dias</span>
             <span className="text-xs font-semibold text-muted-foreground uppercase text-center">Total</span>
@@ -452,9 +485,12 @@ export function SupportDashboard({ m }: { m: AiMetricas }) {
             {(m.media_diaria_tecnicos ?? []).map((t: AiMetricas, i: number) => (
               <div
                 key={i}
-                className="grid grid-cols-[1fr_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 items-center px-2 py-1.5 rounded-lg hover:bg-muted/40"
+                className="grid grid-cols-[1fr_5.5rem_5.5rem_3.5rem_4rem_5.5rem] gap-x-3 items-center px-2 py-1.5 rounded-lg hover:bg-muted/40"
               >
                 <span className="text-sm font-medium truncate" title={t.nome}>{t.nome}</span>
+                <div className="flex justify-center" title="Atendimentos por dia ao longo do período">
+                  <Sparkline valores={t.serie} cor={CHART_COLORS[i % CHART_COLORS.length]} />
+                </div>
                 <div className="flex items-center justify-center gap-1">
                   <span className="text-xs font-bold text-foreground">{t.media_dia}</span>
                   <Variacao pct={t.variacao_pct} anterior={t.anterior_media_dia} />

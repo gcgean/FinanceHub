@@ -152,22 +152,43 @@ export function calcularMetricasDetalhadas(
   deptNameMap: Map<string, string>,
   periodoRef: Date
 ) {
-  // ── Encerrados por inatividade ficam FORA de todas as metricas ──
-  // "FALTA DE INTERACAO DO USUARIO - CHAMADO FINALIZADO" nao e atendimento: o
-  // cliente nunca respondeu e o sistema fechou sozinho. Contar no total e no TMA
-  // distorce os indicadores operacionais.
-  // O volume continua sendo apurado a parte (falta_interacao) porque encerrar em
-  // massa por inatividade e justamente um sinal de manipulacao de metrica — se
-  // simplesmente sumisse, o gestor perderia a capacidade de detectar isso.
+  // ── FILTRO UNICO DA TELA ───────────────────────────────────────────────────
+  // Estes procedimentos nao representam trabalho de suporte e distorcem todos os
+  // indicadores. Sao removidos AQUI, uma unica vez, de modo que TODAS as secoes
+  // e graficos abaixo (total, TMA, filas, ranking, produtividade, satisfacao,
+  // gargalos e series) ja trabalhem so com atendimento real.
   const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
-  const ehFaltaInteracao = (t: TicketMetrics) =>
+  const PROCEDIMENTOS_FORA_DA_ANALISE = [
+    "FALTA DE INTERACAO DO USUARIO",
+    "AGRADECIMENTO DE CLIENTE",
+    "DOIS CONTATOS",
+    "MENSAGEM AUTOMATICA DO CLIENTE",
+    "AGENDAMENTO DE ATENDIMENTO",
+  ];
+  const foraDaAnalise = (t: TicketMetrics) =>
+    PROCEDIMENTOS_FORA_DA_ANALISE.some(x => semAcento(t.nomesProcedimento ?? "").includes(x));
+
+  const ticketsExcluidos = tickets.filter(foraDaAnalise);
+  // Mantemos a contagem do que saiu: encerrar em massa por inatividade e um
+  // sinal de manipulacao de metrica. Se o dado sumisse por completo, o gestor
+  // perderia justamente a capacidade de detectar isso.
+  const ehInatividade = (t: TicketMetrics) =>
     semAcento(t.nomesProcedimento ?? "").includes("FALTA DE INTERACAO DO USUARIO");
-  const ticketsInatividade = tickets.filter(ehFaltaInteracao);
+  const inatividade = ticketsExcluidos.filter(ehInatividade);
   const falta_interacao = {
-    total: ticketsInatividade.length,
+    total: inatividade.length,
+    excluidos_total: ticketsExcluidos.length,
+    por_tipo: (() => {
+      const m = new Map<string, number>();
+      ticketsExcluidos.forEach(t => {
+        const n = (t.nomesProcedimento ?? "").trim() || "(sem procedimento)";
+        m.set(n, (m.get(n) ?? 0) + 1);
+      });
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([nome, count]) => ({ nome, count }));
+    })(),
     por_tecnico: (() => {
       const m = new Map<string, number>();
-      ticketsInatividade.forEach(t => {
+      inatividade.forEach(t => {
         const n = t.usuAtend?.trim();
         if (n) m.set(n, (m.get(n) ?? 0) + 1);
       });
@@ -175,7 +196,7 @@ export function calcularMetricasDetalhadas(
         .map(([nome, count]) => ({ nome, count }));
     })(),
   };
-  tickets = tickets.filter(t => !ehFaltaInteracao(t));
+  tickets = tickets.filter(t => !foraDaAnalise(t));
 
   const total = tickets.length;
   const temposArr = tickets.map(t => { const n = parseInt(t.tempoAtendimento ?? ""); return isNaN(n) ? 0 : n; });
@@ -264,13 +285,29 @@ export function calcularMetricasDetalhadas(
   // quem trabalhou menos dias.
   const diaDoTicket = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const tecDiaMap = new Map<string, { dias: Set<string>; count: number; tempos: number[] }>();
+  // Eixo de dias do periodo, compartilhado por todos os tecnicos — assim as
+  // mini-linhas ficam comparaveis entre si (mesma escala horizontal).
+  const diasEixo: string[] = [];
+  {
+    const ini = new Date(`${dateFrom.split("T")[0]}T12:00:00`);
+    const fim = new Date(`${dateTo.split("T")[0]}T12:00:00`);
+    for (let d = new Date(ini); d <= fim && diasEixo.length < 92; d.setDate(d.getDate() + 1)) {
+      diasEixo.push(diaDoTicket(d));
+    }
+  }
+  // Produtividade so conta trabalho de suporte de verdade: os procedimentos
+  // administrativos (agradecimento, agendamento, mensagem automatica, dois
+  // contatos) inflariam a media sem representar atendimento.
+  const tecDiaMap = new Map<string, { dias: Set<string>; count: number; tempos: number[]; porDia: Map<string, number> }>();
   tickets.forEach((t, i) => {
     const nome = t.usuAtend?.trim();
     if (!nome || !t.dataHoraFinalizacao) return;
-    if (!tecDiaMap.has(nome)) tecDiaMap.set(nome, { dias: new Set<string>(), count: 0, tempos: [] });
+    if (procIrrelevante(t.nomesProcedimento ?? "")) return;
+    if (!tecDiaMap.has(nome)) tecDiaMap.set(nome, { dias: new Set<string>(), count: 0, tempos: [], porDia: new Map() });
     const e = tecDiaMap.get(nome)!;
-    e.dias.add(diaDoTicket(new Date(t.dataHoraFinalizacao)));
+    const dia = diaDoTicket(new Date(t.dataHoraFinalizacao));
+    e.dias.add(dia);
+    e.porDia.set(dia, (e.porDia.get(dia) ?? 0) + 1);
     e.count++;
     if (temposArr[i] > 0) e.tempos.push(temposArr[i]);
   });
@@ -281,6 +318,7 @@ export function calcularMetricasDetalhadas(
       dias_ativos: d.dias.size,
       media_dia: +(d.count / Math.max(1, d.dias.size)).toFixed(1),
       tma: d.tempos.length ? Math.round(d.tempos.reduce((a, b) => a + b, 0) / d.tempos.length) : 0,
+      serie: diasEixo.map(dk => d.porDia.get(dk) ?? 0),
     }))
     .sort((a, b) => b.media_dia - a.media_dia);
 
@@ -573,8 +611,10 @@ export function contagensPorGrupo(tickets: TicketGrupo[], deptNameMap: Map<strin
   // Sem isso o mes anterior contaria chamados que o atual nao conta, e toda
   // variacao apareceria artificialmente negativa.
   const semAcentoCmp = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const FORA = ["FALTA DE INTERACAO DO USUARIO", "AGRADECIMENTO DE CLIENTE", "DOIS CONTATOS",
+                "MENSAGEM AUTOMATICA DO CLIENTE", "AGENDAMENTO DE ATENDIMENTO"];
   tickets
-    .filter(t => !semAcentoCmp(t.nomesProcedimento ?? "").includes("FALTA DE INTERACAO DO USUARIO"))
+    .filter(t => !FORA.some(x => semAcentoCmp(t.nomesProcedimento ?? "").includes(x)))
     .forEach(t => {
     const dep = t.departamento ? (deptNameMap.get(t.departamento) ?? t.departamento) : "Sem fila";
     fila.set(dep, (fila.get(dep) ?? 0) + 1);
